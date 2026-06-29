@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, AlertTriangle, Receipt, Wallet, Package,
