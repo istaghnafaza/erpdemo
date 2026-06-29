@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ReceivablesRouteImport } from './routes/receivables'
 import { Route as PurchasingRouteImport } from './routes/purchasing'
 import { Route as PosRouteImport } from './routes/pos'
@@ -18,6 +19,11 @@ import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReceivablesRoute = ReceivablesRouteImport.update({
   id: '/receivables',
   path: '/receivables',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/pos': typeof PosRoute
   '/purchasing': typeof PurchasingRoute
   '/receivables': typeof ReceivablesRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/pos': typeof PosRoute
   '/purchasing': typeof PurchasingRoute
   '/receivables': typeof ReceivablesRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/pos': typeof PosRoute
   '/purchasing': typeof PurchasingRoute
   '/receivables': typeof ReceivablesRoute
+  '/reports': typeof ReportsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/purchasing'
     | '/receivables'
+    | '/reports'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/purchasing'
     | '/receivables'
+    | '/reports'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/purchasing'
     | '/receivables'
+    | '/reports'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,10 +144,18 @@ export interface RootRouteChildren {
   PosRoute: typeof PosRoute
   PurchasingRoute: typeof PurchasingRoute
   ReceivablesRoute: typeof ReceivablesRoute
+  ReportsRoute: typeof ReportsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/receivables': {
       id: '/receivables'
       path: '/receivables'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   PosRoute: PosRoute,
   PurchasingRoute: PurchasingRoute,
   ReceivablesRoute: ReceivablesRoute,
+  ReportsRoute: ReportsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
