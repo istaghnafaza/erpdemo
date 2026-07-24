@@ -76,15 +76,14 @@ Di Google Console, tambahkan:
 
 Set `AUTH_URL` = URL Railway **tanpa** trailing slash.
 
-### Build & start (Dockerfile — disarankan)
+### Build & start (Dockerfile — wajib)
 
-Deploy memakai **`Dockerfile`** (Node 22) agar build Nitro konsisten dan menghindari bug Nixpacks/`@vercel/nft`.
+Railway **harus** pakai Dockerfile (bukan Nixpacks). Cek di Service → Settings → Builder = **Dockerfile**.
 
-- **Build:** multi-stage Docker (`npm ci` → `npm run build`)
+- **Build:** `npm ci` → patch nf3 → `vite build` (Node 22)
 - **Start:** `node .output/server/index.mjs`
-- **Fallback:** `nixpacks.toml` (Node 22.14+) jika tidak pakai Docker
 
-Nitro preset: **node-server** (sudah di `vite.config.ts`)
+Jika log masih menampilkan `[stage-0 ...] --mount=type=cache ... node_modules/.cache`, berarti masih Nixpacks — ubah builder ke Dockerfile lalu redeploy commit terbaru.
 
 ### Generate domain
 
@@ -165,8 +164,7 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 | File | Fungsi |
 |------|--------|
 | `Dockerfile` | Build production Node 22 (utama) |
-| `railway.toml` | Builder Dockerfile + start command |
-| `nixpacks.toml` | Fallback Nixpacks Node 22.14+ |
+| `railway.toml` / `railway.json` | Builder **DOCKERFILE** — wajib |
 | `.node-version` | Hint versi Node |
 | `vite.config.ts` | `nitro.preset: node-server` |
 | `package.json` | `"name": "seps"`, script `start` |
