@@ -78,7 +78,8 @@ Set `AUTH_URL` = URL Railway **tanpa** trailing slash.
 
 ### Build & start (otomatis via `railway.toml`)
 
-- **Build:** `npm ci && npm run build`
+- **Install:** Nixpacks menjalankan `npm ci` otomatis (jangan ulang di build command)
+- **Build:** `npm run build`
 - **Start:** `npm run start` → `node .output/server/index.mjs`
 - Nitro preset: **node-server** (sudah di `vite.config.ts`)
 
@@ -137,7 +138,7 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 
 | Gejala | Solusi |
 |--------|--------|
-| Build gagal | Cek log Railway; pastikan `npm run build` lokal lulus |
+| Build gagal `EBUSY node_modules/.cache` | Hapus `npm ci` dari build command — Railway sudah install otomatis |
 | 500 saat login | `AUTH_SECRET` & `DATABASE_URL` benar? |
 | Google login gagal | `AUTH_URL` match URL browser; redirect URI di Console |
 | Data kosong | `VITE_DATA_BACKEND=neon`; jalankan `neon:setup` |
