@@ -142,14 +142,18 @@ Develop lokal tetap: `npm run dev` → `http://localhost:8081`
 
 ---
 
-## 5. Hostinger — domain custom (opsional)
+## 5. Domain custom — `seps.fazagroup.id`
 
-1. Railway → custom domain → dapat CNAME target
-2. Hostinger hPanel → DNS → **CNAME** `app` → target Railway
-3. Update `AUTH_URL` ke `https://app.domainanda.com`
-4. Update Google OAuth origins + redirect URI
+Panduan lengkap: **[DOMAIN_fazagroup.md](./DOMAIN_fazagroup.md)**
 
-Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page — app utama di Railway.
+Ringkas:
+
+1. Railway → **Networking** → Custom Domain: `seps.fazagroup.id` → salin **CNAME target**
+2. Hostinger hPanel → DNS **fazagroup.id** → CNAME `seps` → target Railway
+3. Railway Variables → `AUTH_URL=https://seps.fazagroup.id` (+ Neon, `AUTH_SECRET`) — template: `.env.railway.example`
+4. Redeploy → uji `https://seps.fazagroup.id/login`
+
+Hostinger **Premium/Business** tetap untuk email & landing `fazagroup.id` — app SEPS di subdomain `seps`.
 
 ---
 
@@ -185,4 +189,5 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 | `.node-version` | Hint versi Node |
 | `vite.config.ts` | `nitro.preset: node-server` |
 | `package.json` | `"name": "seps"`, script `start` |
-| `.env.example` | Template env |
+| `.env.railway.example` | Template Variables Railway (seps.fazagroup.id) |
+| `DOMAIN_fazagroup.md` | Panduan DNS Hostinger + Railway |
