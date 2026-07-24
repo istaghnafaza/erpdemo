@@ -158,7 +158,7 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 | Gejala | Solusi |
 |--------|--------|
 | Build gagal `EBUSY node_modules/.cache` | Jangan ulang `npm ci` di build command — Railway sudah install otomatis |
-| Build gagal `nodeFileTrace` / `@vercel/nft` | Pakai **Dockerfile** (sudah di repo) — bug Nixpacks + Nitro trace di Linux |
+| Build gagal `Missing: lru-cache@... from lock file` | Jalankan `npm update lru-cache --package-lock-only` lokal, commit `package-lock.json`, push |
 | 500 saat login | `AUTH_SECRET` & `DATABASE_URL` benar? |
 | Google login gagal | `AUTH_URL` match URL browser; redirect URI di Console |
 | Data kosong | `VITE_DATA_BACKEND=neon`; jalankan `neon:setup` |
