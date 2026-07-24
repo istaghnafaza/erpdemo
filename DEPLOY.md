@@ -76,14 +76,31 @@ Di Google Console, tambahkan:
 
 Set `AUTH_URL` = URL Railway **tanpa** trailing slash.
 
-### Build & start (Dockerfile — wajib)
+### ⚠️ Penting: jangan redeploy deployment lama
 
-Railway **harus** pakai Dockerfile (bukan Nixpacks). Cek di Service → Settings → Builder = **Dockerfile**.
+Screenshot/log **8177c477** jam **02:56** = commit **lama** (sebelum patch). Tanda-tandanya:
 
-- **Build:** `npm ci` → patch nf3 → `vite build` (Node 22)
+| Log LAMA (gagal) | Log BARU (benar) |
+|------------------|------------------|
+| `> vite build` saja | `> node scripts/patch-nf3-nft.mjs && vite build` |
+| Tidak ada `[patch-nf3-nft]` | Ada `[patch-nf3-nft] patched nf3...` |
+| `stage-0` + `nix-env` + `$NIXPACKS_PATH` | **Docker:** `FROM node:22-bookworm-slim` |
+
+**Redeploy commit terbaru:**
+
+1. Railway → service **erpdemo** → tab **Deployments**
+2. Klik deployment **paling atas** (commit `4c78684` atau lebih baru)
+3. Jika tidak ada → **Settings → Source** → pastikan branch `main` + repo `istaghnafaza/erpdemo`
+4. Klik **Deploy** / tunggu auto-deploy setelah push GitHub
+5. **Jangan** klik Redeploy pada deployment lama 02:56
+
+### Build & start
+
+**Opsi A — Dockerfile (disarankan):** Service → **Settings → Build** → Builder = **Dockerfile**, path = `Dockerfile`. Hapus custom Build Command.
+
+**Opsi B — Nixpacks:** Tetap bisa jika commit terbaru — script `patch-nf3-nft` jalan otomatis saat `npm run build`.
+
 - **Start:** `node .output/server/index.mjs`
-
-Jika log masih menampilkan `[stage-0 ...] --mount=type=cache ... node_modules/.cache`, berarti masih Nixpacks — ubah builder ke Dockerfile lalu redeploy commit terbaru.
 
 ### Generate domain
 

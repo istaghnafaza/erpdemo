@@ -26,4 +26,4 @@ if (!content.includes(broken)) {
 }
 
 writeFileSync(target, content.replace(broken, fixed));
-console.log("[patch-nf3-nft] patched nf3 for @vercel/nft CJS interop");
+console.log("[patch-nf3-nft] patched nf3 for @vercel/nft CJS interop (SEPS build OK)");
