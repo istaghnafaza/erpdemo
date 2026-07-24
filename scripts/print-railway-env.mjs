@@ -53,6 +53,7 @@ const lines = [
   `DATABASE_URL_DIRECT=${databaseUrlDirect}`,
   `AUTH_SECRET=${authSecret}`,
   "AUTH_URL=https://seps.fazagroup.id",
+  "PORT=8080",
   "",
   "VITE_DATA_BACKEND=neon",
   "VITE_APP_NAME=SEPS",

@@ -14,7 +14,7 @@ Panduan setup **Railway + Hostinger DNS** untuk staging/production SEPS.
 | Neon database | ✅ Selesai | `npm run neon:health` → ok, 2 tenant |
 | Custom domain Railway | ✅ Selesai | `seps.fazagroup.id` |
 | DNS Hostinger (CNAME + TXT) | ✅ Selesai | Agent Hostinger konfirmasi |
-| **Railway Variables** | ⏳ **Langkah aktif** | Belum diisi → situs error 500 |
+| **Railway Variables** | ⏳ **Langkah aktif** | Sudah paste — tambah `PORT=8080`, redeploy commit terbaru |
 | Redeploy setelah Variables | ⏳ Menunggu | Wajib setelah save Variables |
 | Uji login online | ⏳ Menunggu | Setelah redeploy |
 | Google OAuth production | ⏸ Opsional | Nanti |

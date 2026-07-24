@@ -4,7 +4,8 @@
 // =============================================================================
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { createSafeJSONStorage } from "@/lib/safe-storage";
 import { signIn, signOut, getCurrentUser, signUp, signInWithGoogle, signInWithGoogleCode } from "@/lib/api/auth";
 import { getTenant } from "@/lib/api/tenants";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
@@ -487,7 +488,7 @@ export const useAuthStore = create<AuthState>()(
 
     {
       name: "ses-auth",
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(),
       // Only persist what's needed to remember the session — not loading state
       partialize: (state) => ({
         currentUser: state.currentUser,

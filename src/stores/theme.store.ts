@@ -5,7 +5,8 @@
 // =============================================================================
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { createSafeJSONStorage } from "@/lib/safe-storage";
 
 export type Theme = "light" | "dark";
 
@@ -24,7 +25,7 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: "ses-theme",
-      storage: createJSONStorage(() => localStorage),
+      storage: createSafeJSONStorage(),
     },
   ),
 );

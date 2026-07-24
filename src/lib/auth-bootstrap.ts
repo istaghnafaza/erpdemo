@@ -19,6 +19,9 @@ export function waitForAuthHydration(): Promise<void> {
 
 /** Muat ulang user + tenant dari server (Neon). */
 export async function syncAuthFromServer(): Promise<void> {
+  // SSR: skip server-fn auth sync — client hydrates then refreshUser runs in __root.
+  if (typeof window === "undefined") return;
+
   await waitForAuthHydration();
   if (isNeonBackend()) {
     await useAuthStore.getState().refreshUser();
