@@ -11,6 +11,19 @@ COPY package.json package-lock.json ./
 RUN npm install -g npm@11.6.0 && npm ci --include=dev
 
 COPY . .
+
+# Vite inlines VITE_* at build time — Railway passes matching service vars as build ARGs
+ARG VITE_DATA_BACKEND=neon
+ARG VITE_APP_NAME=SEPS
+ARG VITE_APP_ENV=staging
+ARG VITE_GOOGLE_CLIENT_ID=""
+ARG VITE_PUBLIC_APP_URL=""
+ENV VITE_DATA_BACKEND=$VITE_DATA_BACKEND \
+    VITE_APP_NAME=$VITE_APP_NAME \
+    VITE_APP_ENV=$VITE_APP_ENV \
+    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
+    VITE_PUBLIC_APP_URL=$VITE_PUBLIC_APP_URL
+
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runner
