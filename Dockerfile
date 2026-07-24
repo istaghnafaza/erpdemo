@@ -1,10 +1,14 @@
-# SEPS — production image (Node 22, bypass Nixpacks nft trace bug)
+# SEPS — production image (Node 22)
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
+# Railway injects npm production mode — build butuh devDependencies (vite, nitro, dll.)
+ENV NODE_ENV=development
+ENV NPM_CONFIG_PRODUCTION=false
+
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install -g npm@11.6.0 && npm ci --include=dev
 
 COPY . .
 RUN npm run build
