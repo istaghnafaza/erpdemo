@@ -1,69 +1,263 @@
 import { type ReactNode, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, ShoppingCart, Package, Wallet, Receipt, Truck, BarChart3,
-  Bell, Search, ChevronDown, LogOut, Building2, Menu, X, Sparkles,
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Wallet,
+  Receipt,
+  Truck,
+  BarChart3,
+  Bell,
+  Search,
+  ChevronDown,
+  LogOut,
+  Menu,
+  X,
+  Sparkles,
+  Sun,
+  Moon,
+  FileText,
+  Users,
+  Globe,
+  History,
+  PackageCheck,
+  ContactRound,
+  Settings,
+  Store,
 } from "lucide-react";
-import { useAuth, roleLabel } from "@/lib/auth";
-import { BRANCHES, STORE, PRODUCTS, RECEIVABLES, stockStatus } from "@/lib/mock-data";
-import { daysBetween } from "@/lib/format";
+import { useAuthStore } from "@/stores/auth.store";
+import { useOnboardingStore } from "@/stores/onboarding.store";
+import { useNotificationStore } from "@/stores/notification.store";
+import { useThemeStore } from "@/stores/theme.store";
+import { useBranchStore } from "@/stores/branch.store";
+import { roleLabel, initials, type UserRole } from "@/types/app";
+import { canAccess, type RbacFeature } from "@/lib/rbac";
+import { STORE } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { isBranchSetupExemptPath, navigateToBranchSetup } from "@/lib/branch-setup-utils";
+import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
+import { BranchSetupRequired } from "@/components/branches/BranchSetupRequired";
+import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
+import { OnboardingProgressWidget } from "@/components/onboarding/OnboardingProgressWidget";
+import { NotificationPanel } from "@/components/layout/NotificationPanel";
+import { useModuleNavBadges } from "@/hooks/useModuleNavBadges";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import type { Role } from "@/lib/mock-data";
 
 interface NavItem {
+  suffix: string;
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
-  roles?: Role[];
+  feature: RbacFeature;
+  /** Per-module accent color, applied to the active nav item + icon (per PRD). */
+  accent: string;
+  /** Badge count di sidebar (pengingat modul). */
+  badgeKey?: "deliveries" | "sales_orders" | "online_orders";
 }
 
-const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["owner", "manager"] },
-  { to: "/pos", label: "POS Kasir", icon: ShoppingCart },
-  { to: "/inventory", label: "Inventory", icon: Package },
-  { to: "/finance", label: "Keuangan", icon: Wallet, roles: ["owner", "manager"] },
-  { to: "/receivables", label: "Hutang & Piutang", icon: Receipt, roles: ["owner", "manager"] },
-  { to: "/purchasing", label: "Pembelian", icon: Truck, roles: ["owner", "manager"] },
-  { to: "/reports", label: "Laporan", icon: BarChart3, roles: ["owner", "manager"] },
+// Module color mapping per PRD "Visual Identity" table.
+const NAV_DEFINITIONS: Omit<NavItem, "to">[] = [
+  {
+    suffix: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    feature: "dashboard",
+    accent: "blue",
+  },
+  {
+    suffix: "/pos",
+    label: "POS Kasir",
+    icon: ShoppingCart,
+    feature: "pos",
+    accent: "green",
+  },
+  {
+    suffix: "/sales/transactions",
+    label: "Histori Penjualan",
+    icon: History,
+    feature: "sales_history",
+    accent: "teal",
+  },
+  {
+    suffix: "/deliveries",
+    label: "Pengiriman",
+    icon: PackageCheck,
+    feature: "deliveries",
+    accent: "sky",
+    badgeKey: "deliveries",
+  },
+  {
+    suffix: "/customers",
+    label: "Pelanggan",
+    icon: ContactRound,
+    feature: "customers",
+    accent: "rose",
+  },
+  {
+    suffix: "/online-orders",
+    label: "Order Online",
+    icon: Globe,
+    feature: "online_orders",
+    accent: "violet",
+    badgeKey: "online_orders",
+  },
+  {
+    suffix: "/inventory/products",
+    label: "Inventory",
+    icon: Package,
+    feature: "inventory",
+    accent: "cyan",
+  },
+  {
+    suffix: "/sales-orders",
+    label: "Sales Order",
+    icon: FileText,
+    feature: "sales_orders",
+    accent: "indigo",
+    badgeKey: "sales_orders",
+  },
+  {
+    suffix: "/finance",
+    label: "Keuangan",
+    icon: Wallet,
+    feature: "finance",
+    accent: "emerald",
+  },
+  {
+    suffix: "/receivables",
+    label: "Piutang",
+    icon: Receipt,
+    feature: "receivables",
+    accent: "amber",
+  },
+  {
+    suffix: "/payables",
+    label: "Hutang Supplier",
+    icon: Receipt,
+    feature: "payables",
+    accent: "amber",
+  },
+  {
+    suffix: "/purchasing/purchase-orders",
+    label: "Pembelian",
+    icon: Truck,
+    feature: "purchasing",
+    accent: "orange",
+  },
+  {
+    suffix: "/reports",
+    label: "Laporan",
+    icon: BarChart3,
+    feature: "reports",
+    accent: "violet",
+  },
+  {
+    suffix: "/users",
+    label: "Pegawai",
+    icon: Users,
+    feature: "users",
+    accent: "violet",
+  },
+  {
+    suffix: "/toko-saya",
+    label: "Toko Saya",
+    icon: Store,
+    feature: "toko_saya",
+    accent: "orange",
+  },
+  {
+    suffix: "/settings/master-data/product-attributes",
+    label: "Pengaturan",
+    icon: Settings,
+    feature: "settings",
+    accent: "slate",
+  },
 ];
 
-export function AppShell({ children, title, subtitle, actions }: {
+const ACCENT_ACTIVE_BG: Record<string, string> = {
+  blue: "bg-blue-600",
+  green: "bg-green-600",
+  teal: "bg-teal-600",
+  sky: "bg-sky-600",
+  rose: "bg-rose-600",
+  cyan: "bg-cyan-600",
+  indigo: "bg-indigo-600",
+  emerald: "bg-emerald-600",
+  amber: "bg-amber-600",
+  orange: "bg-orange-600",
+  violet: "bg-violet-600",
+  slate: "bg-slate-600",
+};
+
+export function AppShell({
+  children,
+  title,
+  subtitle,
+  actions,
+}: {
   children: ReactNode;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
 }) {
-  const { user, logout } = useAuth();
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const startWizardSetup = useOnboardingStore((s) => s.startWizardSetup);
+  const needsBranchSetup = useBranchStore((s) => !s.isLoading && s.branches.length === 0);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [branch, setBranch] = useState(BRANCHES[0]);
+  const currentTenant = useAuthStore((s) => s.currentTenant);
+  const tenantSlug = currentTenant?.slug ?? pathname.split("/")[1] ?? "";
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const criticalCount = PRODUCTS.filter((p) => stockStatus(p) === "critical").length;
-  const overdueCount = RECEIVABLES.filter(
-    (r) => r.amount - r.paid > 0 && daysBetween(new Date().toISOString(), r.dueDate) > 0,
-  ).length;
-  const notifCount = criticalCount + overdueCount;
+  const isOwner = currentUser?.profile.role === "owner";
+  const showBranchSetupGate =
+    needsBranchSetup && !isBranchSetupExemptPath(pathname, tenantSlug);
 
-  if (!user) {
-    // shouldn't normally happen — pages should redirect; guard anyway
-    navigate({ to: "/login" });
-    return null;
-  }
+  const goToBranchSetup = () => {
+    navigateToBranchSetup({
+      navigate,
+      tenant: currentTenant,
+      startWizardSetup,
+    });
+  };
 
-  const visibleNav = NAV.filter((n) => !n.roles || n.roles.includes(user.role));
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const notifOpen = useNotificationStore((s) => s.isPanelOpen);
+  const setNotifOpen = useNotificationStore((s) => s.setPanelOpen);
+  const theme = useThemeStore((s) => s.theme);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
+
+  const user = currentUser!.profile;
+
+  const visibleNav: NavItem[] = NAV_DEFINITIONS.filter((n) =>
+    canAccess(user.role, n.feature),
+  ).map((n) => ({ ...n, to: `/${tenantSlug}${n.suffix}` }));
+
+  const moduleBadges = useModuleNavBadges();
 
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar - desktop */}
       <aside className="hidden lg:flex w-64 flex-col bg-gradient-sidebar text-sidebar-foreground sticky top-0 h-screen">
-        <SidebarContent nav={visibleNav} pathname={pathname} />
+        <SidebarContent
+          nav={visibleNav}
+          pathname={pathname}
+          logoHref={`/${tenantSlug}/dashboard`}
+          moduleBadges={moduleBadges}
+          needsBranchSetup={needsBranchSetup}
+          isOwner={isOwner}
+          onBranchSetup={goToBranchSetup}
+        />
       </aside>
 
       {/* Sidebar - mobile drawer */}
@@ -77,7 +271,16 @@ export function AppShell({ children, title, subtitle, actions }: {
             >
               <X className="h-5 w-5" />
             </button>
-            <SidebarContent nav={visibleNav} pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent
+              nav={visibleNav}
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+              logoHref={`/${tenantSlug}/dashboard`}
+              moduleBadges={moduleBadges}
+              needsBranchSetup={needsBranchSetup}
+              isOwner={isOwner}
+              onBranchSetup={goToBranchSetup}
+            />
           </aside>
         </div>
       )}
@@ -91,30 +294,15 @@ export function AppShell({ children, title, subtitle, actions }: {
               <Menu className="h-5 w-5" />
             </button>
 
+            {/* Logo (mobile only, sidebar hidden) */}
+            <div className="lg:hidden flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-gradient-primary grid place-items-center shadow-glow">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+            </div>
+
             {/* Branch switcher */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2 -ml-2">
-                  <Building2 className="h-4 w-4 text-primary" />
-                  <div className="text-left hidden sm:block">
-                    <div className="text-xs text-muted-foreground leading-none">Cabang</div>
-                    <div className="text-sm font-medium leading-tight">{branch.name}</div>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>Pilih cabang</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {BRANCHES.map((b) => (
-                  <DropdownMenuItem key={b.id} onClick={() => setBranch(b)}>
-                    <Building2 className="h-4 w-4 mr-2" />
-                    {b.name}
-                    {b.isMain && <Badge variant="secondary" className="ml-auto text-[10px]">Pusat</Badge>}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <BranchSwitcher />
 
             {/* Search */}
             <div className="hidden md:flex flex-1 max-w-md relative">
@@ -127,46 +315,40 @@ export function AppShell({ children, title, subtitle, actions }: {
 
             <div className="flex-1 md:hidden" />
 
+            {/* Dark mode toggle */}
+            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Ganti tema">
+              {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+
             {/* Notifications */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  {notifCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
-                      {notifCount}
-                    </span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {criticalCount > 0 && (
-                  <DropdownMenuItem className="flex-col items-start py-3">
-                    <div className="text-sm font-medium text-destructive">{criticalCount} barang stok kritis</div>
-                    <div className="text-xs text-muted-foreground">Cat Tembok Putih sisa 3 kaleng</div>
-                  </DropdownMenuItem>
-                )}
-                {overdueCount > 0 && (
-                  <DropdownMenuItem className="flex-col items-start py-3">
-                    <div className="text-sm font-medium text-destructive">{overdueCount} piutang terlambat</div>
-                    <div className="text-xs text-muted-foreground">PT Abadi Jaya - Rp 12.000.000</div>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              onClick={() => setNotifOpen(true)}
+              aria-label="Notifikasi"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-0.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Button>
+            <NotificationPanel open={notifOpen} onOpenChange={setNotifOpen} />
 
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg hover:bg-muted">
                   <div className="h-8 w-8 rounded-full bg-gradient-primary text-primary-foreground grid place-items-center text-xs font-semibold">
-                    {user.avatar}
+                    {initials(user.name)}
                   </div>
                   <div className="text-left hidden sm:block">
                     <div className="text-sm font-medium leading-none">{user.name}</div>
-                    <div className="text-[11px] text-muted-foreground leading-none mt-1">{roleLabel(user.role)}</div>
+                    <div className="text-[11px] text-muted-foreground leading-none mt-1">
+                      {roleLabel(user.role)}
+                    </div>
                   </div>
                   <ChevronDown className="h-4 w-4 text-muted-foreground hidden sm:block" />
                 </button>
@@ -174,7 +356,16 @@ export function AppShell({ children, title, subtitle, actions }: {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { logout(); navigate({ to: "/login" }); }}>
+                <DropdownMenuItem onClick={goToBranchSetup}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {needsBranchSetup ? "Wizard Setup Toko" : "Lanjutkan Setup"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    await logout();
+                    navigate({ to: "/login", replace: true });
+                  }}
+                >
                   <LogOut className="h-4 w-4 mr-2" />
                   Keluar
                 </DropdownMenuItem>
@@ -183,46 +374,96 @@ export function AppShell({ children, title, subtitle, actions }: {
           </div>
         </header>
 
+        <OfflineIndicator />
+
         {/* Page header */}
         <div className="px-4 lg:px-8 pt-6 pb-4 flex flex-wrap items-end gap-4 justify-between">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{title}</h1>
-            {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+            {subtitle && !showBranchSetupGate && (
+              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            )}
           </div>
-          {actions && <div className="flex gap-2">{actions}</div>}
+          {actions && !showBranchSetupGate && <div className="flex gap-2">{actions}</div>}
         </div>
 
-        <main className="flex-1 px-4 lg:px-8 pb-8">{children}</main>
+        <main className="flex-1 px-4 lg:px-8 pb-8">
+          {showBranchSetupGate ? (
+            <BranchSetupRequired
+              isOwner={isOwner}
+              onboardingComplete={currentTenant?.onboarding_complete ?? false}
+              onSetup={goToBranchSetup}
+            />
+          ) : (
+            children
+          )}
+        </main>
+        <OnboardingProgressWidget />
       </div>
     </div>
   );
 }
 
 function SidebarContent({
-  nav, pathname, onNavigate,
+  nav,
+  pathname,
+  onNavigate,
+  logoHref,
+  moduleBadges,
+  needsBranchSetup,
+  isOwner,
+  onBranchSetup,
 }: {
   nav: NavItem[];
   pathname: string;
   onNavigate?: () => void;
+  logoHref?: string;
+  moduleBadges: { deliveries: number; sales_orders: number; online_orders: number };
+  needsBranchSetup?: boolean;
+  isOwner?: boolean;
+  onBranchSetup?: () => void;
 }) {
   return (
     <>
       <div className="px-5 py-5 border-b border-white/10">
-        <Link to="/dashboard" className="flex items-center gap-2.5" onClick={onNavigate}>
+        <Link to={logoHref ?? "/"} className="flex items-center gap-2.5" onClick={onNavigate}>
           <div className="h-9 w-9 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>
-            <div className="text-base font-bold leading-tight">Simetri ERP</div>
+            <div className="text-base font-bold leading-tight">SEPS</div>
             <div className="text-[11px] text-sidebar-foreground/70 leading-tight">{STORE.name}</div>
           </div>
         </Link>
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {needsBranchSetup && (
+          <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+            <p className="text-xs font-semibold text-amber-100 mb-1">Belum ada toko aktif</p>
+            <p className="text-[11px] text-sidebar-foreground/70 leading-relaxed mb-2">
+              {isOwner
+                ? "Setup cabang/toko dulu sebelum modul operasional dapat dipakai."
+                : "Hubungi owner untuk menambahkan atau mengaktifkan toko."}
+            </p>
+            {isOwner && onBranchSetup && (
+              <button
+                type="button"
+                onClick={() => {
+                  onBranchSetup();
+                  onNavigate?.();
+                }}
+                className="w-full rounded-lg bg-gradient-primary text-white text-xs font-semibold py-2 px-3 hover:opacity-90 transition-opacity"
+              >
+                Wizard Setup Toko
+              </button>
+            )}
+          </div>
+        )}
         {nav.map((item) => {
           const active = pathname.startsWith(item.to);
           const Icon = item.icon;
+          const badgeCount = item.badgeKey ? moduleBadges[item.badgeKey] : 0;
           return (
             <Link
               key={item.to}
@@ -231,12 +472,24 @@ function SidebarContent({
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                 active
-                  ? "bg-gradient-primary text-white shadow-glow"
+                  ? cn(ACCENT_ACTIVE_BG[item.accent], "text-white shadow-glow")
                   : "text-sidebar-foreground/80 hover:bg-white/10 hover:text-white",
               )}
             >
               <Icon className="h-4.5 w-4.5 shrink-0" style={{ width: 18, height: 18 }} />
-              {item.label}
+              <span className="flex-1 truncate">{item.label}</span>
+              {badgeCount > 0 && (
+                <span
+                  className={cn(
+                    "min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                    active
+                      ? "bg-white/25 text-white"
+                      : "bg-amber-500 text-white",
+                  )}
+                >
+                  {badgeCount > 99 ? "99+" : badgeCount}
+                </span>
+              )}
             </Link>
           );
         })}

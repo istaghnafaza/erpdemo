@@ -9,34 +9,47 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as ReceivablesRouteImport } from './routes/receivables'
-import { Route as PurchasingRouteImport } from './routes/purchasing'
-import { Route as PosRouteImport } from './routes/pos'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as InventoryRouteImport } from './routes/inventory'
-import { Route as FinanceRouteImport } from './routes/finance'
-import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
+import { Route as TenantSlugTokoSayaRouteImport } from './routes/$tenantSlug/toko-saya'
+import { Route as TenantSlugShopRouteImport } from './routes/$tenantSlug/shop'
+import { Route as TenantSlugSalesOrdersRouteImport } from './routes/$tenantSlug/sales-orders'
+import { Route as TenantSlugReceivablesRouteImport } from './routes/$tenantSlug/receivables'
+import { Route as TenantSlugPosRouteImport } from './routes/$tenantSlug/pos'
+import { Route as TenantSlugPayablesRouteImport } from './routes/$tenantSlug/payables'
+import { Route as TenantSlugDashboardRouteImport } from './routes/$tenantSlug/dashboard'
+import { Route as TenantSlugUsersIndexRouteImport } from './routes/$tenantSlug/users/index'
+import { Route as TenantSlugShopIndexRouteImport } from './routes/$tenantSlug/shop/index'
+import { Route as TenantSlugSettingsIndexRouteImport } from './routes/$tenantSlug/settings/index'
+import { Route as TenantSlugReportsIndexRouteImport } from './routes/$tenantSlug/reports/index'
+import { Route as TenantSlugPurchasingIndexRouteImport } from './routes/$tenantSlug/purchasing/index'
+import { Route as TenantSlugOnlineOrdersIndexRouteImport } from './routes/$tenantSlug/online-orders/index'
+import { Route as TenantSlugInventoryIndexRouteImport } from './routes/$tenantSlug/inventory/index'
+import { Route as TenantSlugFinanceIndexRouteImport } from './routes/$tenantSlug/finance/index'
+import { Route as TenantSlugDeliveriesIndexRouteImport } from './routes/$tenantSlug/deliveries/index'
+import { Route as TenantSlugCustomersIndexRouteImport } from './routes/$tenantSlug/customers/index'
+import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
+import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
+import { Route as TenantSlugSalesTransactionsRouteImport } from './routes/$tenantSlug/sales/transactions'
+import { Route as TenantSlugReportsStockOpnameRouteImport } from './routes/$tenantSlug/reports/stock-opname'
+import { Route as TenantSlugReportsSalesRouteImport } from './routes/$tenantSlug/reports/sales'
+import { Route as TenantSlugReportsProfitLossRouteImport } from './routes/$tenantSlug/reports/profit-loss'
+import { Route as TenantSlugReportsCashierAuditRouteImport } from './routes/$tenantSlug/reports/cashier-audit'
+import { Route as TenantSlugPurchasingPurchaseOrdersRouteImport } from './routes/$tenantSlug/purchasing/purchase-orders'
+import { Route as TenantSlugPurchasingGoodsReceiptRouteImport } from './routes/$tenantSlug/purchasing/goods-receipt'
+import { Route as TenantSlugInventoryStockTransferRouteImport } from './routes/$tenantSlug/inventory/stock-transfer'
+import { Route as TenantSlugInventoryStockOpnameRouteImport } from './routes/$tenantSlug/inventory/stock-opname'
+import { Route as TenantSlugInventoryProductsRouteImport } from './routes/$tenantSlug/inventory/products'
+import { Route as TenantSlugFinanceCashBookRouteImport } from './routes/$tenantSlug/finance/cash-book'
+import { Route as TenantSlugSettingsMasterDataIndexRouteImport } from './routes/$tenantSlug/settings/master-data/index'
+import { Route as TenantSlugSettingsMasterDataProductAttributesRouteImport } from './routes/$tenantSlug/settings/master-data/product-attributes'
 
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReceivablesRoute = ReceivablesRouteImport.update({
-  id: '/receivables',
-  path: '/receivables',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PurchasingRoute = PurchasingRouteImport.update({
-  id: '/purchasing',
-  path: '/purchasing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PosRoute = PosRouteImport.update({
-  id: '/pos',
-  path: '/pos',
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -44,19 +57,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const InventoryRoute = InventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceRoute = FinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const TenantSlugRoute = TenantSlugRouteImport.update({
+  id: '/$tenantSlug',
+  path: '/$tenantSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -64,117 +67,441 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
+  id: '/onboarding/',
+  path: '/onboarding/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TenantSlugTokoSayaRoute = TenantSlugTokoSayaRouteImport.update({
+  id: '/toko-saya',
+  path: '/toko-saya',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugShopRoute = TenantSlugShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugSalesOrdersRoute = TenantSlugSalesOrdersRouteImport.update({
+  id: '/sales-orders',
+  path: '/sales-orders',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugReceivablesRoute = TenantSlugReceivablesRouteImport.update({
+  id: '/receivables',
+  path: '/receivables',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugPosRoute = TenantSlugPosRouteImport.update({
+  id: '/pos',
+  path: '/pos',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugPayablesRoute = TenantSlugPayablesRouteImport.update({
+  id: '/payables',
+  path: '/payables',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugDashboardRoute = TenantSlugDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugUsersIndexRoute = TenantSlugUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugShopIndexRoute = TenantSlugShopIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TenantSlugShopRoute,
+} as any)
+const TenantSlugSettingsIndexRoute = TenantSlugSettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugReportsIndexRoute = TenantSlugReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugPurchasingIndexRoute =
+  TenantSlugPurchasingIndexRouteImport.update({
+    id: '/purchasing/',
+    path: '/purchasing/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugOnlineOrdersIndexRoute =
+  TenantSlugOnlineOrdersIndexRouteImport.update({
+    id: '/online-orders/',
+    path: '/online-orders/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugInventoryIndexRoute =
+  TenantSlugInventoryIndexRouteImport.update({
+    id: '/inventory/',
+    path: '/inventory/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugFinanceIndexRoute = TenantSlugFinanceIndexRouteImport.update({
+  id: '/finance/',
+  path: '/finance/',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugDeliveriesIndexRoute =
+  TenantSlugDeliveriesIndexRouteImport.update({
+    id: '/deliveries/',
+    path: '/deliveries/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugCustomersIndexRoute =
+  TenantSlugCustomersIndexRouteImport.update({
+    id: '/customers/',
+    path: '/customers/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
+  id: '/auth/google/callback',
+  path: '/auth/google/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TenantSlugShopOrdersRoute = TenantSlugShopOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => TenantSlugShopRoute,
+} as any)
+const TenantSlugSalesTransactionsRoute =
+  TenantSlugSalesTransactionsRouteImport.update({
+    id: '/sales/transactions',
+    path: '/sales/transactions',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugReportsStockOpnameRoute =
+  TenantSlugReportsStockOpnameRouteImport.update({
+    id: '/reports/stock-opname',
+    path: '/reports/stock-opname',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugReportsSalesRoute = TenantSlugReportsSalesRouteImport.update({
+  id: '/reports/sales',
+  path: '/reports/sales',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
+const TenantSlugReportsProfitLossRoute =
+  TenantSlugReportsProfitLossRouteImport.update({
+    id: '/reports/profit-loss',
+    path: '/reports/profit-loss',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugReportsCashierAuditRoute =
+  TenantSlugReportsCashierAuditRouteImport.update({
+    id: '/reports/cashier-audit',
+    path: '/reports/cashier-audit',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugPurchasingPurchaseOrdersRoute =
+  TenantSlugPurchasingPurchaseOrdersRouteImport.update({
+    id: '/purchasing/purchase-orders',
+    path: '/purchasing/purchase-orders',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugPurchasingGoodsReceiptRoute =
+  TenantSlugPurchasingGoodsReceiptRouteImport.update({
+    id: '/purchasing/goods-receipt',
+    path: '/purchasing/goods-receipt',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugInventoryStockTransferRoute =
+  TenantSlugInventoryStockTransferRouteImport.update({
+    id: '/inventory/stock-transfer',
+    path: '/inventory/stock-transfer',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugInventoryStockOpnameRoute =
+  TenantSlugInventoryStockOpnameRouteImport.update({
+    id: '/inventory/stock-opname',
+    path: '/inventory/stock-opname',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugInventoryProductsRoute =
+  TenantSlugInventoryProductsRouteImport.update({
+    id: '/inventory/products',
+    path: '/inventory/products',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugFinanceCashBookRoute =
+  TenantSlugFinanceCashBookRouteImport.update({
+    id: '/finance/cash-book',
+    path: '/finance/cash-book',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugSettingsMasterDataIndexRoute =
+  TenantSlugSettingsMasterDataIndexRouteImport.update({
+    id: '/settings/master-data/',
+    path: '/settings/master-data/',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugSettingsMasterDataProductAttributesRoute =
+  TenantSlugSettingsMasterDataProductAttributesRouteImport.update({
+    id: '/settings/master-data/product-attributes',
+    path: '/settings/master-data/product-attributes',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/finance': typeof FinanceRoute
-  '/inventory': typeof InventoryRoute
+  '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/login': typeof LoginRoute
-  '/pos': typeof PosRoute
-  '/purchasing': typeof PurchasingRoute
-  '/receivables': typeof ReceivablesRoute
-  '/reports': typeof ReportsRoute
+  '/register': typeof RegisterRoute
+  '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
+  '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
+  '/$tenantSlug/pos': typeof TenantSlugPosRoute
+  '/$tenantSlug/receivables': typeof TenantSlugReceivablesRoute
+  '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
+  '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
+  '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/onboarding/': typeof OnboardingIndexRoute
+  '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
+  '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
+  '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
+  '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
+  '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
+  '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
+  '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
+  '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
+  '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
+  '/$tenantSlug/finance/': typeof TenantSlugFinanceIndexRoute
+  '/$tenantSlug/inventory/': typeof TenantSlugInventoryIndexRoute
+  '/$tenantSlug/online-orders/': typeof TenantSlugOnlineOrdersIndexRoute
+  '/$tenantSlug/purchasing/': typeof TenantSlugPurchasingIndexRoute
+  '/$tenantSlug/reports/': typeof TenantSlugReportsIndexRoute
+  '/$tenantSlug/settings/': typeof TenantSlugSettingsIndexRoute
+  '/$tenantSlug/shop/': typeof TenantSlugShopIndexRoute
+  '/$tenantSlug/users/': typeof TenantSlugUsersIndexRoute
+  '/$tenantSlug/settings/master-data/product-attributes': typeof TenantSlugSettingsMasterDataProductAttributesRoute
+  '/$tenantSlug/settings/master-data/': typeof TenantSlugSettingsMasterDataIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/finance': typeof FinanceRoute
-  '/inventory': typeof InventoryRoute
+  '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/login': typeof LoginRoute
-  '/pos': typeof PosRoute
-  '/purchasing': typeof PurchasingRoute
-  '/receivables': typeof ReceivablesRoute
-  '/reports': typeof ReportsRoute
+  '/register': typeof RegisterRoute
+  '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
+  '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
+  '/$tenantSlug/pos': typeof TenantSlugPosRoute
+  '/$tenantSlug/receivables': typeof TenantSlugReceivablesRoute
+  '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
+  '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/onboarding': typeof OnboardingIndexRoute
+  '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
+  '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
+  '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
+  '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
+  '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
+  '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
+  '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
+  '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/$tenantSlug/customers': typeof TenantSlugCustomersIndexRoute
+  '/$tenantSlug/deliveries': typeof TenantSlugDeliveriesIndexRoute
+  '/$tenantSlug/finance': typeof TenantSlugFinanceIndexRoute
+  '/$tenantSlug/inventory': typeof TenantSlugInventoryIndexRoute
+  '/$tenantSlug/online-orders': typeof TenantSlugOnlineOrdersIndexRoute
+  '/$tenantSlug/purchasing': typeof TenantSlugPurchasingIndexRoute
+  '/$tenantSlug/reports': typeof TenantSlugReportsIndexRoute
+  '/$tenantSlug/settings': typeof TenantSlugSettingsIndexRoute
+  '/$tenantSlug/shop': typeof TenantSlugShopIndexRoute
+  '/$tenantSlug/users': typeof TenantSlugUsersIndexRoute
+  '/$tenantSlug/settings/master-data/product-attributes': typeof TenantSlugSettingsMasterDataProductAttributesRoute
+  '/$tenantSlug/settings/master-data': typeof TenantSlugSettingsMasterDataIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/finance': typeof FinanceRoute
-  '/inventory': typeof InventoryRoute
+  '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/login': typeof LoginRoute
-  '/pos': typeof PosRoute
-  '/purchasing': typeof PurchasingRoute
-  '/receivables': typeof ReceivablesRoute
-  '/reports': typeof ReportsRoute
+  '/register': typeof RegisterRoute
+  '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
+  '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
+  '/$tenantSlug/pos': typeof TenantSlugPosRoute
+  '/$tenantSlug/receivables': typeof TenantSlugReceivablesRoute
+  '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
+  '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
+  '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/onboarding/': typeof OnboardingIndexRoute
+  '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
+  '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
+  '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
+  '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
+  '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
+  '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
+  '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
+  '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
+  '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
+  '/$tenantSlug/finance/': typeof TenantSlugFinanceIndexRoute
+  '/$tenantSlug/inventory/': typeof TenantSlugInventoryIndexRoute
+  '/$tenantSlug/online-orders/': typeof TenantSlugOnlineOrdersIndexRoute
+  '/$tenantSlug/purchasing/': typeof TenantSlugPurchasingIndexRoute
+  '/$tenantSlug/reports/': typeof TenantSlugReportsIndexRoute
+  '/$tenantSlug/settings/': typeof TenantSlugSettingsIndexRoute
+  '/$tenantSlug/shop/': typeof TenantSlugShopIndexRoute
+  '/$tenantSlug/users/': typeof TenantSlugUsersIndexRoute
+  '/$tenantSlug/settings/master-data/product-attributes': typeof TenantSlugSettingsMasterDataProductAttributesRoute
+  '/$tenantSlug/settings/master-data/': typeof TenantSlugSettingsMasterDataIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dashboard'
-    | '/finance'
-    | '/inventory'
+    | '/$tenantSlug'
     | '/login'
-    | '/pos'
-    | '/purchasing'
-    | '/receivables'
-    | '/reports'
+    | '/register'
+    | '/$tenantSlug/dashboard'
+    | '/$tenantSlug/payables'
+    | '/$tenantSlug/pos'
+    | '/$tenantSlug/receivables'
+    | '/$tenantSlug/sales-orders'
+    | '/$tenantSlug/shop'
+    | '/$tenantSlug/toko-saya'
+    | '/onboarding/'
+    | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/inventory/products'
+    | '/$tenantSlug/inventory/stock-opname'
+    | '/$tenantSlug/inventory/stock-transfer'
+    | '/$tenantSlug/purchasing/goods-receipt'
+    | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/reports/cashier-audit'
+    | '/$tenantSlug/reports/profit-loss'
+    | '/$tenantSlug/reports/sales'
+    | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/shop/orders'
+    | '/auth/google/callback'
+    | '/$tenantSlug/customers/'
+    | '/$tenantSlug/deliveries/'
+    | '/$tenantSlug/finance/'
+    | '/$tenantSlug/inventory/'
+    | '/$tenantSlug/online-orders/'
+    | '/$tenantSlug/purchasing/'
+    | '/$tenantSlug/reports/'
+    | '/$tenantSlug/settings/'
+    | '/$tenantSlug/shop/'
+    | '/$tenantSlug/users/'
+    | '/$tenantSlug/settings/master-data/product-attributes'
+    | '/$tenantSlug/settings/master-data/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/dashboard'
-    | '/finance'
-    | '/inventory'
+    | '/$tenantSlug'
     | '/login'
-    | '/pos'
-    | '/purchasing'
-    | '/receivables'
-    | '/reports'
+    | '/register'
+    | '/$tenantSlug/dashboard'
+    | '/$tenantSlug/payables'
+    | '/$tenantSlug/pos'
+    | '/$tenantSlug/receivables'
+    | '/$tenantSlug/sales-orders'
+    | '/$tenantSlug/toko-saya'
+    | '/onboarding'
+    | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/inventory/products'
+    | '/$tenantSlug/inventory/stock-opname'
+    | '/$tenantSlug/inventory/stock-transfer'
+    | '/$tenantSlug/purchasing/goods-receipt'
+    | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/reports/cashier-audit'
+    | '/$tenantSlug/reports/profit-loss'
+    | '/$tenantSlug/reports/sales'
+    | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/shop/orders'
+    | '/auth/google/callback'
+    | '/$tenantSlug/customers'
+    | '/$tenantSlug/deliveries'
+    | '/$tenantSlug/finance'
+    | '/$tenantSlug/inventory'
+    | '/$tenantSlug/online-orders'
+    | '/$tenantSlug/purchasing'
+    | '/$tenantSlug/reports'
+    | '/$tenantSlug/settings'
+    | '/$tenantSlug/shop'
+    | '/$tenantSlug/users'
+    | '/$tenantSlug/settings/master-data/product-attributes'
+    | '/$tenantSlug/settings/master-data'
   id:
     | '__root__'
     | '/'
-    | '/dashboard'
-    | '/finance'
-    | '/inventory'
+    | '/$tenantSlug'
     | '/login'
-    | '/pos'
-    | '/purchasing'
-    | '/receivables'
-    | '/reports'
+    | '/register'
+    | '/$tenantSlug/dashboard'
+    | '/$tenantSlug/payables'
+    | '/$tenantSlug/pos'
+    | '/$tenantSlug/receivables'
+    | '/$tenantSlug/sales-orders'
+    | '/$tenantSlug/shop'
+    | '/$tenantSlug/toko-saya'
+    | '/onboarding/'
+    | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/inventory/products'
+    | '/$tenantSlug/inventory/stock-opname'
+    | '/$tenantSlug/inventory/stock-transfer'
+    | '/$tenantSlug/purchasing/goods-receipt'
+    | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/reports/cashier-audit'
+    | '/$tenantSlug/reports/profit-loss'
+    | '/$tenantSlug/reports/sales'
+    | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/shop/orders'
+    | '/auth/google/callback'
+    | '/$tenantSlug/customers/'
+    | '/$tenantSlug/deliveries/'
+    | '/$tenantSlug/finance/'
+    | '/$tenantSlug/inventory/'
+    | '/$tenantSlug/online-orders/'
+    | '/$tenantSlug/purchasing/'
+    | '/$tenantSlug/reports/'
+    | '/$tenantSlug/settings/'
+    | '/$tenantSlug/shop/'
+    | '/$tenantSlug/users/'
+    | '/$tenantSlug/settings/master-data/product-attributes'
+    | '/$tenantSlug/settings/master-data/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
-  FinanceRoute: typeof FinanceRoute
-  InventoryRoute: typeof InventoryRoute
+  TenantSlugRoute: typeof TenantSlugRouteWithChildren
   LoginRoute: typeof LoginRoute
-  PosRoute: typeof PosRoute
-  PurchasingRoute: typeof PurchasingRoute
-  ReceivablesRoute: typeof ReceivablesRoute
-  ReportsRoute: typeof ReportsRoute
+  RegisterRoute: typeof RegisterRoute
+  OnboardingIndexRoute: typeof OnboardingIndexRoute
+  AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/reports': {
-      id: '/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/receivables': {
-      id: '/receivables'
-      path: '/receivables'
-      fullPath: '/receivables'
-      preLoaderRoute: typeof ReceivablesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/purchasing': {
-      id: '/purchasing'
-      path: '/purchasing'
-      fullPath: '/purchasing'
-      preLoaderRoute: typeof PurchasingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pos': {
-      id: '/pos'
-      path: '/pos'
-      fullPath: '/pos'
-      preLoaderRoute: typeof PosRouteImport
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -184,25 +511,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/inventory': {
-      id: '/inventory'
-      path: '/inventory'
-      fullPath: '/inventory'
-      preLoaderRoute: typeof InventoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/finance': {
-      id: '/finance'
-      path: '/finance'
-      fullPath: '/finance'
-      preLoaderRoute: typeof FinanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/$tenantSlug': {
+      id: '/$tenantSlug'
+      path: '/$tenantSlug'
+      fullPath: '/$tenantSlug'
+      preLoaderRoute: typeof TenantSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -212,19 +525,332 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding/': {
+      id: '/onboarding/'
+      path: '/onboarding'
+      fullPath: '/onboarding/'
+      preLoaderRoute: typeof OnboardingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$tenantSlug/toko-saya': {
+      id: '/$tenantSlug/toko-saya'
+      path: '/toko-saya'
+      fullPath: '/$tenantSlug/toko-saya'
+      preLoaderRoute: typeof TenantSlugTokoSayaRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/shop': {
+      id: '/$tenantSlug/shop'
+      path: '/shop'
+      fullPath: '/$tenantSlug/shop'
+      preLoaderRoute: typeof TenantSlugShopRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/sales-orders': {
+      id: '/$tenantSlug/sales-orders'
+      path: '/sales-orders'
+      fullPath: '/$tenantSlug/sales-orders'
+      preLoaderRoute: typeof TenantSlugSalesOrdersRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/receivables': {
+      id: '/$tenantSlug/receivables'
+      path: '/receivables'
+      fullPath: '/$tenantSlug/receivables'
+      preLoaderRoute: typeof TenantSlugReceivablesRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/pos': {
+      id: '/$tenantSlug/pos'
+      path: '/pos'
+      fullPath: '/$tenantSlug/pos'
+      preLoaderRoute: typeof TenantSlugPosRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/payables': {
+      id: '/$tenantSlug/payables'
+      path: '/payables'
+      fullPath: '/$tenantSlug/payables'
+      preLoaderRoute: typeof TenantSlugPayablesRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/dashboard': {
+      id: '/$tenantSlug/dashboard'
+      path: '/dashboard'
+      fullPath: '/$tenantSlug/dashboard'
+      preLoaderRoute: typeof TenantSlugDashboardRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/users/': {
+      id: '/$tenantSlug/users/'
+      path: '/users'
+      fullPath: '/$tenantSlug/users/'
+      preLoaderRoute: typeof TenantSlugUsersIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/shop/': {
+      id: '/$tenantSlug/shop/'
+      path: '/'
+      fullPath: '/$tenantSlug/shop/'
+      preLoaderRoute: typeof TenantSlugShopIndexRouteImport
+      parentRoute: typeof TenantSlugShopRoute
+    }
+    '/$tenantSlug/settings/': {
+      id: '/$tenantSlug/settings/'
+      path: '/settings'
+      fullPath: '/$tenantSlug/settings/'
+      preLoaderRoute: typeof TenantSlugSettingsIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/reports/': {
+      id: '/$tenantSlug/reports/'
+      path: '/reports'
+      fullPath: '/$tenantSlug/reports/'
+      preLoaderRoute: typeof TenantSlugReportsIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/purchasing/': {
+      id: '/$tenantSlug/purchasing/'
+      path: '/purchasing'
+      fullPath: '/$tenantSlug/purchasing/'
+      preLoaderRoute: typeof TenantSlugPurchasingIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/online-orders/': {
+      id: '/$tenantSlug/online-orders/'
+      path: '/online-orders'
+      fullPath: '/$tenantSlug/online-orders/'
+      preLoaderRoute: typeof TenantSlugOnlineOrdersIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/inventory/': {
+      id: '/$tenantSlug/inventory/'
+      path: '/inventory'
+      fullPath: '/$tenantSlug/inventory/'
+      preLoaderRoute: typeof TenantSlugInventoryIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/finance/': {
+      id: '/$tenantSlug/finance/'
+      path: '/finance'
+      fullPath: '/$tenantSlug/finance/'
+      preLoaderRoute: typeof TenantSlugFinanceIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/deliveries/': {
+      id: '/$tenantSlug/deliveries/'
+      path: '/deliveries'
+      fullPath: '/$tenantSlug/deliveries/'
+      preLoaderRoute: typeof TenantSlugDeliveriesIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/customers/': {
+      id: '/$tenantSlug/customers/'
+      path: '/customers'
+      fullPath: '/$tenantSlug/customers/'
+      preLoaderRoute: typeof TenantSlugCustomersIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/auth/google/callback': {
+      id: '/auth/google/callback'
+      path: '/auth/google/callback'
+      fullPath: '/auth/google/callback'
+      preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$tenantSlug/shop/orders': {
+      id: '/$tenantSlug/shop/orders'
+      path: '/orders'
+      fullPath: '/$tenantSlug/shop/orders'
+      preLoaderRoute: typeof TenantSlugShopOrdersRouteImport
+      parentRoute: typeof TenantSlugShopRoute
+    }
+    '/$tenantSlug/sales/transactions': {
+      id: '/$tenantSlug/sales/transactions'
+      path: '/sales/transactions'
+      fullPath: '/$tenantSlug/sales/transactions'
+      preLoaderRoute: typeof TenantSlugSalesTransactionsRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/reports/stock-opname': {
+      id: '/$tenantSlug/reports/stock-opname'
+      path: '/reports/stock-opname'
+      fullPath: '/$tenantSlug/reports/stock-opname'
+      preLoaderRoute: typeof TenantSlugReportsStockOpnameRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/reports/sales': {
+      id: '/$tenantSlug/reports/sales'
+      path: '/reports/sales'
+      fullPath: '/$tenantSlug/reports/sales'
+      preLoaderRoute: typeof TenantSlugReportsSalesRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/reports/profit-loss': {
+      id: '/$tenantSlug/reports/profit-loss'
+      path: '/reports/profit-loss'
+      fullPath: '/$tenantSlug/reports/profit-loss'
+      preLoaderRoute: typeof TenantSlugReportsProfitLossRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/reports/cashier-audit': {
+      id: '/$tenantSlug/reports/cashier-audit'
+      path: '/reports/cashier-audit'
+      fullPath: '/$tenantSlug/reports/cashier-audit'
+      preLoaderRoute: typeof TenantSlugReportsCashierAuditRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/purchasing/purchase-orders': {
+      id: '/$tenantSlug/purchasing/purchase-orders'
+      path: '/purchasing/purchase-orders'
+      fullPath: '/$tenantSlug/purchasing/purchase-orders'
+      preLoaderRoute: typeof TenantSlugPurchasingPurchaseOrdersRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/purchasing/goods-receipt': {
+      id: '/$tenantSlug/purchasing/goods-receipt'
+      path: '/purchasing/goods-receipt'
+      fullPath: '/$tenantSlug/purchasing/goods-receipt'
+      preLoaderRoute: typeof TenantSlugPurchasingGoodsReceiptRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/inventory/stock-transfer': {
+      id: '/$tenantSlug/inventory/stock-transfer'
+      path: '/inventory/stock-transfer'
+      fullPath: '/$tenantSlug/inventory/stock-transfer'
+      preLoaderRoute: typeof TenantSlugInventoryStockTransferRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/inventory/stock-opname': {
+      id: '/$tenantSlug/inventory/stock-opname'
+      path: '/inventory/stock-opname'
+      fullPath: '/$tenantSlug/inventory/stock-opname'
+      preLoaderRoute: typeof TenantSlugInventoryStockOpnameRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/inventory/products': {
+      id: '/$tenantSlug/inventory/products'
+      path: '/inventory/products'
+      fullPath: '/$tenantSlug/inventory/products'
+      preLoaderRoute: typeof TenantSlugInventoryProductsRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/finance/cash-book': {
+      id: '/$tenantSlug/finance/cash-book'
+      path: '/finance/cash-book'
+      fullPath: '/$tenantSlug/finance/cash-book'
+      preLoaderRoute: typeof TenantSlugFinanceCashBookRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/settings/master-data/': {
+      id: '/$tenantSlug/settings/master-data/'
+      path: '/settings/master-data'
+      fullPath: '/$tenantSlug/settings/master-data/'
+      preLoaderRoute: typeof TenantSlugSettingsMasterDataIndexRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/settings/master-data/product-attributes': {
+      id: '/$tenantSlug/settings/master-data/product-attributes'
+      path: '/settings/master-data/product-attributes'
+      fullPath: '/$tenantSlug/settings/master-data/product-attributes'
+      preLoaderRoute: typeof TenantSlugSettingsMasterDataProductAttributesRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
   }
 }
 
+interface TenantSlugShopRouteChildren {
+  TenantSlugShopOrdersRoute: typeof TenantSlugShopOrdersRoute
+  TenantSlugShopIndexRoute: typeof TenantSlugShopIndexRoute
+}
+
+const TenantSlugShopRouteChildren: TenantSlugShopRouteChildren = {
+  TenantSlugShopOrdersRoute: TenantSlugShopOrdersRoute,
+  TenantSlugShopIndexRoute: TenantSlugShopIndexRoute,
+}
+
+const TenantSlugShopRouteWithChildren = TenantSlugShopRoute._addFileChildren(
+  TenantSlugShopRouteChildren,
+)
+
+interface TenantSlugRouteChildren {
+  TenantSlugDashboardRoute: typeof TenantSlugDashboardRoute
+  TenantSlugPayablesRoute: typeof TenantSlugPayablesRoute
+  TenantSlugPosRoute: typeof TenantSlugPosRoute
+  TenantSlugReceivablesRoute: typeof TenantSlugReceivablesRoute
+  TenantSlugSalesOrdersRoute: typeof TenantSlugSalesOrdersRoute
+  TenantSlugShopRoute: typeof TenantSlugShopRouteWithChildren
+  TenantSlugTokoSayaRoute: typeof TenantSlugTokoSayaRoute
+  TenantSlugFinanceCashBookRoute: typeof TenantSlugFinanceCashBookRoute
+  TenantSlugInventoryProductsRoute: typeof TenantSlugInventoryProductsRoute
+  TenantSlugInventoryStockOpnameRoute: typeof TenantSlugInventoryStockOpnameRoute
+  TenantSlugInventoryStockTransferRoute: typeof TenantSlugInventoryStockTransferRoute
+  TenantSlugPurchasingGoodsReceiptRoute: typeof TenantSlugPurchasingGoodsReceiptRoute
+  TenantSlugPurchasingPurchaseOrdersRoute: typeof TenantSlugPurchasingPurchaseOrdersRoute
+  TenantSlugReportsCashierAuditRoute: typeof TenantSlugReportsCashierAuditRoute
+  TenantSlugReportsProfitLossRoute: typeof TenantSlugReportsProfitLossRoute
+  TenantSlugReportsSalesRoute: typeof TenantSlugReportsSalesRoute
+  TenantSlugReportsStockOpnameRoute: typeof TenantSlugReportsStockOpnameRoute
+  TenantSlugSalesTransactionsRoute: typeof TenantSlugSalesTransactionsRoute
+  TenantSlugCustomersIndexRoute: typeof TenantSlugCustomersIndexRoute
+  TenantSlugDeliveriesIndexRoute: typeof TenantSlugDeliveriesIndexRoute
+  TenantSlugFinanceIndexRoute: typeof TenantSlugFinanceIndexRoute
+  TenantSlugInventoryIndexRoute: typeof TenantSlugInventoryIndexRoute
+  TenantSlugOnlineOrdersIndexRoute: typeof TenantSlugOnlineOrdersIndexRoute
+  TenantSlugPurchasingIndexRoute: typeof TenantSlugPurchasingIndexRoute
+  TenantSlugReportsIndexRoute: typeof TenantSlugReportsIndexRoute
+  TenantSlugSettingsIndexRoute: typeof TenantSlugSettingsIndexRoute
+  TenantSlugUsersIndexRoute: typeof TenantSlugUsersIndexRoute
+  TenantSlugSettingsMasterDataProductAttributesRoute: typeof TenantSlugSettingsMasterDataProductAttributesRoute
+  TenantSlugSettingsMasterDataIndexRoute: typeof TenantSlugSettingsMasterDataIndexRoute
+}
+
+const TenantSlugRouteChildren: TenantSlugRouteChildren = {
+  TenantSlugDashboardRoute: TenantSlugDashboardRoute,
+  TenantSlugPayablesRoute: TenantSlugPayablesRoute,
+  TenantSlugPosRoute: TenantSlugPosRoute,
+  TenantSlugReceivablesRoute: TenantSlugReceivablesRoute,
+  TenantSlugSalesOrdersRoute: TenantSlugSalesOrdersRoute,
+  TenantSlugShopRoute: TenantSlugShopRouteWithChildren,
+  TenantSlugTokoSayaRoute: TenantSlugTokoSayaRoute,
+  TenantSlugFinanceCashBookRoute: TenantSlugFinanceCashBookRoute,
+  TenantSlugInventoryProductsRoute: TenantSlugInventoryProductsRoute,
+  TenantSlugInventoryStockOpnameRoute: TenantSlugInventoryStockOpnameRoute,
+  TenantSlugInventoryStockTransferRoute: TenantSlugInventoryStockTransferRoute,
+  TenantSlugPurchasingGoodsReceiptRoute: TenantSlugPurchasingGoodsReceiptRoute,
+  TenantSlugPurchasingPurchaseOrdersRoute:
+    TenantSlugPurchasingPurchaseOrdersRoute,
+  TenantSlugReportsCashierAuditRoute: TenantSlugReportsCashierAuditRoute,
+  TenantSlugReportsProfitLossRoute: TenantSlugReportsProfitLossRoute,
+  TenantSlugReportsSalesRoute: TenantSlugReportsSalesRoute,
+  TenantSlugReportsStockOpnameRoute: TenantSlugReportsStockOpnameRoute,
+  TenantSlugSalesTransactionsRoute: TenantSlugSalesTransactionsRoute,
+  TenantSlugCustomersIndexRoute: TenantSlugCustomersIndexRoute,
+  TenantSlugDeliveriesIndexRoute: TenantSlugDeliveriesIndexRoute,
+  TenantSlugFinanceIndexRoute: TenantSlugFinanceIndexRoute,
+  TenantSlugInventoryIndexRoute: TenantSlugInventoryIndexRoute,
+  TenantSlugOnlineOrdersIndexRoute: TenantSlugOnlineOrdersIndexRoute,
+  TenantSlugPurchasingIndexRoute: TenantSlugPurchasingIndexRoute,
+  TenantSlugReportsIndexRoute: TenantSlugReportsIndexRoute,
+  TenantSlugSettingsIndexRoute: TenantSlugSettingsIndexRoute,
+  TenantSlugUsersIndexRoute: TenantSlugUsersIndexRoute,
+  TenantSlugSettingsMasterDataProductAttributesRoute:
+    TenantSlugSettingsMasterDataProductAttributesRoute,
+  TenantSlugSettingsMasterDataIndexRoute:
+    TenantSlugSettingsMasterDataIndexRoute,
+}
+
+const TenantSlugRouteWithChildren = TenantSlugRoute._addFileChildren(
+  TenantSlugRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
-  FinanceRoute: FinanceRoute,
-  InventoryRoute: InventoryRoute,
+  TenantSlugRoute: TenantSlugRouteWithChildren,
   LoginRoute: LoginRoute,
-  PosRoute: PosRoute,
-  PurchasingRoute: PurchasingRoute,
-  ReceivablesRoute: ReceivablesRoute,
-  ReportsRoute: ReportsRoute,
+  RegisterRoute: RegisterRoute,
+  OnboardingIndexRoute: OnboardingIndexRoute,
+  AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

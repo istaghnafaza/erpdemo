@@ -1,0 +1,337 @@
+// =============================================================================
+// Products service — Neon/Drizzle (Phase 2)
+// =============================================================================
+
+import { and, asc, eq, ilike, sql } from "drizzle-orm";
+import { getDb } from "@/server/db";
+import {
+  toBranchProduct,
+  toBranchProductWithProduct,
+  toProduct,
+  toProductCategory,
+} from "@/server/db/mappers";
+import { branchProducts, productCategories, products } from "@/server/db/schema";
+import type {
+  BranchProduct,
+  BranchProductUpdate,
+  BranchProductWithProduct,
+  Product,
+  ProductCategory,
+  ProductCategoryInsert,
+  ProductInsert,
+  ProductUpdate,
+} from "@/types/database";
+
+export async function listCategories(tenantId: string): Promise<ProductCategory[]> {
+  const db = getDb();
+  const rows = await db.query.productCategories.findMany({
+    where: eq(productCategories.tenantId, tenantId),
+    orderBy: asc(productCategories.name),
+  });
+  return rows.map(toProductCategory);
+}
+
+export async function createCategory(
+  tenantId: string,
+  payload: Omit<ProductCategoryInsert, "tenant_id">,
+): Promise<ProductCategory> {
+  const db = getDb();
+  const [row] = await db
+    .insert(productCategories)
+    .values({
+      id: payload.id,
+      tenantId,
+      name: payload.name,
+      icon: payload.icon,
+    })
+    .returning();
+  return toProductCategory(row);
+}
+
+export async function listProducts(
+  tenantId: string,
+  options?: { activeOnly?: boolean; categoryId?: string; search?: string },
+): Promise<Product[]> {
+  const db = getDb();
+  const conditions = [eq(products.tenantId, tenantId)];
+  if (options?.activeOnly) conditions.push(eq(products.isActive, true));
+  if (options?.categoryId) conditions.push(eq(products.categoryId, options.categoryId));
+  if (options?.search) conditions.push(ilike(products.name, `%${options.search}%`));
+
+  const rows = await db.query.products.findMany({
+    where: and(...conditions),
+    orderBy: asc(products.name),
+  });
+  return rows.map(toProduct);
+}
+
+export async function getProductById(tenantId: string, productId: string): Promise<Product | null> {
+  const db = getDb();
+  const row = await db.query.products.findFirst({
+    where: and(eq(products.tenantId, tenantId), eq(products.id, productId)),
+  });
+  return row ? toProduct(row) : null;
+}
+
+export async function getProductBySku(tenantId: string, sku: string): Promise<Product | null> {
+  const db = getDb();
+  const row = await db.query.products.findFirst({
+    where: and(eq(products.tenantId, tenantId), eq(products.sku, sku)),
+  });
+  return row ? toProduct(row) : null;
+}
+
+export async function getProductByBarcode(
+  tenantId: string,
+  barcode: string,
+): Promise<Product | null> {
+  const db = getDb();
+  const row = await db.query.products.findFirst({
+    where: and(eq(products.tenantId, tenantId), eq(products.barcode, barcode)),
+  });
+  return row ? toProduct(row) : null;
+}
+
+export async function createProduct(
+  tenantId: string,
+  payload: Omit<ProductInsert, "tenant_id">,
+): Promise<Product> {
+  const db = getDb();
+  const [row] = await db
+    .insert(products)
+    .values({
+      id: payload.id,
+      tenantId,
+      sku: payload.sku,
+      barcode: payload.barcode,
+      name: payload.name,
+      categoryId: payload.category_id,
+      unit: payload.unit,
+      purchasePrice: payload.purchase_price,
+      isActive: payload.is_active ?? true,
+    })
+    .returning();
+  return toProduct(row);
+}
+
+export async function updateProduct(
+  tenantId: string,
+  productId: string,
+  updates: ProductUpdate,
+): Promise<Product | null> {
+  const db = getDb();
+  const patch: Partial<typeof products.$inferInsert> = {};
+  if (updates.sku !== undefined) patch.sku = updates.sku;
+  if (updates.barcode !== undefined) patch.barcode = updates.barcode;
+  if (updates.name !== undefined) patch.name = updates.name;
+  if (updates.category_id !== undefined) patch.categoryId = updates.category_id;
+  if (updates.unit !== undefined) patch.unit = updates.unit;
+  if (updates.purchase_price !== undefined) patch.purchasePrice = updates.purchase_price;
+  if (updates.is_active !== undefined) patch.isActive = updates.is_active;
+
+  const [row] = await db
+    .update(products)
+    .set(patch)
+    .where(and(eq(products.tenantId, tenantId), eq(products.id, productId)))
+    .returning();
+  return row ? toProduct(row) : null;
+}
+
+export async function listBranchProducts(
+  tenantId: string,
+  branchId: string,
+  options?: { search?: string; lowStockOnly?: boolean },
+): Promise<BranchProductWithProduct[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      bp: branchProducts,
+      product: products,
+      category: productCategories,
+    })
+    .from(branchProducts)
+    .innerJoin(products, eq(branchProducts.productId, products.id))
+    .leftJoin(productCategories, eq(products.categoryId, productCategories.id))
+    .where(and(eq(branchProducts.tenantId, tenantId), eq(branchProducts.branchId, branchId)));
+
+  let result = rows.map(({ bp, product, category }) =>
+    toBranchProductWithProduct(bp, product, category),
+  );
+
+  if (options?.search) {
+    const q = options.search.toLowerCase();
+    result = result.filter(
+      (r) =>
+        r.product.name.toLowerCase().includes(q) || r.product.sku.toLowerCase().includes(q),
+    );
+  }
+
+  if (options?.lowStockOnly) {
+    result = result.filter((r) => r.stock <= r.reorder_point);
+  }
+
+  return result;
+}
+
+export async function getBranchProduct(
+  tenantId: string,
+  branchId: string,
+  productId: string,
+): Promise<BranchProduct | null> {
+  const db = getDb();
+  const row = await db.query.branchProducts.findFirst({
+    where: and(
+      eq(branchProducts.tenantId, tenantId),
+      eq(branchProducts.branchId, branchId),
+      eq(branchProducts.productId, productId),
+    ),
+  });
+  return row ? toBranchProduct(row) : null;
+}
+
+export async function upsertBranchProduct(
+  tenantId: string,
+  branchId: string,
+  productId: string,
+  payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location">,
+): Promise<BranchProduct> {
+  const db = getDb();
+  const [row] = await db
+    .insert(branchProducts)
+    .values({
+      tenantId,
+      branchId,
+      productId,
+      sellingPrice: payload.selling_price,
+      reorderPoint: payload.reorder_point,
+      warehouseLocation: payload.warehouse_location,
+    })
+    .onConflictDoUpdate({
+      target: [branchProducts.branchId, branchProducts.productId],
+      set: {
+        sellingPrice: payload.selling_price,
+        reorderPoint: payload.reorder_point,
+        warehouseLocation: payload.warehouse_location,
+      },
+    })
+    .returning();
+  return toBranchProduct(row);
+}
+
+export async function updateBranchProductById(
+  tenantId: string,
+  branchProductId: string,
+  updates: BranchProductUpdate,
+): Promise<BranchProduct | null> {
+  const db = getDb();
+  const patch: Partial<typeof branchProducts.$inferInsert> = {};
+  if (updates.selling_price !== undefined) patch.sellingPrice = updates.selling_price;
+  if (updates.stock !== undefined) patch.stock = updates.stock;
+  if (updates.legacy_stock !== undefined) patch.legacyStock = updates.legacy_stock;
+  if (updates.reorder_point !== undefined) patch.reorderPoint = updates.reorder_point;
+  if (updates.warehouse_location !== undefined) patch.warehouseLocation = updates.warehouse_location;
+
+  const [row] = await db
+    .update(branchProducts)
+    .set(patch)
+    .where(and(eq(branchProducts.tenantId, tenantId), eq(branchProducts.id, branchProductId)))
+    .returning();
+  return row ? toBranchProduct(row) : null;
+}
+
+export async function updateSellingPrice(
+  tenantId: string,
+  branchId: string,
+  productId: string,
+  sellingPrice: number,
+): Promise<BranchProduct | null> {
+  const db = getDb();
+  const [row] = await db
+    .update(branchProducts)
+    .set({ sellingPrice })
+    .where(
+      and(
+        eq(branchProducts.tenantId, tenantId),
+        eq(branchProducts.branchId, branchId),
+        eq(branchProducts.productId, productId),
+      ),
+    )
+    .returning();
+  return row ? toBranchProduct(row) : null;
+}
+
+export async function listLowStockAlert(
+  tenantId: string,
+  branchId?: string,
+): Promise<BranchProductWithProduct[]> {
+  const db = getDb();
+  const conditions = [
+    eq(branchProducts.tenantId, tenantId),
+    sql`${branchProducts.stock} <= ${branchProducts.reorderPoint}`,
+  ];
+  if (branchId) conditions.push(eq(branchProducts.branchId, branchId));
+
+  const rows = await db
+    .select({ bp: branchProducts, product: products, category: productCategories })
+    .from(branchProducts)
+    .innerJoin(products, eq(branchProducts.productId, products.id))
+    .leftJoin(productCategories, eq(products.categoryId, productCategories.id))
+    .where(and(...conditions))
+    .orderBy(asc(branchProducts.stock));
+
+  return rows.map(({ bp, product, category }) =>
+    toBranchProductWithProduct(bp, product, category),
+  );
+}
+
+export async function ensureCategory(
+  tenantId: string,
+  name: string,
+): Promise<ProductCategory> {
+  const db = getDb();
+  const existing = await db.query.productCategories.findFirst({
+    where: and(eq(productCategories.tenantId, tenantId), eq(productCategories.name, name)),
+  });
+  if (existing) return toProductCategory(existing);
+
+  const [row] = await db
+    .insert(productCategories)
+    .values({ tenantId, name, icon: null })
+    .returning();
+  return toProductCategory(row);
+}
+
+export async function ensureBranchProductRow(
+  tenantId: string,
+  branchId: string,
+  productId: string,
+  data: {
+    sellingPrice: number;
+    stock: number;
+    legacyStock: number;
+    reorderPoint?: number;
+  },
+): Promise<BranchProduct> {
+  const db = getDb();
+  const [row] = await db
+    .insert(branchProducts)
+    .values({
+      tenantId,
+      branchId,
+      productId,
+      sellingPrice: data.sellingPrice,
+      stock: data.stock,
+      legacyStock: data.legacyStock,
+      reorderPoint: data.reorderPoint ?? 5,
+    })
+    .onConflictDoUpdate({
+      target: [branchProducts.branchId, branchProducts.productId],
+      set: {
+        sellingPrice: data.sellingPrice,
+        stock: data.stock,
+        legacyStock: data.legacyStock,
+      },
+    })
+    .returning();
+  return toBranchProduct(row);
+}

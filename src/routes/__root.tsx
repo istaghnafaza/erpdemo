@@ -9,10 +9,14 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { APP_NAME } from "@/lib/app-branding";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AuthProvider } from "../lib/auth";
 import { Toaster } from "@/components/ui/sonner";
+import { useAuthStore } from "@/stores/auth.store";
+import { initOfflineListeners } from "@/stores/offline.store";
+import { initOfflineCache } from "@/lib/offline/init";
+import { useThemeStore } from "@/stores/theme.store";
 
 function NotFoundComponent() {
   return (
@@ -79,10 +83,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Simetri ERP Store — Demo" },
-      { name: "description", content: "Sistem ERP untuk toko bangunan: POS, inventory, keuangan, piutang & laporan dalam satu layar." },
-      { name: "author", content: "Simetri ERP" },
-      { property: "og:title", content: "Simetri ERP Store" },
+      { title: `${APP_NAME} — Demo` },
+      {
+        name: "description",
+        content:
+          "Sistem ERP untuk toko bangunan: POS, inventory, keuangan, piutang & laporan dalam satu layar.",
+      },
+      { name: "author", content: APP_NAME },
+      { property: "og:title", content: APP_NAME },
       { property: "og:description", content: "Sistem ERP untuk toko bangunan modern." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -116,13 +124,29 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const theme = useThemeStore((s) => s.theme);
+
+  useEffect(() => {
+    void refreshUser();
+    initOfflineListeners();
+    initOfflineCache();
+
+    if (typeof window !== "undefined") {
+      void import("virtual:pwa-register").then(({ registerSW }) => {
+        registerSW({ immediate: true });
+      }).catch(() => undefined);
+    }
+  }, [refreshUser]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Outlet />
-        <Toaster richColors position="top-right" />
-      </AuthProvider>
+      <Outlet />
+      <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
 }

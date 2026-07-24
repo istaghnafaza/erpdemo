@@ -83,11 +83,20 @@ export const CUSTOMERS: Customer[] = [
 export interface Receivable {
   id: string;
   customerId: string;
+  branchId: string;
   invoice: string;
   amount: number;
   paid: number;
   dueDate: string; // ISO
   issuedDate: string;
+}
+
+export interface ArPaymentRecord {
+  id: string;
+  receivableId: string;
+  branchId: string;
+  amount: number;
+  paymentDate: string;
 }
 
 const today = new Date();
@@ -99,13 +108,19 @@ const daysAgo = (n: number) => {
 const daysAhead = (n: number) => daysAgo(-n);
 
 export const RECEIVABLES: Receivable[] = [
-  { id: "r1", customerId: "c1", invoice: "INV-2026-0421", amount: 12000000, paid: 0, dueDate: daysAgo(5), issuedDate: daysAgo(35) },
-  { id: "r2", customerId: "c2", invoice: "INV-2026-0436", amount: 5500000, paid: 0, dueDate: daysAhead(3), issuedDate: daysAgo(27) },
-  { id: "r3", customerId: "c3", invoice: "INV-2026-0442", amount: 8000000, paid: 0, dueDate: daysAhead(12), issuedDate: daysAgo(18) },
-  { id: "r4", customerId: "c5", invoice: "INV-2026-0451", amount: 24500000, paid: 10000000, dueDate: daysAhead(8), issuedDate: daysAgo(22) },
-  { id: "r5", customerId: "c4", invoice: "INV-2026-0463", amount: 3400000, paid: 0, dueDate: daysAgo(2), issuedDate: daysAgo(32) },
-  { id: "r6", customerId: "c1", invoice: "INV-2026-0478", amount: 18000000, paid: 0, dueDate: daysAhead(20), issuedDate: daysAgo(10) },
-  { id: "r7", customerId: "c3", invoice: "INV-2026-0481", amount: 16000000, paid: 0, dueDate: daysAhead(15), issuedDate: daysAgo(15) },
+  { id: "r1", customerId: "c1", branchId: "22221111-0000-0000-0000-000000000001", invoice: "INV-2026-0421", amount: 12000000, paid: 0, dueDate: daysAgo(5), issuedDate: daysAgo(35) },
+  { id: "r2", customerId: "c2", branchId: "22221111-0000-0000-0000-000000000001", invoice: "INV-2026-0436", amount: 5500000, paid: 2000000, dueDate: daysAhead(3), issuedDate: daysAgo(27) },
+  { id: "r3", customerId: "c3", branchId: "22221111-0000-0000-0000-000000000002", invoice: "INV-2026-0442", amount: 8000000, paid: 0, dueDate: daysAhead(12), issuedDate: daysAgo(18) },
+  { id: "r4", customerId: "c5", branchId: "22221111-0000-0000-0000-000000000001", invoice: "INV-2026-0451", amount: 24500000, paid: 10000000, dueDate: daysAhead(8), issuedDate: daysAgo(22) },
+  { id: "r5", customerId: "c4", branchId: "22221111-0000-0000-0000-000000000002", invoice: "INV-2026-0463", amount: 3400000, paid: 0, dueDate: daysAgo(2), issuedDate: daysAgo(32) },
+  { id: "r6", customerId: "c1", branchId: "22221111-0000-0000-0000-000000000003", invoice: "INV-2026-0478", amount: 18000000, paid: 0, dueDate: daysAhead(20), issuedDate: daysAgo(10) },
+  { id: "r7", customerId: "c3", branchId: "22221111-0000-0000-0000-000000000003", invoice: "INV-2026-0481", amount: 16000000, paid: 0, dueDate: daysAhead(15), issuedDate: daysAgo(15) },
+];
+
+/** Pembayaran piutang — untuk hitung penagihan bulan berjalan. */
+export const AR_PAYMENTS: ArPaymentRecord[] = [
+  { id: "ap1", receivableId: "r4", branchId: "22221111-0000-0000-0000-000000000001", amount: 10_000_000, paymentDate: daysAgo(3) },
+  { id: "ap2", receivableId: "r2", branchId: "22221111-0000-0000-0000-000000000001", amount: 2_000_000, paymentDate: daysAgo(1) },
 ];
 
 export interface Supplier {
@@ -124,6 +139,7 @@ export const SUPPLIERS: Supplier[] = [
 export interface Payable {
   id: string;
   supplierId: string;
+  branchId: string;
   invoice: string;
   amount: number;
   paid: number;
@@ -131,11 +147,31 @@ export interface Payable {
   issuedDate: string;
 }
 
+export interface ApPaymentRecord {
+  id: string;
+  payableId: string;
+  branchId: string;
+  cashAccountId: string;
+  amount: number;
+  paymentDate: string;
+}
+
 export const PAYABLES: Payable[] = [
-  { id: "p1", supplierId: "s1", invoice: "PO-2026-0112", amount: 14500000, paid: 0, dueDate: daysAhead(5), issuedDate: daysAgo(25) },
-  { id: "p2", supplierId: "s3", invoice: "PO-2026-0118", amount: 6800000, paid: 0, dueDate: daysAhead(12), issuedDate: daysAgo(18) },
-  { id: "p3", supplierId: "s4", invoice: "PO-2026-0124", amount: 9200000, paid: 4000000, dueDate: daysAhead(2), issuedDate: daysAgo(28) },
-  { id: "p4", supplierId: "s2", invoice: "PO-2026-0131", amount: 3000000, paid: 0, dueDate: daysAgo(3), issuedDate: daysAgo(33) },
+  { id: "p1", supplierId: "s1", branchId: "22221111-0000-0000-0000-000000000001", invoice: "PO-2026-0112", amount: 14500000, paid: 0, dueDate: daysAhead(5), issuedDate: daysAgo(25) },
+  { id: "p2", supplierId: "s3", branchId: "22221111-0000-0000-0000-000000000002", invoice: "PO-2026-0118", amount: 6800000, paid: 0, dueDate: daysAhead(12), issuedDate: daysAgo(18) },
+  { id: "p3", supplierId: "s4", branchId: "22221111-0000-0000-0000-000000000003", invoice: "PO-2026-0124", amount: 9200000, paid: 4000000, dueDate: daysAhead(2), issuedDate: daysAgo(28) },
+  { id: "p4", supplierId: "s2", branchId: "22221111-0000-0000-0000-000000000001", invoice: "PO-2026-0131", amount: 3000000, paid: 0, dueDate: daysAgo(3), issuedDate: daysAgo(33) },
+];
+
+export const AP_PAYMENTS: ApPaymentRecord[] = [
+  {
+    id: "apay1",
+    payableId: "p3",
+    branchId: "22221111-0000-0000-0000-000000000003",
+    cashAccountId: "cc311111-0000-0000-0000-000000000003",
+    amount: 4_000_000,
+    paymentDate: daysAgo(5),
+  },
 ];
 
 // Daily sales history for last 30 days — varies for nice chart

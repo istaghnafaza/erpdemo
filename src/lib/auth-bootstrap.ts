@@ -1,0 +1,60 @@
+// =============================================================================
+// Auth bootstrap — hydration + server sync for route guards
+// =============================================================================
+
+import { redirect } from "@tanstack/react-router";
+import { isNeonBackend } from "@/lib/api/backend";
+import { getPostAuthDestination } from "@/lib/auth-navigate";
+import { useAuthStore } from "@/stores/auth.store";
+import { useOnboardingStore } from "@/stores/onboarding.store";
+
+export function waitForAuthHydration(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const persist = useAuthStore.persist;
+  if (!persist || persist.hasHydrated()) return Promise.resolve();
+  return new Promise((resolve) => {
+    persist.onFinishHydration(() => resolve());
+  });
+}
+
+/** Muat ulang user + tenant dari server (Neon). */
+export async function syncAuthFromServer(): Promise<void> {
+  await waitForAuthHydration();
+  if (isNeonBackend()) {
+    await useAuthStore.getState().refreshUser();
+    const tenant = useAuthStore.getState().currentTenant;
+    if (tenant?.onboarding_complete) {
+      const { wizardResumeMode } = useOnboardingStore.getState();
+      if (!wizardResumeMode) {
+        useOnboardingStore.getState().completeOnboarding();
+      }
+    }
+  }
+}
+
+type AuthRedirect =
+  | ReturnType<typeof redirect>
+  | null;
+
+/** Redirect untuk user yang sudah login — null jika belum auth atau tenant belum ter-load. */
+export function redirectIfAuthenticated(): AuthRedirect {
+  const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
+  if (!isAuthenticated || !currentUser || !currentTenant) return null;
+
+  return redirect(getPostAuthDestination(currentTenant, currentUser.profile.role));
+}
+
+/** Redirect jika onboarding sudah selesai (halaman setup tidak perlu dibuka lagi). */
+export function redirectIfOnboardingComplete(): AuthRedirect {
+  const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
+  if (!isAuthenticated || !currentUser) {
+    return redirect({ to: "/login" });
+  }
+  if (!currentTenant) {
+    return redirect({ to: "/login" });
+  }
+  if (currentTenant.onboarding_complete) {
+    return redirect(getPostAuthDestination(currentTenant, currentUser.profile.role));
+  }
+  return null;
+}

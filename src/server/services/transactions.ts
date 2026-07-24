@@ -1,0 +1,828 @@
+// =============================================================================
+// Transactions service — Neon/Drizzle (Phase 3)
+// =============================================================================
+
+import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { getDb } from "@/server/db";
+import {
+  toCashierSession,
+  toPosCart,
+  toSalesItem,
+  toSalesTransaction,
+} from "@/server/db/mappers";
+import {
+  branchProducts,
+  branches,
+  cashierSessions,
+  customers,
+  posCarts,
+  profiles,
+  salesItems,
+  salesTransactions,
+  stockMovements,
+} from "@/server/db/schema";
+import type { DateRangeFilter } from "@/types/app";
+import type {
+  CashierSession,
+  CashierSessionInsert,
+  PosCart,
+  PosCartInsert,
+  PosCartUpdate,
+  SalesItem,
+  SalesItemInsert,
+  SalesTransaction,
+  SalesTransactionInsert,
+} from "@/types/database";
+
+type PaymentMethod = SalesTransaction["payment_method"];
+
+function sessionBucketField(
+  pm: PaymentMethod,
+): "totalCashSales" | "totalCardSales" | "totalTransferSales" | "totalCreditSales" {
+  if (pm === "cash") return "totalCashSales";
+  if (pm === "card") return "totalCardSales";
+  if (pm === "transfer") return "totalTransferSales";
+  if (pm === "credit") return "totalCreditSales";
+  return "totalCardSales";
+}
+
+function computeSessionDeltas(
+  paymentMethod: PaymentMethod,
+  grandTotal: number,
+  amountPaid: number,
+): {
+  totalSales: number;
+  totalTransactions: number;
+  totalCashSales: number;
+  totalCardSales: number;
+  totalTransferSales: number;
+  totalCreditSales: number;
+  expectedCashDelta: number;
+} {
+  const base = {
+    totalSales: grandTotal,
+    totalTransactions: 1,
+    totalCashSales: 0,
+    totalCardSales: 0,
+    totalTransferSales: 0,
+    totalCreditSales: 0,
+    expectedCashDelta: 0,
+  };
+
+  if (paymentMethod === "credit") {
+    const creditDebt = grandTotal - amountPaid;
+    base.totalCreditSales = creditDebt;
+    if (amountPaid > 0) {
+      base.totalCashSales = amountPaid;
+      base.expectedCashDelta = amountPaid;
+    }
+    return base;
+  }
+
+  const bucket = sessionBucketField(paymentMethod);
+  base[bucket] = grandTotal;
+  if (paymentMethod === "cash") {
+    base.expectedCashDelta = grandTotal;
+  }
+  return base;
+}
+
+async function deductStockInTx(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  tenantId: string,
+  branchId: string,
+  productId: string,
+  qty: number,
+  stockSource: SalesItem["stock_source"],
+  reference: string,
+  userId: string | null,
+): Promise<void> {
+  const bp = await tx.query.branchProducts.findFirst({
+    where: and(
+      eq(branchProducts.tenantId, tenantId),
+      eq(branchProducts.branchId, branchId),
+      eq(branchProducts.productId, productId),
+    ),
+  });
+  if (!bp) throw new Error(`STOCK_DEFICIT: produk tidak ditemukan`);
+
+  const isLegacy = stockSource === "legacy";
+  const currentQty = isLegacy ? bp.legacyStock : bp.stock;
+  if (currentQty < qty) throw new Error(`STOCK_DEFICIT: ${productId}`);
+
+  const newQty = currentQty - qty;
+  await tx
+    .update(branchProducts)
+    .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+    .where(eq(branchProducts.id, bp.id));
+
+  await tx.insert(stockMovements).values({
+    tenantId,
+    branchId,
+    productId,
+    type: isLegacy ? "legacy_out" : "out",
+    stockSource,
+    qty,
+    qtyBefore: currentQty,
+    qtyAfter: newQty,
+    reference,
+    userId,
+  });
+}
+
+async function restoreStockInTx(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  tenantId: string,
+  branchId: string,
+  item: SalesItem,
+  reference: string,
+  userId: string | null,
+): Promise<void> {
+  if (!item.product_id) return;
+
+  const bp = await tx.query.branchProducts.findFirst({
+    where: and(
+      eq(branchProducts.tenantId, tenantId),
+      eq(branchProducts.branchId, branchId),
+      eq(branchProducts.productId, item.product_id),
+    ),
+  });
+  if (!bp) return;
+
+  const isLegacy = item.stock_source === "legacy";
+  const currentQty = isLegacy ? bp.legacyStock : bp.stock;
+  const newQty = currentQty + item.qty;
+
+  await tx
+    .update(branchProducts)
+    .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+    .where(eq(branchProducts.id, bp.id));
+
+  await tx.insert(stockMovements).values({
+    tenantId,
+    branchId,
+    productId: item.product_id,
+    type: isLegacy ? "legacy_in" : "in",
+    stockSource: item.stock_source,
+    qty: item.qty,
+    qtyBefore: currentQty,
+    qtyAfter: newQty,
+    reference,
+    notes: "Void transaksi — stok dikembalikan",
+    userId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cashier sessions
+// ---------------------------------------------------------------------------
+
+export async function getOpenSession(
+  tenantId: string,
+  branchId: string,
+  cashierId: string,
+): Promise<CashierSession | null> {
+  const db = getDb();
+  const row = await db.query.cashierSessions.findFirst({
+    where: and(
+      eq(cashierSessions.tenantId, tenantId),
+      eq(cashierSessions.branchId, branchId),
+      eq(cashierSessions.cashierId, cashierId),
+      eq(cashierSessions.status, "open"),
+    ),
+    orderBy: desc(cashierSessions.openedAt),
+  });
+  return row ? toCashierSession(row) : null;
+}
+
+export async function listSessions(
+  tenantId: string,
+  branchId: string,
+  dateRange?: DateRangeFilter,
+): Promise<CashierSession[]> {
+  const db = getDb();
+  const conditions = [
+    eq(cashierSessions.tenantId, tenantId),
+    eq(cashierSessions.branchId, branchId),
+  ];
+  if (dateRange?.from) {
+    conditions.push(gte(cashierSessions.openedAt, new Date(dateRange.from)));
+  }
+  if (dateRange?.to) {
+    conditions.push(lte(cashierSessions.openedAt, new Date(dateRange.to)));
+  }
+  const rows = await db.query.cashierSessions.findMany({
+    where: and(...conditions),
+    orderBy: desc(cashierSessions.openedAt),
+  });
+  return rows.map(toCashierSession);
+}
+
+export async function openSession(
+  tenantId: string,
+  payload: Omit<CashierSessionInsert, "tenant_id">,
+): Promise<CashierSession> {
+  const db = getDb();
+  const [row] = await db
+    .insert(cashierSessions)
+    .values({
+      tenantId,
+      branchId: payload.branch_id,
+      cashierId: payload.cashier_id,
+      status: payload.status ?? "open",
+      openedAt: payload.opened_at ? new Date(payload.opened_at) : undefined,
+      openingCashBalance: payload.opening_cash_balance,
+      expectedCashBalance: payload.opening_cash_balance,
+      actualCashBalance: payload.actual_cash_balance ?? null,
+      notes: payload.notes ?? null,
+    })
+    .returning();
+  return toCashierSession(row);
+}
+
+export async function closeSession(
+  tenantId: string,
+  sessionId: string,
+  actualCashBalance: number,
+  notes?: string,
+): Promise<CashierSession | null> {
+  const db = getDb();
+  const [row] = await db
+    .update(cashierSessions)
+    .set({
+      status: "closed",
+      closedAt: new Date(),
+      actualCashBalance,
+      notes: notes ?? null,
+    })
+    .where(and(eq(cashierSessions.tenantId, tenantId), eq(cashierSessions.id, sessionId)))
+    .returning();
+  return row ? toCashierSession(row) : null;
+}
+
+export interface ForceCloseBranchSessionsResult {
+  closedCount: number;
+  cancelledCarts: number;
+}
+
+/** Owner force-close — tutup semua sesi kasir terbuka saat menonaktifkan toko. */
+export async function forceCloseAllOpenSessionsForBranch(
+  tenantId: string,
+  branchId: string,
+  adminNote = "Ditutup otomatis saat penutupan toko (owner)",
+): Promise<ForceCloseBranchSessionsResult> {
+  const db = getDb();
+
+  const openSessions = await db.query.cashierSessions.findMany({
+    where: and(
+      eq(cashierSessions.tenantId, tenantId),
+      eq(cashierSessions.branchId, branchId),
+      eq(cashierSessions.status, "open"),
+    ),
+  });
+
+  if (openSessions.length === 0) {
+    return { closedCount: 0, cancelledCarts: 0 };
+  }
+
+  const sessionIds = openSessions.map((s) => s.id);
+
+  const cancelledCarts = await db
+    .update(posCarts)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(
+      and(
+        eq(posCarts.tenantId, tenantId),
+        inArray(posCarts.sessionId, sessionIds),
+        inArray(posCarts.status, ["active", "hold"]),
+      ),
+    )
+    .returning();
+
+  let closedCount = 0;
+  for (const session of openSessions) {
+    const [row] = await db
+      .update(cashierSessions)
+      .set({
+        status: "closed",
+        closedAt: new Date(),
+        actualCashBalance: session.expectedCashBalance,
+        notes: adminNote,
+      })
+      .where(and(eq(cashierSessions.tenantId, tenantId), eq(cashierSessions.id, session.id)))
+      .returning();
+    if (row) closedCount++;
+  }
+
+  return { closedCount, cancelledCarts: cancelledCarts.length };
+}
+
+// ---------------------------------------------------------------------------
+// POS carts
+// ---------------------------------------------------------------------------
+
+export async function listActiveCarts(
+  tenantId: string,
+  sessionId: string,
+): Promise<PosCart[]> {
+  const db = getDb();
+  const rows = await db.query.posCarts.findMany({
+    where: and(
+      eq(posCarts.tenantId, tenantId),
+      eq(posCarts.sessionId, sessionId),
+      inArray(posCarts.status, ["active", "hold"]),
+    ),
+    orderBy: posCarts.cartNumber,
+  });
+  return rows.map(toPosCart);
+}
+
+export async function createCart(
+  tenantId: string,
+  payload: Omit<PosCartInsert, "tenant_id">,
+): Promise<PosCart> {
+  const db = getDb();
+  const [row] = await db
+    .insert(posCarts)
+    .values({
+      tenantId,
+      branchId: payload.branch_id,
+      sessionId: payload.session_id,
+      cashierId: payload.cashier_id,
+      cartNumber: payload.cart_number,
+      customerName: payload.customer_name,
+      customerId: payload.customer_id,
+      discountPercent: String(payload.discount_percent ?? 0),
+      notes: payload.notes,
+      status: payload.status ?? "active",
+    })
+    .returning();
+  return toPosCart(row);
+}
+
+export async function listHeldCartsInBranch(
+  tenantId: string,
+  branchId: string,
+  excludeCashierId: string,
+): Promise<(PosCart & { cashier: Pick<typeof profiles.$inferSelect, "id" | "name"> | null })[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      cart: posCarts,
+      cashierId: profiles.id,
+      cashierName: profiles.name,
+    })
+    .from(posCarts)
+    .leftJoin(profiles, eq(posCarts.cashierId, profiles.id))
+    .where(
+      and(
+        eq(posCarts.tenantId, tenantId),
+        eq(posCarts.branchId, branchId),
+        eq(posCarts.status, "hold"),
+        ne(posCarts.cashierId, excludeCashierId),
+      ),
+    )
+    .orderBy(desc(posCarts.updatedAt));
+
+  return rows.map((r) => ({
+    ...toPosCart(r.cart),
+    cashier: r.cashierId ? { id: r.cashierId, name: r.cashierName ?? "" } : null,
+  }));
+}
+
+export async function updateCartById(
+  tenantId: string,
+  cartId: string,
+  updates: PosCartUpdate,
+): Promise<PosCart | null> {
+  const db = getDb();
+  const patch: Partial<typeof posCarts.$inferInsert> = {};
+  if (updates.customer_name !== undefined) patch.customerName = updates.customer_name;
+  if (updates.customer_id !== undefined) patch.customerId = updates.customer_id;
+  if (updates.discount_percent !== undefined) {
+    patch.discountPercent = String(updates.discount_percent);
+  }
+  if (updates.notes !== undefined) patch.notes = updates.notes;
+  if (updates.status !== undefined) patch.status = updates.status;
+  if (updates.cart_number !== undefined) patch.cartNumber = updates.cart_number;
+
+  const [row] = await db
+    .update(posCarts)
+    .set(patch)
+    .where(and(eq(posCarts.tenantId, tenantId), eq(posCarts.id, cartId)))
+    .returning();
+  return row ? toPosCart(row) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Sales transactions
+// ---------------------------------------------------------------------------
+
+export async function listTransactions(
+  tenantId: string,
+  branchId: string,
+  options?: {
+    dateRange?: DateRangeFilter;
+    sessionId?: string;
+    status?: SalesTransaction["status"];
+    limit?: number;
+  },
+): Promise<SalesTransaction[]> {
+  const db = getDb();
+  const conditions = [
+    eq(salesTransactions.tenantId, tenantId),
+    eq(salesTransactions.branchId, branchId),
+  ];
+  if (options?.sessionId) conditions.push(eq(salesTransactions.sessionId, options.sessionId));
+  if (options?.status) conditions.push(eq(salesTransactions.status, options.status));
+  if (options?.dateRange?.from) {
+    conditions.push(gte(salesTransactions.createdAt, new Date(options.dateRange.from)));
+  }
+  if (options?.dateRange?.to) {
+    conditions.push(lte(salesTransactions.createdAt, new Date(options.dateRange.to)));
+  }
+
+  const rows = await db.query.salesTransactions.findMany({
+    where: and(...conditions),
+    orderBy: desc(salesTransactions.createdAt),
+    limit: options?.limit,
+  });
+  return rows.map(toSalesTransaction);
+}
+
+export type SalesHistoryRow = SalesTransaction & {
+  items: SalesItem[];
+  branch_name: string;
+  cashier_name: string;
+};
+
+export async function listSalesHistoryForBranches(
+  tenantId: string,
+  branchIds: string[],
+  limit = 300,
+): Promise<SalesHistoryRow[]> {
+  if (branchIds.length === 0) return [];
+
+  const db = getDb();
+  const txRows = await db.query.salesTransactions.findMany({
+    where: and(
+      eq(salesTransactions.tenantId, tenantId),
+      inArray(salesTransactions.branchId, branchIds),
+    ),
+    orderBy: desc(salesTransactions.createdAt),
+    limit,
+  });
+
+  if (txRows.length === 0) return [];
+
+  const txIds = txRows.map((r) => r.id);
+  const itemRows = await db.query.salesItems.findMany({
+    where: inArray(salesItems.transactionId, txIds),
+  });
+
+  const branchRows = await db.query.branches.findMany({
+    where: and(eq(branches.tenantId, tenantId), inArray(branches.id, branchIds)),
+  });
+  const branchMap = new Map(branchRows.map((b) => [b.id, b.name]));
+
+  const sessionIds = [...new Set(txRows.map((r) => r.sessionId))];
+  const sessionRows = await db.query.cashierSessions.findMany({
+    where: inArray(cashierSessions.id, sessionIds),
+  });
+  const cashierIds = [...new Set(sessionRows.map((s) => s.cashierId))];
+  const profileRows =
+    cashierIds.length > 0
+      ? await db.query.profiles.findMany({ where: inArray(profiles.id, cashierIds) })
+      : [];
+  const cashierMap = new Map(profileRows.map((p) => [p.id, p.name]));
+  const sessionCashierMap = new Map(
+    sessionRows.map((s) => [s.id, cashierMap.get(s.cashierId) ?? "Kasir"]),
+  );
+
+  const itemsByTx = new Map<string, SalesItem[]>();
+  for (const item of itemRows) {
+    const mapped = toSalesItem(item);
+    const list = itemsByTx.get(item.transactionId) ?? [];
+    list.push(mapped);
+    itemsByTx.set(item.transactionId, list);
+  }
+
+  return txRows.map((row) => {
+    const tx = toSalesTransaction(row);
+    return {
+      ...tx,
+      items: itemsByTx.get(row.id) ?? [],
+      branch_name: branchMap.get(row.branchId) ?? "",
+      cashier_name: sessionCashierMap.get(row.sessionId) ?? "Kasir",
+    };
+  });
+}
+
+export async function getTransactionById(
+  tenantId: string,
+  transactionId: string,
+): Promise<(SalesTransaction & { items: SalesItem[] }) | null> {
+  const db = getDb();
+  const txRow = await db.query.salesTransactions.findFirst({
+    where: and(
+      eq(salesTransactions.tenantId, tenantId),
+      eq(salesTransactions.id, transactionId),
+    ),
+  });
+  if (!txRow) return null;
+
+  const itemRows = await db.query.salesItems.findMany({
+    where: eq(salesItems.transactionId, transactionId),
+  });
+
+  return {
+    ...toSalesTransaction(txRow),
+    items: itemRows.map(toSalesItem),
+  };
+}
+
+export async function getTransactionByNumber(
+  tenantId: string,
+  txNumber: string,
+): Promise<SalesTransaction | null> {
+  const db = getDb();
+  const row = await db.query.salesTransactions.findFirst({
+    where: and(
+      eq(salesTransactions.tenantId, tenantId),
+      eq(salesTransactions.transactionNumber, txNumber),
+    ),
+  });
+  return row ? toSalesTransaction(row) : null;
+}
+
+export async function getNextTransactionSequence(
+  tenantId: string,
+  branchId: string,
+  date: Date,
+): Promise<number> {
+  const db = getDb();
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(salesTransactions)
+    .where(
+      and(
+        eq(salesTransactions.tenantId, tenantId),
+        eq(salesTransactions.branchId, branchId),
+        gte(salesTransactions.createdAt, dayStart),
+        lte(salesTransactions.createdAt, dayEnd),
+      ),
+    );
+
+  return (result?.count ?? 0) + 1;
+}
+
+export async function createSaleTransaction(
+  tenantId: string,
+  transaction: Omit<SalesTransactionInsert, "tenant_id">,
+  items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
+): Promise<SalesTransaction> {
+  const db = getDb();
+
+  if (transaction.client_tx_id) {
+    const existing = await db.query.salesTransactions.findFirst({
+      where: and(
+        eq(salesTransactions.tenantId, tenantId),
+        eq(salesTransactions.clientTxId, transaction.client_tx_id),
+      ),
+    });
+    if (existing) return toSalesTransaction(existing);
+  }
+
+  return db.transaction(async (tx) => {
+    const session = await tx.query.cashierSessions.findFirst({
+      where: and(
+        eq(cashierSessions.tenantId, tenantId),
+        eq(cashierSessions.id, transaction.session_id),
+        eq(cashierSessions.status, "open"),
+      ),
+    });
+    if (!session) throw new Error("Sesi kasir tidak ditemukan atau sudah ditutup");
+
+    if (transaction.payment_method === "credit" && transaction.customer_id) {
+      const customer = await tx.query.customers.findFirst({
+        where: and(
+          eq(customers.tenantId, tenantId),
+          eq(customers.id, transaction.customer_id),
+        ),
+      });
+      const creditDebt = transaction.grand_total - transaction.amount_paid;
+      if (
+        customer &&
+        creditDebt > 0 &&
+        customer.outstandingDebt + creditDebt > customer.creditLimit
+      ) {
+        throw new Error("CREDIT_EXCEEDED");
+      }
+    }
+
+    for (const item of items) {
+      if (!item.product_id) continue;
+      const bp = await tx.query.branchProducts.findFirst({
+        where: and(
+          eq(branchProducts.tenantId, tenantId),
+          eq(branchProducts.branchId, transaction.branch_id),
+          eq(branchProducts.productId, item.product_id),
+        ),
+      });
+      if (!bp) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      const isLegacy = item.stock_source === "legacy";
+      const currentQty = isLegacy ? bp.legacyStock : bp.stock;
+      if (currentQty < item.qty) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+    }
+
+    const [txRow] = await tx
+      .insert(salesTransactions)
+      .values({
+        tenantId,
+        branchId: transaction.branch_id,
+        sessionId: transaction.session_id,
+        cartId: transaction.cart_id,
+        transactionNumber: transaction.transaction_number,
+        clientTxId: transaction.client_tx_id ?? null,
+        customerId: transaction.customer_id,
+        customerName: transaction.customer_name,
+        subtotal: transaction.subtotal,
+        discountAmount: transaction.discount_amount,
+        taxAmount: transaction.tax_amount,
+        grandTotal: transaction.grand_total,
+        paymentMethod: transaction.payment_method,
+        qrisProvider: transaction.qris_provider,
+        amountPaid: transaction.amount_paid,
+        changeAmount: transaction.change_amount,
+        inputBy: transaction.input_by,
+        paidBy: transaction.paid_by,
+        isCrossSession: transaction.is_cross_session,
+        hasLegacyItems: transaction.has_legacy_items,
+        isOfflineTransaction: transaction.is_offline_transaction,
+        offlineCreatedAt: transaction.offline_created_at
+          ? new Date(transaction.offline_created_at)
+          : null,
+        syncStatus: transaction.sync_status,
+        status: transaction.status ?? "completed",
+        notes: transaction.notes,
+        createdAt: transaction.created_at ? new Date(transaction.created_at) : undefined,
+      })
+      .returning();
+
+    if (items.length > 0) {
+      await tx.insert(salesItems).values(
+        items.map((item) => ({
+          transactionId: txRow.id,
+          tenantId,
+          productId: item.product_id,
+          productName: item.product_name,
+          sku: item.sku,
+          unit: item.unit,
+          qty: item.qty,
+          purchasePrice: item.purchase_price,
+          sellingPrice: item.selling_price,
+          discount: item.discount,
+          subtotal: item.subtotal,
+          stockSource: item.stock_source,
+        })),
+      );
+    }
+
+    for (const item of items) {
+      if (!item.product_id) continue;
+      await deductStockInTx(
+        tx,
+        tenantId,
+        transaction.branch_id,
+        item.product_id,
+        item.qty,
+        item.stock_source,
+        transaction.transaction_number,
+        transaction.paid_by,
+      );
+    }
+
+    if (transaction.payment_method === "credit" && transaction.customer_id) {
+      const creditDebt = transaction.grand_total - transaction.amount_paid;
+      if (creditDebt > 0) {
+        await tx
+          .update(customers)
+          .set({
+            outstandingDebt: sql`${customers.outstandingDebt} + ${creditDebt}`,
+          })
+          .where(
+            and(eq(customers.tenantId, tenantId), eq(customers.id, transaction.customer_id)),
+          );
+
+        const { createReceivableFromCreditSale } = await import(
+          "@/server/services/receivables"
+        );
+        await createReceivableFromCreditSale(tx, tenantId, {
+          branchId: transaction.branch_id,
+          customerId: transaction.customer_id,
+          customerName: transaction.customer_name ?? "Pelanggan Kredit",
+          salesTransactionId: txRow.id,
+          invoiceNumber: `AR-${transaction.transaction_number}`,
+          amount: creditDebt,
+        });
+      }
+    }
+
+    const deltas = computeSessionDeltas(
+      transaction.payment_method,
+      transaction.grand_total,
+      transaction.amount_paid,
+    );
+
+    await tx
+      .update(cashierSessions)
+      .set({
+        totalSales: sql`${cashierSessions.totalSales} + ${deltas.totalSales}`,
+        totalTransactions: sql`${cashierSessions.totalTransactions} + ${deltas.totalTransactions}`,
+        totalCashSales: sql`${cashierSessions.totalCashSales} + ${deltas.totalCashSales}`,
+        totalCardSales: sql`${cashierSessions.totalCardSales} + ${deltas.totalCardSales}`,
+        totalTransferSales: sql`${cashierSessions.totalTransferSales} + ${deltas.totalTransferSales}`,
+        totalCreditSales: sql`${cashierSessions.totalCreditSales} + ${deltas.totalCreditSales}`,
+        expectedCashBalance: sql`${cashierSessions.expectedCashBalance} + ${deltas.expectedCashDelta}`,
+      })
+      .where(eq(cashierSessions.id, session.id));
+
+    return toSalesTransaction(txRow);
+  });
+}
+
+export async function voidSaleTransaction(
+  tenantId: string,
+  transactionId: string,
+  userId: string,
+): Promise<SalesTransaction | null> {
+  const db = getDb();
+
+  return db.transaction(async (tx) => {
+    const txRow = await tx.query.salesTransactions.findFirst({
+      where: and(
+        eq(salesTransactions.tenantId, tenantId),
+        eq(salesTransactions.id, transactionId),
+      ),
+    });
+    if (!txRow || txRow.status === "voided") {
+      return txRow ? toSalesTransaction(txRow) : null;
+    }
+
+    const itemRows = await tx.query.salesItems.findMany({
+      where: eq(salesItems.transactionId, transactionId),
+    });
+    const items = itemRows.map(toSalesItem);
+
+    for (const item of items) {
+      await restoreStockInTx(
+        tx,
+        tenantId,
+        txRow.branchId,
+        item,
+        txRow.transactionNumber,
+        userId,
+      );
+    }
+
+    if (txRow.paymentMethod === "credit" && txRow.customerId) {
+      const creditDebt = txRow.grandTotal - txRow.amountPaid;
+      if (creditDebt > 0) {
+        await tx
+          .update(customers)
+          .set({
+            outstandingDebt: sql`GREATEST(0, ${customers.outstandingDebt} - ${creditDebt})`,
+          })
+          .where(and(eq(customers.tenantId, tenantId), eq(customers.id, txRow.customerId)));
+      }
+    }
+
+    const reverse = computeSessionDeltas(txRow.paymentMethod, txRow.grandTotal, txRow.amountPaid);
+
+    await tx
+      .update(cashierSessions)
+      .set({
+        totalSales: sql`GREATEST(0, ${cashierSessions.totalSales} - ${reverse.totalSales})`,
+        totalTransactions: sql`GREATEST(0, ${cashierSessions.totalTransactions} - 1)`,
+        totalCashSales: sql`GREATEST(0, ${cashierSessions.totalCashSales} - ${reverse.totalCashSales})`,
+        totalCardSales: sql`GREATEST(0, ${cashierSessions.totalCardSales} - ${reverse.totalCardSales})`,
+        totalTransferSales: sql`GREATEST(0, ${cashierSessions.totalTransferSales} - ${reverse.totalTransferSales})`,
+        totalCreditSales: sql`GREATEST(0, ${cashierSessions.totalCreditSales} - ${reverse.totalCreditSales})`,
+        expectedCashBalance: sql`GREATEST(0, ${cashierSessions.expectedCashBalance} - ${reverse.expectedCashDelta})`,
+      })
+      .where(eq(cashierSessions.id, txRow.sessionId));
+
+    const [updated] = await tx
+      .update(salesTransactions)
+      .set({ status: "voided" })
+      .where(eq(salesTransactions.id, transactionId))
+      .returning();
+
+    return updated ? toSalesTransaction(updated) : null;
+  });
+}
