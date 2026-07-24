@@ -2,13 +2,11 @@
 # Docs: DEPLOY.md
 
 [build]
-builder = "NIXPACKS"
-# Jangan ulang `npm ci` — Nixpacks/Railpack sudah install deps di fase install.
-# Ulang npm ci di sini memicu EBUSY pada node_modules/.cache (cache mount read-only).
-buildCommand = "npm run build"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "node .output/server/index.mjs"
 healthcheckPath = "/login"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

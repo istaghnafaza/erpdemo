@@ -76,12 +76,15 @@ Di Google Console, tambahkan:
 
 Set `AUTH_URL` = URL Railway **tanpa** trailing slash.
 
-### Build & start (otomatis via `railway.toml`)
+### Build & start (Dockerfile — disarankan)
 
-- **Install:** Nixpacks menjalankan `npm ci` otomatis (jangan ulang di build command)
-- **Build:** `npm run build`
-- **Start:** `npm run start` → `node .output/server/index.mjs`
-- Nitro preset: **node-server** (sudah di `vite.config.ts`)
+Deploy memakai **`Dockerfile`** (Node 22) agar build Nitro konsisten dan menghindari bug Nixpacks/`@vercel/nft`.
+
+- **Build:** multi-stage Docker (`npm ci` → `npm run build`)
+- **Start:** `node .output/server/index.mjs`
+- **Fallback:** `nixpacks.toml` (Node 22.14+) jika tidak pakai Docker
+
+Nitro preset: **node-server** (sudah di `vite.config.ts`)
 
 ### Generate domain
 
@@ -138,7 +141,8 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 
 | Gejala | Solusi |
 |--------|--------|
-| Build gagal `EBUSY node_modules/.cache` | Hapus `npm ci` dari build command — Railway sudah install otomatis |
+| Build gagal `EBUSY node_modules/.cache` | Jangan ulang `npm ci` di build command — Railway sudah install otomatis |
+| Build gagal `nodeFileTrace` / `@vercel/nft` | Pakai **Dockerfile** (sudah di repo) — bug Nixpacks + Nitro trace di Linux |
 | 500 saat login | `AUTH_SECRET` & `DATABASE_URL` benar? |
 | Google login gagal | `AUTH_URL` match URL browser; redirect URI di Console |
 | Data kosong | `VITE_DATA_BACKEND=neon`; jalankan `neon:setup` |
@@ -160,7 +164,10 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 
 | File | Fungsi |
 |------|--------|
-| `railway.toml` | Build/start Railway |
+| `Dockerfile` | Build production Node 22 (utama) |
+| `railway.toml` | Builder Dockerfile + start command |
+| `nixpacks.toml` | Fallback Nixpacks Node 22.14+ |
+| `.node-version` | Hint versi Node |
 | `vite.config.ts` | `nitro.preset: node-server` |
 | `package.json` | `"name": "seps"`, script `start` |
 | `.env.example` | Template env |
