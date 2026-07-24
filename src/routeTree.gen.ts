@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
@@ -55,6 +56,11 @@ const RegisterRoute = RegisterRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TenantSlugRoute = TenantSlugRouteImport.update({
@@ -253,6 +259,7 @@ const TenantSlugSettingsMasterDataProductAttributesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
@@ -292,6 +299,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$tenantSlug'
+    | '/health'
     | '/login'
     | '/register'
     | '/$tenantSlug/dashboard'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$tenantSlug'
+    | '/health'
     | '/login'
     | '/register'
     | '/$tenantSlug/dashboard'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$tenantSlug'
+    | '/health'
     | '/login'
     | '/register'
     | '/$tenantSlug/dashboard'
@@ -489,6 +501,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TenantSlugRoute: typeof TenantSlugRouteWithChildren
+  HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
@@ -509,6 +522,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$tenantSlug': {
@@ -847,6 +867,7 @@ const TenantSlugRouteWithChildren = TenantSlugRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TenantSlugRoute: TenantSlugRouteWithChildren,
+  HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
