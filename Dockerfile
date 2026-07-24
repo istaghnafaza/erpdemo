@@ -22,7 +22,8 @@ ENV HOST=0.0.0.0
 ENV NITRO_HOST=0.0.0.0
 
 COPY --from=build /app/.output ./.output
+COPY --from=build /app/scripts/start-production.mjs ./scripts/start-production.mjs
 
 EXPOSE 8080
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["node", "scripts/start-production.mjs"]

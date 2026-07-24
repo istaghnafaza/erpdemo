@@ -117,7 +117,7 @@ Copy URL → update `AUTH_URL` → redeploy.
    - `budi@simetri.id` / `DemoSES2025!`
 3. Wizard onboarding → POS → Dashboard
 
-Health check Railway: path `/health` (tanpa database). Set env vars sebelum uji login.
+Health check Railway: path **`/pwa-icon.svg`** (file statis, tanpa SSR). Route `/health` tetap ada untuk cek manual.
 
 ---
 
@@ -158,7 +158,7 @@ Hostinger **Premium/Business** tetap berguna untuk email bisnis & landing page �
 | Gejala | Solusi |
 |--------|--------|
 | Build gagal `EBUSY node_modules/.cache` | Jangan ulang `npm ci` di build command — Railway sudah install otomatis |
-| Healthcheck failure | Pastikan env `HOST`/`PORT` OK; healthcheck pakai `/health` bukan `/login` |
+| Healthcheck failure | Cek **Deploy Logs** baris `[SEPS] starting server host=... port=...`; healthcheck pakai `/pwa-icon.svg` |
 | 500 saat login | `AUTH_SECRET` & `DATABASE_URL` benar? |
 | Google login gagal | `AUTH_URL` match URL browser; redirect URI di Console |
 | Data kosong | `VITE_DATA_BACKEND=neon`; jalankan `neon:setup` |

@@ -6,8 +6,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node .output/server/index.mjs"
-healthcheckPath = "/health"
+startCommand = "node scripts/start-production.mjs"
+# Static asset — tidak lewat SSR (andalkan untuk healthcheck Railway)
+healthcheckPath = "/pwa-icon.svg"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
