@@ -24,7 +24,9 @@ ENV VITE_DATA_BACKEND=$VITE_DATA_BACKEND \
     VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
     VITE_PUBLIC_APP_URL=$VITE_PUBLIC_APP_URL
 
-RUN npm run build
+# SSR must use react/jsx-runtime (production), NOT jsx-dev-runtime — NODE_ENV=development
+# during build caused "jsxDEV is not a function" on Railway (see deploy logs).
+RUN NODE_ENV=production npm run build
 RUN test -f .output/public/pwa-icon.svg && test -f .output/server/index.mjs
 
 FROM node:22-bookworm-slim AS runner

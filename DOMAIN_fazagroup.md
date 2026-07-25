@@ -232,6 +232,7 @@ Redeploy lagi.
 | Railway domain "Pending" | CNAME belum benar atau belum propagate                        |
 | SSL error                | Tunggu Railway issue cert (beberapa menit setelah DNS active) |
 | Login 500                | `DATABASE_URL`, `AUTH_SECRET` di Railway                      |
+| SSR `jsxDEV is not a function` | Dockerfile build harus `NODE_ENV=production npm run build` |
 | Redirect loop login      | `AUTH_URL` harus exact `https://seps.fazagroup.id`            |
 | Google login gagal       | Origins + redirect URI + `VITE_PUBLIC_APP_URL`                |
 
