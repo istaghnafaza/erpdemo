@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { useFinanceStore } from "@/stores/finance.store";
@@ -138,7 +139,7 @@ const CONSOLIDATED_WEIGHTS = [0.55, 0.3, 0.15];
 export function useDashboard() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const tenantId = currentUser?.tenantId ?? "";
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
   const branches = useBranchStore((s) => s.branches);
   const activeBranch = useBranchStore((s) => s.activeBranch);
   const isConsolidated = useBranchStore((s) => s.isConsolidated);

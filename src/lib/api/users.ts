@@ -32,7 +32,7 @@ function profileToRecord(p: Profile, branchIds: string[]): TenantUserRecord {
 }
 
 export async function listTenantUsers(tenantId: string): Promise<ApiResponse<TenantUserRecord[]>> {
-  if (tenantId === MOCK_TENANT_ID && !isNeonBackend()) {
+  if (isMockTenantId(tenantId)) {
     useUsersStore.getState().initForTenant(tenantId);
     return ok(useUsersStore.getState().listForTenant(tenantId));
   }
@@ -71,7 +71,7 @@ export async function createTenantUser(
   tenantId: string,
   input: CreateTenantUserInput,
 ): Promise<ApiResponse<TenantUserRecord>> {
-  if (tenantId === MOCK_TENANT_ID && !isNeonBackend()) {
+  if (isMockTenantId(tenantId)) {
     const result = useUsersStore.getState().createUser(tenantId, input);
     if (!result.ok || !result.user) return fail(result.error ?? "Gagal menambah pegawai");
     return ok(result.user);
@@ -92,7 +92,7 @@ export async function updateTenantUser(
   userId: string,
   input: UpdateTenantUserInput,
 ): Promise<ApiResponse<TenantUserRecord>> {
-  if (tenantId === MOCK_TENANT_ID && !isNeonBackend()) {
+  if (isMockTenantId(tenantId)) {
     const result = useUsersStore.getState().updateUser(userId, input);
     if (!result.ok) return fail(result.error ?? "Gagal memperbarui pegawai");
     const updated = useUsersStore.getState().findById(userId);
@@ -117,7 +117,7 @@ export async function setTenantUserActive(
   userId: string,
   isActive: boolean,
 ): Promise<ApiResponse<TenantUserRecord>> {
-  if (tenantId === MOCK_TENANT_ID && !isNeonBackend()) {
+  if (isMockTenantId(tenantId)) {
     const result = useUsersStore.getState().setActive(userId, isActive);
     if (!result.ok) return fail(result.error ?? "Gagal mengubah status pegawai");
     const updated = useUsersStore.getState().findById(userId);

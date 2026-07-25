@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import {
   usePurchasingStore,
@@ -55,7 +56,7 @@ export function usePurchaseOrders() {
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
   const branchId = activeBranch?.id ?? "";
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
 
   const [orders, setOrders] = useState<MockPoWithItems[]>([]);
   const [loading, setLoading] = useState(true);

@@ -6,6 +6,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { loadNeonReports } from "@/lib/reports-neon-loader";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
@@ -42,7 +43,7 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
   const mockPayables = usePayablesStore((s) => s.mockPayables);
   const mockApPayments = usePayablesStore((s) => s.mockPayments);
 
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
   const useNeonData = isNeonBackend() && !isMockTenant;
 
   const [period, setPeriod] = useState<ReportPeriod>(initialPeriod);

@@ -43,6 +43,7 @@ import {
 import { resolveCashAccountForPayment } from "@/lib/mock-finance";
 import { MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import type { CashierSession, PosCart, Customer, CartItem } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
 import type { OrderFulfillmentType } from "@/types/sales-transactions";
@@ -321,7 +322,7 @@ export const usePosStore = create<PosState>()(
         s.cashierId = cashierId;
         s.cashierName = cashierName;
         s.branchCode = branchCode;
-        s.isMockSession = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+        s.isMockSession = isMockTenantId(tenantId);
       });
     },
 

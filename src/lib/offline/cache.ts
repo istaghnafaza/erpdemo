@@ -8,6 +8,7 @@ import { getMockPosCatalog } from "@/lib/mock-pos-catalog";
 import { getMockTenantCustomers } from "@/stores/customers.store";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import {
   saveProducts,
   saveCustomers,
@@ -19,7 +20,7 @@ const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 export async function refreshCache(tenantId: string, branchId: string): Promise<CacheMeta> {
-  const isMock = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMock = isMockTenantId(tenantId);
 
   let products;
   let customers;

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore, MOCK_TENANT_ID, MOCK_BRANCHES } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePosStore } from "@/stores/pos.store";
 import { useInventoryStore } from "@/stores/inventory.store";
@@ -42,7 +43,7 @@ export function useStockTransfer() {
 
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
   const branchList =
     branches.length > 0 ? branches : isMockTenant ? MOCK_BRANCHES : [];
 

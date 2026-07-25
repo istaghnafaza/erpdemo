@@ -27,6 +27,7 @@ import type { DeliverySiteType } from "@/types/customer-delivery-sites";
 import { useOfflineStore } from "@/stores/offline.store";
 import { MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { getBranchProducts } from "@/lib/api/products";
 import { getCustomers } from "@/lib/api/customers";
 import { getHeldCartsInBranch } from "@/lib/api/transactions";
@@ -85,7 +86,7 @@ export function usePos() {
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
   const branchId = activeBranch?.id ?? "";
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
 
   // -------------------------------------------------------------------------
   // Store wiring

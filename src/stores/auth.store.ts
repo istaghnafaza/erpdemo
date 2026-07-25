@@ -401,12 +401,8 @@ export const useAuthStore = create<AuthState>()(
       // refreshUser — re-reads from Supabase session (called on app mount)
       // -----------------------------------------------------------------------
       refreshUser: async () => {
-        // Mock demo session — no Supabase/Neon cookie to refresh
-        if (
-          isMockBackend() &&
-          get().isAuthenticated &&
-          get().currentUser?.id.startsWith("33331111-")
-        ) {
+        // Mock demo session — skip Neon refresh (quick login staging)
+        if (get().isAuthenticated && get().currentUser?.id.startsWith(MOCK_USER_ID_PREFIX)) {
           return;
         }
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockDemoUser } from "@/lib/mock-session";
 import { createBranch, assignUserToBranch, finalizeOnboardingPrimaryBranch } from "@/lib/api/branches";
 import { setLegacyMode, setOnboardingComplete } from "@/lib/api/tenants";
 import { createTenantUser } from "@/lib/api/users";
@@ -228,10 +229,7 @@ function OnboardingPage() {
       }
     }
 
-    const dashboardSlug =
-      currentUser.tenantId === MOCK_TENANT_ID && !isNeonBackend()
-        ? tenantSlug
-        : targetSlug;
+    const dashboardSlug = isMockDemoUser(currentUser) ? tenantSlug : targetSlug;
 
     let branch;
     if (isNeonBackend()) {
@@ -365,7 +363,7 @@ function OnboardingPage() {
     useOnboardingStore.getState().finishWizardResume();
     const slug =
       useAuthStore.getState().currentTenant?.slug ??
-      (currentUser.tenantId === MOCK_TENANT_ID && !isNeonBackend() ? tenantSlug : targetSlug);
+      (isMockDemoUser(currentUser) ? tenantSlug : targetSlug);
     navigate({ to: "/$tenantSlug/dashboard", params: { tenantSlug: slug } });
   };
 

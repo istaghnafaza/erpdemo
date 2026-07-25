@@ -16,7 +16,7 @@ export async function listSalesTransactions(
   branchIds?: string[],
 ): Promise<ApiResponse<SalesTransactionRecord[]>> {
   const useMockStore =
-    isMockBackend() || (tenantId === MOCK_TENANT_ID && !isNeonBackend());
+    isMockBackend() || (isMockTenantId(tenantId));
 
   if (useMockStore) {
     try {

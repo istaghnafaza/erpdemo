@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { createTransaction } from "@/lib/api/transactions";
-import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { recordSyncBatch } from "@/lib/offline/sync-metrics";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
 import type { QueuedTransaction } from "@/stores/offline.store";
@@ -11,7 +11,7 @@ import { useNotificationStore } from "@/stores/notification.store";
 
 /** Demo tenant (mock backend only): sesi POS in-memory, tidak ada di DB. */
 function isMockOfflineItem(item: QueuedTransaction): boolean {
-  if (item.tenantId === MOCK_TENANT_ID && !isNeonBackend()) return true;
+  if (isMockTenantId(item.tenantId)) return true;
   const sessionId = item.transaction.session_id;
   return typeof sessionId === "string" && sessionId.startsWith("mock-session-");
 }

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { useFinanceStore } from "@/stores/finance.store";
 import { useReceivablesStore } from "@/stores/receivables.store";
@@ -52,7 +53,7 @@ export function useFinance() {
 
   const tenantId = currentUser?.tenantId ?? "";
   const tenantSlug = useAuthStore((s) => s.currentTenant?.slug) ?? "";
-  const isMockTenant = tenantId === MOCK_TENANT_ID && !isNeonBackend();
+  const isMockTenant = isMockTenantId(tenantId);
   const isOwner = currentUser?.profile.role === "owner";
 
   useEffect(() => {
