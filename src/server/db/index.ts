@@ -19,7 +19,7 @@ export function getDb() {
   const url = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      "[SES] DATABASE_URL is not set. Configure Neon connection string in .env",
+      "[SES] DATABASE_URL belum diset. Railway → Variables → isi DATABASE_URL + DATABASE_URL_DIRECT dari Neon, lalu Redeploy.",
     );
   }
 

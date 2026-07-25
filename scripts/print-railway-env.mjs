@@ -45,42 +45,38 @@ const authSecret =
   env.get("RAILWAY_AUTH_SECRET")?.trim() ||
   randomBytes(32).toString("base64url");
 
+/** Tanpa baris komentar — aman untuk Railway Raw Editor (replace ALL variables). */
 const lines = [
-  "# Paste ke Railway → service erpdemo → Variables → Raw Editor",
-  "# Setelah save → Deployments → Redeploy",
-  "",
   `DATABASE_URL=${databaseUrl}`,
   `DATABASE_URL_DIRECT=${databaseUrlDirect}`,
   `AUTH_SECRET=${authSecret}`,
   "AUTH_URL=https://seps.fazagroup.id",
   "PORT=8080",
-  "",
   "VITE_DATA_BACKEND=neon",
   "VITE_APP_NAME=SEPS",
   "VITE_APP_ENV=staging",
   "NODE_ENV=production",
-  "",
 ];
 
 const googleClientId = env.get("VITE_GOOGLE_CLIENT_ID")?.trim();
 const googleSecret = env.get("GOOGLE_CLIENT_SECRET")?.trim();
 if (googleClientId && googleSecret) {
   lines.push(
-    "# Google OAuth (opsional — sudah ada di .env lokal)",
     `VITE_GOOGLE_CLIENT_ID=${googleClientId}`,
     `GOOGLE_CLIENT_ID=${env.get("GOOGLE_CLIENT_ID")?.trim() || googleClientId}`,
     `GOOGLE_CLIENT_SECRET=${googleSecret}`,
     "VITE_PUBLIC_APP_URL=https://seps.fazagroup.id",
-    "",
   );
 }
 
-writeFileSync(outPath, lines.join("\n"), "utf8");
+writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
 
-console.log(`[railway:env] OK — salin isi file ini ke Railway Variables:`);
+console.log(`[railway:env] OK — salin SEMUA baris ke Railway Variables (Raw Editor):`);
 console.log(`  ${outPath}`);
 console.log("");
-console.log("Langkah:");
-console.log("  1. Railway → erpdemo → Variables → Raw Editor → paste → Save");
-console.log("  2. Deployments → Redeploy");
-console.log("  3. Uji https://seps.fazagroup.id/login");
+console.log("PENTING:");
+console.log("  - Buka service erpdemo (bukan project-level saja)");
+console.log("  - Raw Editor → paste → Save (mengganti SEMUA variable service)");
+console.log("  - Deployments → Redeploy");
+console.log("  - Deploy Logs harus tampil: [SEPS] env database=ok auth=ok");
+console.log("  - Uji https://seps.fazagroup.id/login");
