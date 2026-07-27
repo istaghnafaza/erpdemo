@@ -100,12 +100,13 @@ Buka file **`.env.railway.local`** → salin semua → paste ke Railway **Variab
 
 ```env
 # --- Neon (salin dari .env lokal Anda) ---
-DATABASE_URL=<postgresql://...@...neon.tech/...?sslmode=require>
-DATABASE_URL_DIRECT=<sama atau direct connection dari Neon Console>
+DATABASE_URL=postgresql://...@...neon.tech/...?sslmode=require
+DATABASE_URL_DIRECT=postgresql://...@...neon.tech/...?sslmode=require
 
 # --- Auth ---
-AUTH_SECRET=<random min 32 karakter — jangan kosong>
+AUTH_SECRET=random-min-32-karakter-jangan-kosong
 AUTH_URL=https://seps.fazagroup.id
+PORT=8080
 
 # --- App ---
 VITE_DATA_BACKEND=neon
@@ -122,6 +123,10 @@ NODE_ENV=production
 
 **Penting:**
 
+- Paste ke Raw Editor **tanpa** tanda kutip di value (`DATABASE_URL=postgresql://...` — bukan `DATABASE_URL="postgresql://..."`)
+- Pastikan Variables diisi di **service yang punya domain** `seps.fazagroup.id` (bukan service/project lain)
+- Setelah Save → **Redeploy** deployment ACTIVE (Variables baru tidak otomatis masuk container lama)
+- Verifikasi: buka `https://seps.fazagroup.id/health` — harus `databaseConfigured: true`
 - `AUTH_URL` = `https://seps.fazagroup.id` (**tanpa** `/` di akhir)
 - Jangan commit file `.env` ke GitHub
 
@@ -231,7 +236,7 @@ Redeploy lagi.
 | DNS tidak resolve        | Tunggu propagasi; cek CNAME `seps` di Hostinger               |
 | Railway domain "Pending" | CNAME belum benar atau belum propagate                        |
 | SSL error                | Tunggu Railway issue cert (beberapa menit setelah DNS active) |
-| Login 500 / DATABASE_URL | Cek Deploy Logs: `database=ok`. Jika `MISSING`, paste ulang `.env.railway.local` → Redeploy |
+| Login 500 / DATABASE_URL | Buka `https://seps.fazagroup.id/health`. Jika `env_missing`, Variables belum masuk **service yang domain-nya seps.fazagroup.id**. Paste ulang tanpa tanda kutip di value → Save → Redeploy → cek Deploy Logs `database=ok` + `env keys present: DATABASE_URL,...` |
 | SSR `jsxDEV is not a function` | Dockerfile build harus `NODE_ENV=production npm run build` |
 | Redirect loop login      | `AUTH_URL` harus exact `https://seps.fazagroup.id`            |
 | Google login gagal       | Origins + redirect URI + `VITE_PUBLIC_APP_URL`                |

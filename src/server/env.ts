@@ -1,0 +1,63 @@
+// =============================================================================
+// Runtime env helpers — strip accidental quotes from Railway Raw Editor pastes
+// =============================================================================
+
+/**
+ * Read a process env var safely.
+ * Railway Raw Editor pastes sometimes include surrounding quotes as part of the value.
+ */
+export function readEnv(name: string): string | undefined {
+  const raw = process.env[name];
+  if (raw == null) return undefined;
+
+  let value = raw.trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+
+  return value.length > 0 ? value : undefined;
+}
+
+export function hasEnv(name: string): boolean {
+  return Boolean(readEnv(name));
+}
+
+/** Normalize known SEPS env keys in-place (startup only). */
+export function sanitizeProcessEnv(keys: string[]): void {
+  for (const key of keys) {
+    const cleaned = readEnv(key);
+    if (cleaned !== undefined) {
+      process.env[key] = cleaned;
+    } else if (process.env[key] != null && process.env[key]!.trim() === "") {
+      delete process.env[key];
+    }
+  }
+}
+
+export function getDatabaseUrl(): string | undefined {
+  return readEnv("DATABASE_URL_DIRECT") || readEnv("DATABASE_URL");
+}
+
+export function getEnvDiagnostics() {
+  const databaseUrlDirect = readEnv("DATABASE_URL_DIRECT");
+  const databaseUrl = readEnv("DATABASE_URL");
+  const authSecret = readEnv("AUTH_SECRET");
+  const authUrl = readEnv("AUTH_URL");
+
+  let databaseUrlSource: "DATABASE_URL_DIRECT" | "DATABASE_URL" | null = null;
+  if (databaseUrlDirect) databaseUrlSource = "DATABASE_URL_DIRECT";
+  else if (databaseUrl) databaseUrlSource = "DATABASE_URL";
+
+  return {
+    databaseConfigured: Boolean(databaseUrlDirect || databaseUrl),
+    databaseUrlSource,
+    authSecretConfigured: Boolean(authSecret && authSecret.length >= 16),
+    authUrl: authUrl ?? null,
+    viteDataBackend: readEnv("VITE_DATA_BACKEND") ?? null,
+    nodeEnv: readEnv("NODE_ENV") ?? null,
+    port: readEnv("PORT") ?? null,
+  };
+}

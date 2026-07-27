@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { SignJWT, jwtVerify } from "jose";
+import { readEnv } from "@/server/env";
 
 const COOKIE_NAME = "ses_session";
 const MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
@@ -14,7 +15,7 @@ export interface SessionPayload {
 }
 
 function getSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET;
+  const secret = readEnv("AUTH_SECRET");
   if (!secret || secret.length < 16) {
     throw new Error("[SES] AUTH_SECRET must be set (min 16 chars) for Neon auth");
   }

@@ -5,6 +5,7 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
+import { getDatabaseUrl } from "@/server/env";
 import * as schema from "./schema";
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
@@ -16,10 +17,10 @@ if (typeof globalThis.WebSocket === "undefined") {
 export function getDb() {
   if (_db) return _db;
 
-  const url = process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL;
+  const url = getDatabaseUrl();
   if (!url) {
     throw new Error(
-      "[SES] DATABASE_URL belum diset. Railway → Variables → isi DATABASE_URL + DATABASE_URL_DIRECT dari Neon, lalu Redeploy.",
+      "[SES] DATABASE_URL belum diset di runtime container. Pastikan Variables ada di service Railway yang melayani seps.fazagroup.id (bukan service lain), tanpa tanda kutip di value, lalu Redeploy. Cek /health untuk status env.",
     );
   }
 
@@ -29,7 +30,7 @@ export function getDb() {
 }
 
 export function isDatabaseConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL || process.env.DATABASE_URL_DIRECT);
+  return Boolean(getDatabaseUrl());
 }
 
 export { schema };

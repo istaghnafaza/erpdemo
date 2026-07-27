@@ -335,8 +335,43 @@ export const neonSetTenantUserActive = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 
 export const neonHealthCheck = createServerFn({ method: "GET" }).handler(async () => {
-  const { getHealthReport } = await import("@/server/services/health");
-  return getHealthReport();
+  const { getEnvDiagnostics, getDatabaseUrl } = await import("@/server/env");
+  const env = getEnvDiagnostics();
+
+  if (!env.databaseConfigured) {
+    return {
+      ok: false as const,
+      status: "env_missing" as const,
+      message:
+        "DATABASE_URL belum terbaca di runtime. Cek Railway Variables pada service yang benar, lalu Redeploy.",
+      env,
+      database: null,
+    };
+  }
+
+  try {
+    const { getHealthReport } = await import("@/server/services/health");
+    const database = await getHealthReport();
+    return {
+      ok: database.ok as boolean,
+      status: "ok" as const,
+      message: "SEPS OK",
+      env,
+      database,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false as const,
+      status: "db_error" as const,
+      message,
+      env: {
+        ...env,
+        databaseConfigured: Boolean(getDatabaseUrl()),
+      },
+      database: null,
+    };
+  }
 });
 
 // ---------------------------------------------------------------------------

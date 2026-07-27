@@ -4,18 +4,19 @@
 
 import { OAuth2Client } from "google-auth-library";
 import type { GoogleTokenPayload } from "@/server/auth/google";
+import { readEnv } from "@/server/env";
 
 function getGoogleClientId(): string {
-  return process.env.GOOGLE_CLIENT_ID ?? process.env.VITE_GOOGLE_CLIENT_ID ?? "";
+  return readEnv("GOOGLE_CLIENT_ID") ?? readEnv("VITE_GOOGLE_CLIENT_ID") ?? "";
 }
 
 function getGoogleClientSecret(): string {
-  return process.env.GOOGLE_CLIENT_SECRET ?? "";
+  return readEnv("GOOGLE_CLIENT_SECRET") ?? "";
 }
 
 /** Must match Google Console → Authorized redirect URIs */
 export function getGoogleOAuthRedirectUri(): string {
-  const base = process.env.AUTH_URL ?? "http://localhost:8081";
+  const base = readEnv("AUTH_URL") ?? "http://localhost:8081";
   return `${base.replace(/\/$/, "")}/auth/google/callback`;
 }
 
