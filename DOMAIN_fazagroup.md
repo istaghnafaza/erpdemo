@@ -125,7 +125,8 @@ NODE_ENV=production
 
 - Paste ke Raw Editor **tanpa** tanda kutip di value (`DATABASE_URL=postgresql://...` — bukan `DATABASE_URL="postgresql://..."`)
 - Pastikan Variables diisi di **service yang punya domain** `seps.fazagroup.id` (bukan service/project lain)
-- Setelah Save → **Redeploy** deployment ACTIVE (Variables baru tidak otomatis masuk container lama)
+- Setelah Save → **Deploy staged changes** (banner ungu di canvas project → **Deploy**)
+- **Jangan** hanya **Redeploy** dari menu Deployments — itu pakai config lama tanpa variable baru
 - Verifikasi: buka `https://seps.fazagroup.id/health` — harus `databaseConfigured: true`
 - `AUTH_URL` = `https://seps.fazagroup.id` (**tanpa** `/` di akhir)
 - Jangan commit file `.env` ke GitHub
@@ -157,13 +158,17 @@ Login demo (jika seed sudah di-import):
 
 
 
-## 4. Redeploy
+## 4. Apply Variables (staged changes)
 
-Setelah save Variables:
+Setelah save Variables, Railway menampung perubahan sebagai **staged changes** (banner ungu di canvas project):
 
-- **Deployments** → deployment **ACTIVE** → **⋯** → **Redeploy**
+1. Kembali ke **Architecture / canvas** project Railway
+2. Klik banner **"X staged changes"** (ungu) → **Details** → **Deploy**
+3. Tunggu deploy selesai
 
-Atau push ke `main` (auto-deploy).
+> **Redeploy** dari tab Deployments (⋯ → Redeploy) **tidak** menerapkan variable baru — hanya rebuild deployment lama dengan env yang sama.
+
+Push ke `main` juga auto-deploy, tapi tetap butuh Variables sudah di-**Deploy** dari staged changes dulu.
 
 ---
 

@@ -55,8 +55,17 @@ console.log(`[SEPS] env keys present: ${presentKeys.join(", ") || "(none)"}`);
 
 if (!hasDatabase) {
   console.error(
-    "[SEPS] DATABASE_URL tidak ada di runtime container — buka Railway → service yang domain-nya seps.fazagroup.id → Variables. Pastikan key DATABASE_URL ada (value tanpa tanda kutip), Save, lalu Redeploy deployment ACTIVE.",
+    "[SEPS] DATABASE_URL tidak ada di runtime container.",
+  );
+  console.error(
+    "[SEPS] Railway: Variables disimpan belum otomatis masuk container. Di canvas project, klik banner ungu 'Staged changes' → Deploy (BUKAN Redeploy dari menu deployment).",
+  );
+  console.error(
+    "[SEPS] Pastikan Variables ada di SERVICE erpdemo (domain seps.fazagroup.id), value tanpa tanda kutip.",
   );
 }
+
+const allEnvKeys = Object.keys(process.env).sort();
+console.log(`[SEPS] process.env total keys=${allEnvKeys.length} (custom vars should include DATABASE_URL, AUTH_SECRET)`);
 
 await import("../.output/server/index.mjs");
