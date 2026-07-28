@@ -20,6 +20,7 @@
     "neon:health": "node scripts/health-neon.mjs",
     "neon:migrate": "node scripts/migrate-neon.mjs",
     "neon:migrate:phase7": "node scripts/migrate-phase7.mjs",
+    "neon:seed:lumayan": "node scripts/seed-lumayan.mjs",
     "neon:uat": "node scripts/uat-neon.mjs",
     "railway:env": "node scripts/print-railway-env.mjs"
   },

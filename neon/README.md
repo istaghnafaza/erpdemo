@@ -102,7 +102,24 @@ Quick login mock tetap aktif jika `VITE_DATA_BACKEND=mock` (default).
 
 | andi@simetri.id | cashier | 222222 |
 
+## Tenant uji coba — TB Lumayan
 
+Jalankan seed (butuh `.env` Neon):
+
+```bash
+npm run neon:seed:lumayan
+```
+
+| Email | Role | Password / PIN |
+|-------|------|----------------|
+| owner@seps.id | owner | 111111 |
+| manager@seps.id | manager | 111111 |
+| kasir@seps.id | cashier | 111111 |
+| gudang@seps.id | warehouse | 111111 |
+
+URL: `https://seps.fazagroup.id/login` → redirect ke `/tb-lumayan/dashboard`
+
+Isi data: 2 cabang, 15 produk + stok, 8 pelanggan, 5 supplier. **Tanpa** histori penjualan / keuangan / pengiriman.
 
 ## Arsitektur
 
