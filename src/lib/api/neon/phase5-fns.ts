@@ -440,6 +440,39 @@ export const neonGetDashboardStats = createServerFn({ method: "POST" })
     return getDashboardStatsReport(data.tenantId, data.branchId);
   });
 
+export const neonGetDashboardBundle = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string; branchIds: string[] }) => data)
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { assertServerFnRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertServerFnRateLimit("dashboard-bundle", data.tenantId);
+    const { getDashboardBundleReport } = await import("@/server/services/reports");
+    const branches = await getDashboardBundleReport(data.tenantId, data.branchIds);
+    return { branches };
+  });
+
+export const neonGetReportsBundle = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      branchIds: string[];
+      periodDays: number;
+      monthRange: DateRangeFilter;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { assertServerFnRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertServerFnRateLimit("reports-bundle", data.tenantId);
+    const { getReportsBundleReport } = await import("@/server/services/reports");
+    return getReportsBundleReport(
+      data.tenantId,
+      data.branchIds,
+      data.periodDays,
+      data.monthRange,
+    );
+  });
+
 export const neonGetProfitLossSummary = createServerFn({ method: "POST" })
   .validator(
     (data: { tenantId: string; branchId: string; dateRange: DateRangeFilter }) => data,

@@ -3,15 +3,17 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { useFinanceStore } from "@/stores/finance.store";
 import { useReceivablesStore } from "@/stores/receivables.store";
 import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
-import { getCashAccounts, getCashTransactions, recordCashTransaction } from "@/lib/api/finance";
+import { fetchCashBookOverview } from "@/lib/finance-overview-client";
+import { recordCashTransaction } from "@/lib/api/finance";
+import { queryKeys } from "@/lib/query-keys";
 import { EXPENSE_CATEGORIES } from "@/lib/mock-finance";
 import { filterFinanceByBranches, getFinanceScopeLabel } from "@/lib/finance-scope";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
@@ -19,6 +21,7 @@ import type { MockCashTxWithAccount } from "@/lib/mock-finance";
 import type { CashAccount, DbCashTxType } from "@/types/database";
 
 export function useCashBook() {
+  const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.currentUser);
   const branches = useBranchStore((s) => s.branches);
   const activeBranch = useBranchStore((s) => s.activeBranch);
@@ -53,9 +56,6 @@ export function useCashBook() {
   const scopeLabel = getFinanceScopeLabel(isConsolidated && isOwner, activeBranch);
   const canRecordExpense = !(isConsolidated && isOwner) && !!activeBranch;
 
-  const [apiAccounts, setApiAccounts] = useState<CashAccount[]>([]);
-  const [apiTransactions, setApiTransactions] = useState<MockCashTxWithAccount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
 
@@ -63,6 +63,33 @@ export function useCashBook() {
   const [dateTo, setDateTo] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<DbCashTxType | "all">("all");
+
+  useEffect(() => {
+    if (!isMockTenant) return;
+    initializeMockFinance(mockSales);
+    syncHistoricalArApPayments({
+      receivables: mockReceivables,
+      arPayments: mockArPayments,
+      payables: mockPayables,
+      apPayments: mockApPayments,
+    });
+  }, [
+    isMockTenant,
+    mockSales,
+    mockReceivables,
+    mockArPayments,
+    mockPayables,
+    mockApPayments,
+    initializeMockFinance,
+    syncHistoricalArApPayments,
+  ]);
+
+  const cashBookQuery = useQuery({
+    queryKey: queryKeys.cashBookOverview(tenantId, branchIds, dateFrom, dateTo),
+    queryFn: () => fetchCashBookOverview(tenantId, branchIds, dateFrom, dateTo),
+    enabled: !isMockTenant && Boolean(tenantId) && branchIds.length > 0,
+    staleTime: 60_000,
+  });
 
   const mockScopedAccounts = useMemo(
     () => filterFinanceByBranches(mockAccounts, branchIds),
@@ -74,62 +101,11 @@ export function useCashBook() {
     [mockTransactions, branchIds],
   );
 
-  const loadApiData = useCallback(async () => {
-    setLoading(true);
-
-    if (branchIds.length === 0) {
-      setApiAccounts([]);
-      setApiTransactions([]);
-      setLoading(false);
-      return;
-    }
-
-    const accountResults = await Promise.all(
-      branchIds.map((id) => getCashAccounts(tenantId, id, { activeOnly: true })),
-    );
-    const txResults = await Promise.all(
-      branchIds.map((id) =>
-        getCashTransactions(tenantId, id, {
-          dateRange: dateFrom || dateTo ? { from: dateFrom, to: dateTo } : undefined,
-          limit: 500,
-        }),
-      ),
-    );
-
-    setApiAccounts(accountResults.flatMap((r) => r.data ?? []));
-    setApiTransactions(
-      txResults.flatMap((r) => (r.data ?? []) as MockCashTxWithAccount[]),
-    );
-    setLoading(false);
-  }, [branchIds, tenantId, dateFrom, dateTo]);
-
-  useEffect(() => {
-    if (isMockTenant) {
-      initializeMockFinance(mockSales);
-      syncHistoricalArApPayments({
-        receivables: mockReceivables,
-        arPayments: mockArPayments,
-        payables: mockPayables,
-        apPayments: mockApPayments,
-      });
-      setLoading(false);
-      return;
-    }
-    void loadApiData();
-  }, [
-    isMockTenant,
-    loadApiData,
-    initializeMockFinance,
-    syncHistoricalArApPayments,
-    mockSales,
-    mockReceivables,
-    mockArPayments,
-    mockPayables,
-    mockApPayments,
-  ]);
-
-  const accounts = isMockTenant ? mockScopedAccounts : apiAccounts;
-  const transactions = isMockTenant ? mockScopedTransactions : apiTransactions;
+  const loading = isMockTenant ? false : cashBookQuery.isPending;
+  const accounts = isMockTenant ? mockScopedAccounts : (cashBookQuery.data?.accounts ?? []);
+  const transactions = isMockTenant
+    ? mockScopedTransactions
+    : (cashBookQuery.data?.transactions ?? []);
 
   const branchNameById = useMemo(
     () => new Map(branches.map((b) => [b.id, b.name])),
@@ -146,6 +122,16 @@ export function useCashBook() {
       return true;
     });
   }, [transactions, dateFrom, dateTo, accountFilter, typeFilter]);
+
+  const refreshData = useCallback(async () => {
+    if (isMockTenant) return;
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.cashBookOverview(tenantId, branchIds, dateFrom, dateTo),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.financeOverview(tenantId, branchIds),
+    });
+  }, [isMockTenant, queryClient, tenantId, branchIds, dateFrom, dateTo]);
 
   const recordExpense = useCallback(
     async (data: {
@@ -195,10 +181,19 @@ export function useCashBook() {
       setActionLoading(false);
       if (txResult.error) return { success: false, error: txResult.error };
       setFormOpen(false);
-      await loadApiData();
+      await refreshData();
       return { success: true };
     },
-    [user, activeBranch, isConsolidated, isOwner, isMockTenant, tenantId, recordMockExpense, loadApiData],
+    [
+      user,
+      activeBranch,
+      isConsolidated,
+      isOwner,
+      isMockTenant,
+      tenantId,
+      recordMockExpense,
+      refreshData,
+    ],
   );
 
   return {
@@ -224,6 +219,6 @@ export function useCashBook() {
     setFormOpen,
     actionLoading,
     recordExpense,
-    loadData: loadApiData,
+    loadData: refreshData,
   };
 }

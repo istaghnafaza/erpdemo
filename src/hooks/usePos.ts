@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePosStore, cartGrandTotal, cartSubtotal, type ActiveCart } from "@/stores/pos.store";
@@ -25,12 +26,10 @@ import { getCustomerSegment } from "@/stores/customers.store";
 import { MANUAL_DELIVERY_SITE_VALUE } from "@/components/pos/SaveDeliverySiteDialog";
 import type { DeliverySiteType } from "@/types/customer-delivery-sites";
 import { useOfflineStore } from "@/stores/offline.store";
-import { MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
-import { getBranchProducts } from "@/lib/api/products";
 import { getCustomers } from "@/lib/api/customers";
 import { getHeldCartsInBranch } from "@/lib/api/transactions";
+import { queryKeys } from "@/lib/query-keys";
 import { useInventoryStore } from "@/stores/inventory.store";
 import {
   getMockPosCatalog,
@@ -41,6 +40,7 @@ import { buildMockBranchCatalog } from "@/lib/mock-branch-catalog";
 import { usePosHeldCartsStore } from "@/stores/pos-held-carts.store";
 import { getMockTenantCustomers, useCustomersStore } from "@/stores/customers.store";
 import { getProducts, getCustomers as getCachedCustomers } from "@/lib/offline/idb";
+import { fetchPosCatalogWithWarm } from "@/lib/offline/pos-catalog-warm";
 import type { BranchProductWithProduct, Customer, CartItem } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
 
@@ -87,6 +87,7 @@ export function usePos() {
   const tenantId = currentUser?.tenantId ?? "";
   const branchId = activeBranch?.id ?? "";
   const isMockTenant = isMockTenantId(tenantId);
+  const queryClient = useQueryClient();
 
   // -------------------------------------------------------------------------
   // Store wiring
@@ -158,38 +159,22 @@ export function usePos() {
   // -------------------------------------------------------------------------
   // Catalog (products + branch stock/price)
   // -------------------------------------------------------------------------
-  const [rawCatalog, setRawCatalog] = useState<BranchProductWithProduct[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-
-  useEffect(() => {
-    if (!tenantId || !branchId) return;
-    let cancelled = false;
-    setCatalogLoading(true);
-
-    if (isMockTenant) {
-      Promise.resolve().then(() => {
-        if (cancelled) return;
-        setRawCatalog(getMockPosCatalog(branchId));
-        setCatalogLoading(false);
+  const catalogQuery = useQuery({
+    queryKey: [...queryKeys.posCatalog(tenantId, branchId), isOnline],
+    queryFn: async (): Promise<BranchProductWithProduct[]> => {
+      if (isMockTenant) return getMockPosCatalog(branchId);
+      if (!isOnline) return getProducts<BranchProductWithProduct>(tenantId, branchId);
+      const cacheKey = queryKeys.posCatalog(tenantId, branchId);
+      return fetchPosCatalogWithWarm(tenantId, branchId, (fresh) => {
+        queryClient.setQueryData([...cacheKey, isOnline], fresh);
       });
-    } else if (!isOnline) {
-      void getProducts<BranchProductWithProduct>(tenantId, branchId).then((cached) => {
-        if (cancelled) return;
-        setRawCatalog(cached);
-        setCatalogLoading(false);
-      });
-    } else {
-      void getBranchProducts(tenantId, branchId).then((result) => {
-        if (cancelled) return;
-        setRawCatalog(result.data ?? []);
-        setCatalogLoading(false);
-      });
-    }
+    },
+    enabled: Boolean(tenantId && branchId),
+    staleTime: 60_000,
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantId, branchId, isMockTenant, isOnline]);
+  const rawCatalog = catalogQuery.data ?? [];
+  const catalogLoading = catalogQuery.isPending;
 
   const catalog = useMemo<PosCatalogItem[]>(() => {
     if (isMockTenant) {
@@ -257,29 +242,23 @@ export function usePos() {
   // -------------------------------------------------------------------------
   // Customers
   // -------------------------------------------------------------------------
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const mockStoreCustomers = useCustomersStore((s) => s.customers);
 
-  useEffect(() => {
-    if (!tenantId) return;
-    let cancelled = false;
+  const customersQuery = useQuery({
+    queryKey: [...queryKeys.posCustomers(tenantId), branchId, isOnline, mockStoreCustomers.length],
+    queryFn: async (): Promise<Customer[]> => {
+      if (isMockTenant) return getMockTenantCustomers(tenantId);
+      if (!isOnline && branchId) {
+        return getCachedCustomers<Customer>(tenantId, branchId);
+      }
+      const result = await getCustomers(tenantId);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: Boolean(tenantId),
+  });
 
-    if (isMockTenant) {
-      setCustomers(getMockTenantCustomers(tenantId));
-    } else if (!isOnline && branchId) {
-      void getCachedCustomers<Customer>(tenantId, branchId).then((cached) => {
-        if (!cancelled) setCustomers(cached);
-      });
-    } else {
-      void getCustomers(tenantId).then((result) => {
-        if (!cancelled) setCustomers(result.data ?? []);
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantId, branchId, isMockTenant, isOnline, mockStoreCustomers]);
+  const customers = customersQuery.data ?? [];
 
   const customerDebtDelta = usePosStore((s) => s.mockCustomerDebtDelta);
   const customersWithLiveDebt = useMemo(

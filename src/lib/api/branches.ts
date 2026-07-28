@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
+import { withResponseCache, invalidateResponseCache } from "./response-cache";
 import { neonCall } from "./backend";
 import {
   neonAssignUserToBranch,
@@ -50,47 +51,53 @@ export interface ForceCloseBranchSessionsResult {
 }
 
 export async function getBranches(tenantId: string): Promise<ApiResponse<Branch[]>> {
-  if (isNeonBackend()) {
-    const result = await neonCall(() => neonGetBranches({ data: { tenantId } }));
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
-  }
-  return queryMany(() =>
-    supabase.from("branches").select("*").eq("tenant_id", tenantId).order("name"),
-  );
+  return withResponseCache(`branches:${tenantId}:all`, 60_000, async () => {
+    if (isNeonBackend()) {
+      const result = await neonCall(() => neonGetBranches({ data: { tenantId } }));
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    }
+    return queryMany(() =>
+      supabase.from("branches").select("*").eq("tenant_id", tenantId).order("name"),
+    );
+  });
 }
 
 export async function getActiveBranches(tenantId: string): Promise<ApiResponse<Branch[]>> {
-  if (isNeonBackend()) {
-    const result = await neonCall(() => neonGetActiveBranches({ data: { tenantId } }));
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
-  }
-  return queryMany(() =>
-    supabase
-      .from("branches")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true)
-      .order("name"),
-  );
+  return withResponseCache(`branches:${tenantId}:active`, 60_000, async () => {
+    if (isNeonBackend()) {
+      const result = await neonCall(() => neonGetActiveBranches({ data: { tenantId } }));
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    }
+    return queryMany(() =>
+      supabase
+        .from("branches")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .order("name"),
+    );
+  });
 }
 
 export async function getBranchesWithManager(
   tenantId: string,
 ): Promise<ApiResponse<BranchWithManager[]>> {
-  if (isNeonBackend()) {
-    const result = await neonCall(() => neonGetBranchesWithManager({ data: { tenantId } }));
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
-  }
-  return queryMany(() =>
-    supabase
-      .from("branches")
-      .select("*, manager:manager_id(id, name, email)")
-      .eq("tenant_id", tenantId)
-      .order("name"),
-  );
+  return withResponseCache(`branches:${tenantId}:with-manager`, 60_000, async () => {
+    if (isNeonBackend()) {
+      const result = await neonCall(() => neonGetBranchesWithManager({ data: { tenantId } }));
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    }
+    return queryMany(() =>
+      supabase
+        .from("branches")
+        .select("*, manager:manager_id(id, name, email)")
+        .eq("tenant_id", tenantId)
+        .order("name"),
+    );
+  });
 }
 
 export async function getBranch(
@@ -151,6 +158,7 @@ export async function createBranch(
     const result = await neonCall(() => neonCreateBranch({ data: { tenantId, payload } }));
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal membuat cabang");
+    invalidateResponseCache(`branches:${tenantId}:`);
     return ok(result.data);
   }
 
@@ -161,6 +169,7 @@ export async function createBranch(
       .select()
       .single();
     if (error) return fail(error);
+    invalidateResponseCache(`branches:${tenantId}:`);
     return ok(data);
   } catch (err) {
     return fail(err);
@@ -178,6 +187,7 @@ export async function finalizeOnboardingPrimaryBranch(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal menyiapkan cabang");
+    invalidateResponseCache(`branches:${tenantId}:`);
     return ok(result.data);
   }
   return createBranch(tenantId, payload);
@@ -194,6 +204,7 @@ export async function updateBranch(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Cabang tidak ditemukan");
+    invalidateResponseCache(`branches:${tenantId}:`);
     return ok(result.data);
   }
 
@@ -206,6 +217,7 @@ export async function updateBranch(
       .select()
       .single();
     if (error) return fail(error);
+    invalidateResponseCache(`branches:${tenantId}:`);
     return ok(data);
   } catch (err) {
     return fail(err);

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
+import { withResponseCache, invalidateResponseCache } from "./response-cache";
 import { neonCall } from "./backend";
 import {
   neonCreateGoodsReceipt,
@@ -36,23 +37,29 @@ export async function getSuppliers(
   tenantId: string,
   options?: { activeOnly?: boolean; search?: string },
 ): Promise<ApiResponse<Supplier[]>> {
-  if (isNeonBackend()) {
-    const result = await neonCall(() => neonGetSuppliers({ data: { tenantId, options } }));
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
-  }
-  return queryMany(() => {
-    let q = supabase
-      .from("suppliers")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .order("name");
+  const cacheKey = `suppliers:${tenantId}:${options?.activeOnly ? "active" : "all"}:${options?.search ?? ""}`;
+  const load = async (): Promise<ApiResponse<Supplier[]>> => {
+    if (isNeonBackend()) {
+      const result = await neonCall(() => neonGetSuppliers({ data: { tenantId, options } }));
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    }
+    return queryMany(() => {
+      let q = supabase
+        .from("suppliers")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("name");
 
-    if (options?.activeOnly) q = q.eq("is_active", true);
-    if (options?.search) q = q.ilike("name", `%${options.search}%`);
+      if (options?.activeOnly) q = q.eq("is_active", true);
+      if (options?.search) q = q.ilike("name", `%${options.search}%`);
 
-    return q;
-  });
+      return q;
+    });
+  };
+
+  if (options?.search) return load();
+  return withResponseCache(cacheKey, 30_000, load);
 }
 
 export async function getSupplier(
@@ -91,6 +98,7 @@ export async function createSupplier(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal membuat supplier");
+    invalidateResponseCache(`suppliers:${tenantId}:`);
     return ok(result.data);
   }
   try {
@@ -100,6 +108,7 @@ export async function createSupplier(
       .select()
       .single();
     if (error) return fail(error);
+    invalidateResponseCache(`suppliers:${tenantId}:`);
     return ok(data);
   } catch (err) {
     return fail(err);
@@ -117,6 +126,7 @@ export async function updateSupplier(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Supplier tidak ditemukan");
+    invalidateResponseCache(`suppliers:${tenantId}:`);
     return ok(result.data);
   }
   try {
@@ -128,6 +138,7 @@ export async function updateSupplier(
       .select()
       .single();
     if (error) return fail(error);
+    invalidateResponseCache(`suppliers:${tenantId}:`);
     return ok(data);
   } catch (err) {
     return fail(err);

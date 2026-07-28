@@ -4,6 +4,9 @@
 
 import { and, asc, eq, ilike } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { customersKey } from "@/server/cache/keys";
+import { CACHE_TTL, getCached } from "@/server/cache/redis";
+import { invalidateCustomers } from "@/server/cache/invalidate";
 import { toCustomer } from "@/server/db/mappers";
 import { customers } from "@/server/db/schema";
 import type { Customer, CustomerInsert, CustomerUpdate } from "@/types/database";
@@ -12,16 +15,27 @@ export async function listCustomers(
   tenantId: string,
   options?: { search?: string; type?: "retail" | "credit" },
 ): Promise<Customer[]> {
-  const db = getDb();
-  const conditions = [eq(customers.tenantId, tenantId)];
-  if (options?.type) conditions.push(eq(customers.type, options.type));
-  if (options?.search) conditions.push(ilike(customers.name, `%${options.search}%`));
+  if (options?.search || options?.type) {
+    const db = getDb();
+    const conditions = [eq(customers.tenantId, tenantId)];
+    if (options?.type) conditions.push(eq(customers.type, options.type));
+    if (options?.search) conditions.push(ilike(customers.name, `%${options.search}%`));
 
-  const rows = await db.query.customers.findMany({
-    where: and(...conditions),
-    orderBy: asc(customers.name),
+    const rows = await db.query.customers.findMany({
+      where: and(...conditions),
+      orderBy: asc(customers.name),
+    });
+    return rows.map(toCustomer);
+  }
+
+  return getCached(customersKey(tenantId), CACHE_TTL.customers, async () => {
+    const db = getDb();
+    const rows = await db.query.customers.findMany({
+      where: eq(customers.tenantId, tenantId),
+      orderBy: asc(customers.name),
+    });
+    return rows.map(toCustomer);
   });
-  return rows.map(toCustomer);
 }
 
 export async function getCustomerById(
@@ -53,6 +67,7 @@ export async function createCustomer(
       outstandingDebt: payload.outstanding_debt ?? 0,
     })
     .returning();
+  await invalidateCustomers(tenantId);
   return toCustomer(row);
 }
 
@@ -75,6 +90,7 @@ export async function updateCustomer(
     .set(patch)
     .where(and(eq(customers.tenantId, tenantId), eq(customers.id, customerId)))
     .returning();
+  if (row) await invalidateCustomers(tenantId);
   return row ? toCustomer(row) : null;
 }
 

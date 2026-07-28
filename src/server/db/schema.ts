@@ -725,3 +725,105 @@ export const stockTransferItems = pgTable("stock_transfer_items", {
   sentQty: integer("sent_qty").notNull().default(0),
   receivedQty: integer("received_qty").notNull().default(0),
 });
+
+// --- Phase 8 (Fase C) ---
+
+export const deliveryStatusEnum = pgEnum("delivery_status", [
+  "pending",
+  "preparing",
+  "in_transit",
+  "delivered",
+  "partial_delivered",
+  "cancelled",
+]);
+
+export const onlineOrderStatusEnum = pgEnum("online_order_status", [
+  "pending_approval",
+  "approved",
+  "payment_uploaded",
+  "processing",
+  "shipped",
+  "completed",
+  "cancelled",
+  "rejected",
+]);
+
+export const dailyBranchSales = pgTable(
+  "daily_branch_sales",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    saleDate: date("sale_date").notNull(),
+    txCount: integer("tx_count").notNull().default(0),
+    totalRevenue: bigint("total_revenue", { mode: "number" }).notNull().default(0),
+    cashRevenue: bigint("cash_revenue", { mode: "number" }).notNull().default(0),
+    transferRevenue: bigint("transfer_revenue", { mode: "number" }).notNull().default(0),
+    qrisRevenue: bigint("qris_revenue", { mode: "number" }).notNull().default(0),
+    creditRevenue: bigint("credit_revenue", { mode: "number" }).notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.branchId, t.saleDate] })],
+);
+
+export const deliveries = pgTable(
+  "deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    salesTransactionId: uuid("sales_transaction_id").references(() => salesTransactions.id, {
+      onDelete: "set null",
+    }),
+    deliveryNumber: text("delivery_number").notNull(),
+    customerName: text("customer_name"),
+    deliveryAddress: text("delivery_address"),
+    status: deliveryStatusEnum("status").notNull().default("pending"),
+    grandTotal: bigint("grand_total", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.tenantId, t.deliveryNumber)],
+);
+
+export const onlineOrders = pgTable(
+  "online_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    orderNumber: text("order_number").notNull(),
+    customerName: text("customer_name").notNull(),
+    customerPhone: text("customer_phone"),
+    status: onlineOrderStatusEnum("status").notNull().default("pending_approval"),
+    grandTotal: bigint("grand_total", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.tenantId, t.orderNumber)],
+);
+
+export const auditEvents = pgTable("audit_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  actorId: uuid("actor_id").references(() => profiles.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id"),
+  metadata: text("metadata"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

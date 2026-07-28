@@ -510,6 +510,45 @@ export interface DashboardStats {
   revenueChartData: DailySalesSummary[];
 }
 
+/** Single-branch slice returned by getDashboardBundle (Sprint 1 P0-2). */
+export interface DashboardBranchBundle {
+  branchId: string;
+  stats: DashboardStats;
+  topProducts30d: TopProduct[];
+  topProductsToday: TopProduct[];
+}
+
+export interface DashboardBundle {
+  branches: DashboardBranchBundle[];
+}
+
+/** Laporan agregat multi-cabang (Sprint 3 P1-2). */
+export interface ReportsBundle {
+  salesReport: {
+    chart: { date: string; label: string; total: number; transactions: number }[];
+    summary: { totalSales: number; totalTransactions: number; avgTicket: number };
+  };
+  topProducts: { sku: string; name: string; qty: number; revenue: number }[];
+  paymentMethods: { name: string; value: number }[];
+  profitLoss: {
+    sales: number;
+    salesMargin: number;
+    cogs: number;
+    grossProfit: number;
+    opex: number;
+    netProfit: number;
+    marginPct: number;
+    grossMarginPct: number;
+  };
+}
+
+/** Badge sidebar modul operasional (Sprint 3 P1-5). */
+export interface ModuleNavCounts {
+  deliveries: number;
+  sales_orders: number;
+  online_orders: number;
+}
+
 export interface StockAlertItem {
   branchProductId: string;
   productId: string;

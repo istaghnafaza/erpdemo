@@ -115,6 +115,26 @@ export const neonGetBranchCashSummary = createServerFn({ method: "POST" })
     return getBranchCashSummary(data.tenantId, data.branchId);
   });
 
+export const neonGetFinanceOverview = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      branchIds: string[];
+      options?: {
+        txLimit?: number;
+        dateRange?: DateRangeFilter;
+        includeAr?: boolean;
+      };
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { assertServerFnRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertServerFnRateLimit("finance-overview", data.tenantId);
+    const { getFinanceOverviewReport } = await import("@/server/services/finance-overview");
+    return getFinanceOverviewReport(data.tenantId, data.branchIds, data.options);
+  });
+
 // --- Receivables ---
 
 export const neonGetReceivables = createServerFn({ method: "POST" })

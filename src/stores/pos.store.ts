@@ -1239,6 +1239,18 @@ export const usePosStore = create<PosState>()(
         recordSaleHistory(savedTxNumber, false);
         finalize(savedTxNumber, false);
         invalidateResponseCache(`branch-products:${tenantId}:${branchId}`);
+        try {
+          const { getQueryClient } = await import("@/lib/query-client");
+          const { queryKeys } = await import("@/lib/query-keys");
+          const qc = getQueryClient();
+          qc.invalidateQueries({
+            queryKey: queryKeys.posCatalog(tenantId, branchId),
+          });
+          qc.invalidateQueries({ queryKey: ["inventory-catalog", tenantId] });
+          qc.invalidateQueries({ queryKey: queryKeys.posCustomers(tenantId) });
+        } catch {
+          // query client only available in browser
+        }
         return { success: true, transactionNumber: savedTxNumber, change: changeAmount };
       } catch (err) {
         set((s) => {

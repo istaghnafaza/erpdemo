@@ -3,11 +3,12 @@
 // =============================================================================
 
 import { and, eq, gte, lte } from "drizzle-orm";
-import { getDb } from "@/server/db";
+import { getReadDb } from "@/server/db";
 import {
   branchProducts,
   branches,
   cashTransactions,
+  dailyBranchSales,
   products,
   salesItems,
   salesTransactions,
@@ -17,20 +18,38 @@ import { getApSummary } from "@/server/services/payables";
 import { getArSummary } from "@/server/services/receivables";
 import type {
   BranchSummary,
+  DashboardBranchBundle,
   DailySalesSummary,
   DashboardStats,
   DateRangeFilter,
+  ReportsBundle,
   StockAlertItem,
   StockStatus,
   TopProduct,
 } from "@/types/app";
 
-export async function getDailySalesReport(
+function localDateKey(d: Date): string {
+  return d.toISOString().split("T")[0]!;
+}
+
+function aggregateRowToDaily(row: typeof dailyBranchSales.$inferSelect): DailySalesSummary {
+  return {
+    date: row.saleDate,
+    totalRevenue: row.totalRevenue,
+    totalTransactions: row.txCount,
+    cashRevenue: row.cashRevenue,
+    transferRevenue: row.transferRevenue,
+    qrisRevenue: row.qrisRevenue,
+    creditRevenue: row.creditRevenue,
+  };
+}
+
+async function getDailySalesFromRaw(
   tenantId: string,
   branchId: string,
   dateRange: DateRangeFilter,
 ): Promise<DailySalesSummary[]> {
-  const db = getDb();
+  const db = getReadDb();
   const rows = await db.query.salesTransactions.findMany({
     where: and(
       eq(salesTransactions.tenantId, tenantId),
@@ -45,7 +64,7 @@ export async function getDailySalesReport(
   const byDate = new Map<string, DailySalesSummary>();
 
   for (const tx of rows) {
-    const date = tx.createdAt.toISOString().split("T")[0];
+    const date = tx.createdAt.toISOString().split("T")[0]!;
     if (!byDate.has(date)) {
       byDate.set(date, {
         date,
@@ -72,15 +91,55 @@ export async function getDailySalesReport(
   return Array.from(byDate.values());
 }
 
+export async function getDailySalesReport(
+  tenantId: string,
+  branchId: string,
+  dateRange: DateRangeFilter,
+): Promise<DailySalesSummary[]> {
+  const db = getReadDb();
+  const fromDate = dateRange.from.split("T")[0]!;
+  const toDate = dateRange.to.split("T")[0]!;
+  const today = localDateKey(new Date());
+
+  const aggRows = await db.query.dailyBranchSales.findMany({
+    where: and(
+      eq(dailyBranchSales.tenantId, tenantId),
+      eq(dailyBranchSales.branchId, branchId),
+      gte(dailyBranchSales.saleDate, fromDate),
+      lte(dailyBranchSales.saleDate, toDate),
+    ),
+  });
+
+  if (aggRows.length === 0) {
+    return getDailySalesFromRaw(tenantId, branchId, dateRange);
+  }
+
+  const byDate = new Map<string, DailySalesSummary>();
+  for (const row of aggRows) {
+    if (row.saleDate === today) continue;
+    byDate.set(row.saleDate, aggregateRowToDaily(row));
+  }
+
+  if (toDate >= today && fromDate <= today) {
+    const todayRows = await getDailySalesFromRaw(tenantId, branchId, {
+      from: `${today}T00:00:00.000Z`,
+      to: `${today}T23:59:59.999Z`,
+    });
+    for (const day of todayRows) {
+      byDate.set(day.date, day);
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export async function getTopProductsReport(
   tenantId: string,
   branchId: string,
   dateRange: DateRangeFilter,
   limit = 10,
 ): Promise<TopProduct[]> {
-  const db = getDb();
-  const fromDate = dateRange.from.split("T")[0];
-  const toDate = dateRange.to.split("T")[0];
+  const db = getReadDb();
 
   const rows = await db
     .select({
@@ -92,22 +151,22 @@ export async function getTopProductsReport(
       purchasePrice: salesItems.purchasePrice,
       sellingPrice: salesItems.sellingPrice,
       subtotal: salesItems.subtotal,
-      createdAt: salesTransactions.createdAt,
-      branchId: salesTransactions.branchId,
-      status: salesTransactions.status,
     })
     .from(salesItems)
     .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
-    .where(eq(salesItems.tenantId, tenantId));
+    .where(
+      and(
+        eq(salesItems.tenantId, tenantId),
+        eq(salesTransactions.branchId, branchId),
+        eq(salesTransactions.status, "completed"),
+        gte(salesTransactions.createdAt, new Date(dateRange.from)),
+        lte(salesTransactions.createdAt, new Date(dateRange.to)),
+      ),
+    );
 
   const productMap = new Map<string, TopProduct>();
 
   for (const item of rows) {
-    if (item.status !== "completed") continue;
-    if (item.branchId !== branchId) continue;
-    const txDate = item.createdAt.toISOString().split("T")[0];
-    if (txDate < fromDate || txDate > toDate) continue;
-
     const key = item.productId ?? item.sku;
     if (!productMap.has(key)) {
       productMap.set(key, {
@@ -135,7 +194,7 @@ export async function getBranchSummariesReport(
   tenantId: string,
   dateRange: DateRangeFilter,
 ): Promise<BranchSummary[]> {
-  const db = getDb();
+  const db = getReadDb();
   const branchRows = await db.query.branches.findMany({
     where: and(eq(branches.tenantId, tenantId), eq(branches.isActive, true)),
   });
@@ -178,7 +237,7 @@ export async function getStockAlertsReport(
   tenantId: string,
   branchId?: string,
 ): Promise<StockAlertItem[]> {
-  const db = getDb();
+  const db = getReadDb();
   const conditions = [eq(branchProducts.tenantId, tenantId)];
   if (branchId) conditions.push(eq(branchProducts.branchId, branchId));
 
@@ -254,7 +313,7 @@ export async function getDashboardStatsReport(
   const last30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
   const last30Str = txDateKey(last30);
 
-  const db = getDb();
+  const db = getReadDb();
   const txAll = await db.query.salesTransactions.findMany({
     where: and(
       eq(salesTransactions.tenantId, tenantId),
@@ -366,37 +425,60 @@ export async function getDashboardStatsReport(
   };
 }
 
+export async function getDashboardBundleReport(
+  tenantId: string,
+  branchIds: string[],
+): Promise<DashboardBranchBundle[]> {
+  if (branchIds.length === 0) return [];
+
+  const today = new Date();
+  const todayKey = txDateKey(today);
+  const last30From = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const to = today.toISOString();
+  const last30Range = { from: last30From, to };
+  const todayRange = { from: `${todayKey}T00:00:00.000Z`, to };
+
+  return Promise.all(
+    branchIds.map(async (branchId) => {
+      const [stats, topProducts30d, topProductsToday] = await Promise.all([
+        getDashboardStatsReport(tenantId, branchId),
+        getTopProductsReport(tenantId, branchId, last30Range, 10),
+        getTopProductsReport(tenantId, branchId, todayRange, 25),
+      ]);
+      return { branchId, stats, topProducts30d, topProductsToday };
+    }),
+  );
+}
+
 export async function getProfitLossSummaryReport(
   tenantId: string,
   branchId: string,
   dateRange: DateRangeFilter,
 ): Promise<{ revenue: number; cogs: number; grossProfit: number; grossMargin: number }> {
-  const db = getDb();
-  const fromDate = dateRange.from.split("T")[0];
-  const toDate = dateRange.to.split("T")[0];
+  const db = getReadDb();
 
   const rows = await db
     .select({
       qty: salesItems.qty,
       purchasePrice: salesItems.purchasePrice,
       subtotal: salesItems.subtotal,
-      createdAt: salesTransactions.createdAt,
-      branchId: salesTransactions.branchId,
-      status: salesTransactions.status,
     })
     .from(salesItems)
     .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
-    .where(eq(salesItems.tenantId, tenantId));
+    .where(
+      and(
+        eq(salesItems.tenantId, tenantId),
+        eq(salesTransactions.branchId, branchId),
+        eq(salesTransactions.status, "completed"),
+        gte(salesTransactions.createdAt, new Date(dateRange.from)),
+        lte(salesTransactions.createdAt, new Date(dateRange.to)),
+      ),
+    );
 
   let revenue = 0;
   let cogs = 0;
 
   for (const item of rows) {
-    if (item.status !== "completed") continue;
-    if (item.branchId !== branchId) continue;
-    const d = item.createdAt.toISOString().split("T")[0];
-    if (d < fromDate || d > toDate) continue;
-
     revenue += item.subtotal;
     cogs += item.purchasePrice * item.qty;
   }
@@ -405,4 +487,153 @@ export async function getProfitLossSummaryReport(
   const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
 
   return { revenue, cogs, grossProfit, grossMargin: Math.round(grossMargin * 100) / 100 };
+}
+
+function reportPeriodToDateRange(periodDays: number): DateRangeFilter {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - periodDays + 1);
+  from.setHours(0, 0, 0, 0);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function formatReportDayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
+function buildEmptyReportChart(periodDays: number) {
+  const rows: ReportsBundle["salesReport"]["chart"] = [];
+  for (let i = 0; i < periodDays; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - (periodDays - 1 - i));
+    const date = txDateKey(d);
+    rows.push({ date, label: formatReportDayLabel(date), total: 0, transactions: 0 });
+  }
+  return rows;
+}
+
+export async function getReportsBundleReport(
+  tenantId: string,
+  branchIds: string[],
+  periodDays: number,
+  monthRange: DateRangeFilter,
+): Promise<ReportsBundle> {
+  const empty: ReportsBundle = {
+    salesReport: {
+      chart: buildEmptyReportChart(periodDays),
+      summary: { totalSales: 0, totalTransactions: 0, avgTicket: 0 },
+    },
+    topProducts: [],
+    paymentMethods: [],
+    profitLoss: {
+      sales: 0,
+      salesMargin: 0,
+      cogs: 0,
+      grossProfit: 0,
+      opex: 0,
+      netProfit: 0,
+      marginPct: 0,
+      grossMarginPct: 0,
+    },
+  };
+
+  if (branchIds.length === 0) return empty;
+
+  const dateRange = reportPeriodToDateRange(periodDays);
+  const dayMap = new Map<string, (typeof empty.salesReport.chart)[number]>();
+  for (const row of buildEmptyReportChart(periodDays)) {
+    dayMap.set(row.date, { ...row });
+  }
+
+  let payCash = 0;
+  let payTransfer = 0;
+  let payQris = 0;
+  let payCredit = 0;
+  const productMap = new Map<string, (typeof empty.topProducts)[number]>();
+  let plRevenue = 0;
+  let plCogs = 0;
+  let plGross = 0;
+
+  await Promise.all(
+    branchIds.map(async (branchId) => {
+      const [daily, top, pl] = await Promise.all([
+        getDailySalesReport(tenantId, branchId, dateRange),
+        getTopProductsReport(tenantId, branchId, dateRange, 15),
+        getProfitLossSummaryReport(tenantId, branchId, monthRange),
+      ]);
+
+      for (const day of daily) {
+        const existing = dayMap.get(day.date);
+        if (existing) {
+          existing.total += day.totalRevenue;
+          existing.transactions += day.totalTransactions;
+        }
+        payCash += day.cashRevenue;
+        payTransfer += day.transferRevenue;
+        payQris += day.qrisRevenue;
+        payCredit += day.creditRevenue;
+      }
+
+      for (const p of top) {
+        const key = p.sku || p.productId;
+        const prev = productMap.get(key);
+        if (prev) {
+          prev.qty += p.totalQty;
+          prev.revenue += p.totalRevenue;
+        } else {
+          productMap.set(key, {
+            sku: p.sku,
+            name: p.productName,
+            qty: p.totalQty,
+            revenue: p.totalRevenue,
+          });
+        }
+      }
+
+      plRevenue += pl.revenue;
+      plCogs += pl.cogs;
+      plGross += pl.grossProfit;
+    }),
+  );
+
+  const chart = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const totalSales = chart.reduce((s, r) => s + r.total, 0);
+  const totalTransactions = chart.reduce((s, r) => s + r.transactions, 0);
+  const payTotal = payCash + payTransfer + payQris + payCredit;
+  const paymentMethods =
+    payTotal > 0
+      ? [
+          { name: "Tunai", value: Math.round((payCash / payTotal) * 100) },
+          { name: "Transfer", value: Math.round((payTransfer / payTotal) * 100) },
+          { name: "QRIS", value: Math.round((payQris / payTotal) * 100) },
+          { name: "Piutang", value: Math.round((payCredit / payTotal) * 100) },
+        ].filter((x) => x.value > 0)
+      : [];
+
+  const topProducts = Array.from(productMap.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
+  return {
+    salesReport: {
+      chart,
+      summary: {
+        totalSales,
+        totalTransactions,
+        avgTicket: totalTransactions > 0 ? Math.round(totalSales / totalTransactions) : 0,
+      },
+    },
+    topProducts,
+    paymentMethods,
+    profitLoss: {
+      sales: plRevenue,
+      salesMargin: plGross,
+      cogs: plCogs,
+      grossProfit: plGross,
+      opex: 0,
+      netProfit: plGross,
+      marginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
+      grossMarginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
+    },
+  };
 }

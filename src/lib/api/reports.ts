@@ -7,8 +7,10 @@ import { neonCall } from "./backend";
 import {
   neonGetBranchSummaries,
   neonGetDailySales,
+  neonGetDashboardBundle,
   neonGetDashboardStats,
   neonGetProfitLossSummary,
+  neonGetReportsBundle,
   neonGetStockAlerts,
   neonGetTopProducts,
 } from "@/lib/api/neon/phase5-fns";
@@ -19,6 +21,8 @@ import type {
   TopProduct,
   BranchSummary,
   DashboardStats,
+  DashboardBundle,
+  ReportsBundle,
   StockAlertItem,
   StockStatus,
 } from "@/types/app";
@@ -353,6 +357,204 @@ export async function getDashboardStats(
       totalCashBalance: 0,
       cashAccountCount: 0,
       revenueChartData: chartResult.data ?? [],
+    });
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function getDashboardBundle(
+  tenantId: string,
+  branchIds: string[],
+): Promise<ApiResponse<DashboardBundle>> {
+  if (branchIds.length === 0) return ok({ branches: [] });
+
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonGetDashboardBundle({ data: { tenantId, branchIds } }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data ?? { branches: [] });
+  }
+
+  try {
+    const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const to = new Date().toISOString();
+    const todayKey = new Date().toISOString().split("T")[0]!;
+    const todayRange = { from: `${todayKey}T00:00:00.000Z`, to };
+    const last30Range = { from: last30, to };
+
+    const branches = await Promise.all(
+      branchIds.map(async (branchId) => {
+        const [statsResult, top30Result, topTodayResult] = await Promise.all([
+          getDashboardStats(tenantId, branchId),
+          getTopProducts(tenantId, branchId, last30Range, 10),
+          getTopProducts(tenantId, branchId, todayRange, 25),
+        ]);
+        if (statsResult.error || !statsResult.data) {
+          throw new Error(statsResult.error ?? "Gagal memuat dashboard");
+        }
+        return {
+          branchId,
+          stats: statsResult.data,
+          topProducts30d: top30Result.data ?? [],
+          topProductsToday: topTodayResult.data ?? [],
+        };
+      }),
+    );
+
+    return ok({ branches });
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function getReportsBundle(
+  tenantId: string,
+  branchIds: string[],
+  periodDays: number,
+  monthRange: DateRangeFilter,
+): Promise<ApiResponse<ReportsBundle>> {
+  if (branchIds.length === 0) {
+    return ok({
+      salesReport: {
+        chart: [],
+        summary: { totalSales: 0, totalTransactions: 0, avgTicket: 0 },
+      },
+      topProducts: [],
+      paymentMethods: [],
+      profitLoss: {
+        sales: 0,
+        salesMargin: 0,
+        cogs: 0,
+        grossProfit: 0,
+        opex: 0,
+        netProfit: 0,
+        marginPct: 0,
+        grossMarginPct: 0,
+      },
+    });
+  }
+
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonGetReportsBundle({ data: { tenantId, branchIds, periodDays, monthRange } }),
+    );
+    if (result.error) return fail(result.error);
+    if (!result.data) return fail("Gagal memuat laporan");
+    return ok(result.data);
+  }
+
+  try {
+    const dateRange = {
+      from: new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString(),
+      to: new Date().toISOString(),
+    };
+    const dayMap = new Map<
+      string,
+      { date: string; label: string; total: number; transactions: number }
+    >();
+    for (let i = 0; i < periodDays; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - (periodDays - 1 - i));
+      const date = d.toISOString().split("T")[0]!;
+      dayMap.set(date, {
+        date,
+        label: new Date(date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        total: 0,
+        transactions: 0,
+      });
+    }
+
+    let payCash = 0;
+    let payTransfer = 0;
+    let payQris = 0;
+    let payCredit = 0;
+    const productMap = new Map<string, ReportsBundle["topProducts"][number]>();
+    let plRevenue = 0;
+    let plCogs = 0;
+    let plGross = 0;
+
+    await Promise.all(
+      branchIds.map(async (branchId) => {
+        const [dailyResult, topResult, plResult] = await Promise.all([
+          getDailySales(tenantId, branchId, dateRange),
+          getTopProducts(tenantId, branchId, dateRange, 15),
+          getProfitLossSummary(tenantId, branchId, monthRange),
+        ]);
+
+        for (const day of dailyResult.data ?? []) {
+          const existing = dayMap.get(day.date);
+          if (existing) {
+            existing.total += day.totalRevenue;
+            existing.transactions += day.totalTransactions;
+          }
+          payCash += day.cashRevenue;
+          payTransfer += day.transferRevenue;
+          payQris += day.qrisRevenue;
+          payCredit += day.creditRevenue;
+        }
+
+        for (const p of topResult.data ?? []) {
+          const key = p.sku || p.productId;
+          const prev = productMap.get(key);
+          if (prev) {
+            prev.qty += p.totalQty;
+            prev.revenue += p.totalRevenue;
+          } else {
+            productMap.set(key, {
+              sku: p.sku,
+              name: p.productName,
+              qty: p.totalQty,
+              revenue: p.totalRevenue,
+            });
+          }
+        }
+
+        if (plResult.data) {
+          plRevenue += plResult.data.revenue;
+          plCogs += plResult.data.cogs;
+          plGross += plResult.data.grossProfit;
+        }
+      }),
+    );
+
+    const chart = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    const totalSales = chart.reduce((s, r) => s + r.total, 0);
+    const totalTransactions = chart.reduce((s, r) => s + r.transactions, 0);
+    const payTotal = payCash + payTransfer + payQris + payCredit;
+
+    return ok({
+      salesReport: {
+        chart,
+        summary: {
+          totalSales,
+          totalTransactions,
+          avgTicket: totalTransactions > 0 ? Math.round(totalSales / totalTransactions) : 0,
+        },
+      },
+      topProducts: Array.from(productMap.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10),
+      paymentMethods:
+        payTotal > 0
+          ? [
+              { name: "Tunai", value: Math.round((payCash / payTotal) * 100) },
+              { name: "Transfer", value: Math.round((payTransfer / payTotal) * 100) },
+              { name: "QRIS", value: Math.round((payQris / payTotal) * 100) },
+              { name: "Piutang", value: Math.round((payCredit / payTotal) * 100) },
+            ].filter((x) => x.value > 0)
+          : [],
+      profitLoss: {
+        sales: plRevenue,
+        salesMargin: plGross,
+        cogs: plCogs,
+        grossProfit: plGross,
+        opex: 0,
+        netProfit: plGross,
+        marginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
+        grossMarginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
+      },
     });
   } catch (err) {
     return fail(err);

@@ -14,8 +14,8 @@
 // =============================================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
@@ -23,8 +23,8 @@ import { useFinanceStore } from "@/stores/finance.store";
 import { useReceivablesStore } from "@/stores/receivables.store";
 import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
-import { getDashboardStats, getTopProducts } from "@/lib/api/reports";
-import type { DashboardStats, TopProduct } from "@/types/app";
+import { getDashboardBundle } from "@/lib/api/reports";
+import { queryKeys } from "@/lib/query-keys";
 import {
   PRODUCTS,
   SALES_HISTORY,
@@ -160,11 +160,7 @@ export function useDashboard() {
   const allNotifications = useNotificationStore((s) => s.notifications);
 
   const [period, setPeriod] = useState<DashboardPeriod>("today");
-  const [isLoading, setIsLoading] = useState(true);
-  const [neonStats, setNeonStats] = useState<DashboardStats | null>(null);
-  const [branchStatsById, setBranchStatsById] = useState<Record<string, DashboardStats>>({});
-  const [neonTopProducts, setNeonTopProducts] = useState<TopProduct[]>([]);
-  const [topProfitableToday, setTopProfitableToday] = useState<TopProfitableProductRow[]>([]);
+  const [mockLoading, setMockLoading] = useState(true);
 
   const user = currentUser?.profile ?? null;
   const isOwner = user?.role === "owner";
@@ -180,54 +176,47 @@ export function useDashboard() {
     [isConsolidated, isOwner, branches, activeBranch],
   );
 
-  // Simulates the network latency a real API call would have, so the
-  // KPI/chart/notification sections show their loading skeleton on first
-  // paint instead of popping in instantly (matches the pattern used for
-  // the eventual Supabase-backed version of this hook).
+  // Demo mock: brief skeleton on first paint (Neon uses query pending state).
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 400);
+    if (!isMockTenant) return;
+    const timer = setTimeout(() => setMockLoading(false), 400);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isMockTenant]);
 
-  useEffect(() => {
-    if (isMockTenant || !tenantId || branchIds.length === 0) {
-      setBranchStatsById({});
-      return;
-    }
+  const dashboardQuery = useQuery({
+    queryKey: queryKeys.dashboardBundle(tenantId, branchIds),
+    queryFn: async () => {
+      const result = await getDashboardBundle(tenantId, branchIds);
+      if (result.error) throw new Error(result.error);
+      return result.data!;
+    },
+    enabled: !isMockTenant && Boolean(tenantId) && branchIds.length > 0,
+  });
 
-    const last30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const to = new Date().toISOString();
-    const todayKey = localDateKey(new Date());
-    const todayRange = { from: `${todayKey}T00:00:00.000Z`, to };
+  const branchStatsById = useMemo(
+    () =>
+      Object.fromEntries(
+        (dashboardQuery.data?.branches ?? []).map((b) => [b.branchId, b.stats]),
+      ),
+    [dashboardQuery.data],
+  );
 
-    void Promise.all(
-      branchIds.map(async (id) => {
-        const result = await getDashboardStats(tenantId, id);
-        return { id, data: result.data ?? null };
-      }),
-    ).then((pairs) => {
-      const stats = pairs.map((p) => p.data).filter((d): d is DashboardStats => d != null);
-      const byId = Object.fromEntries(
-        pairs.filter((p): p is { id: string; data: DashboardStats } => p.data != null).map((p) => [p.id, p.data]),
-      );
-      setBranchStatsById(byId);
-      setNeonStats(mergeDashboardStats(stats));
-    });
+  const neonStats = useMemo(() => {
+    const stats = dashboardQuery.data?.branches.map((b) => b.stats) ?? [];
+    return stats.length > 0 ? mergeDashboardStats(stats) : null;
+  }, [dashboardQuery.data]);
 
-    void Promise.all(branchIds.map((id) => getTopProducts(tenantId, id, { from: last30, to }, 10))).then(
-      (results) => {
-        const flat = results.flatMap((r) => r.data ?? []);
-        setNeonTopProducts(mergeTopProducts(flat, 10));
-      },
-    );
+  const neonTopProducts = useMemo(() => {
+    const flat = dashboardQuery.data?.branches.flatMap((b) => b.topProducts30d) ?? [];
+    return mergeTopProducts(flat, 10);
+  }, [dashboardQuery.data]);
 
-    void Promise.all(branchIds.map((id) => getTopProducts(tenantId, id, todayRange, 25))).then(
-      (results) => {
-        const flat = results.flatMap((r) => r.data ?? []);
-        setTopProfitableToday(mergeTopProductsByProfit(flat, 5));
-      },
-    );
-  }, [isMockTenant, tenantId, branchIds]);
+  const topProfitableToday = useMemo((): TopProfitableProductRow[] => {
+    const flat = dashboardQuery.data?.branches.flatMap((b) => b.topProductsToday) ?? [];
+    return mergeTopProductsByProfit(flat, 5);
+  }, [dashboardQuery.data]);
+
+  const isLoading = isMockTenant ? mockLoading : dashboardQuery.isPending;
 
   useEffect(() => {
     if (!isMockTenant) return;

@@ -2,30 +2,25 @@
 // useFinance — dashboard keuangan (Fase 11).
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { useFinanceStore } from "@/stores/finance.store";
 import { useReceivablesStore } from "@/stores/receivables.store";
 import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
-import { getCashAccounts, getCashTransactions } from "@/lib/api/finance";
-import { getArSummary } from "@/lib/api/receivables";
+import { fetchFinanceOverview } from "@/lib/finance-overview-client";
+import { queryKeys } from "@/lib/query-keys";
 import {
   computeCashFlowSeries,
   computeProfitLoss,
   getMonthDateRange,
 } from "@/lib/finance-calculations";
-import {
-  computeReceivablesSummary,
-  type ReceivablesSummary,
-} from "@/lib/receivables-calculations";
+import { computeReceivablesSummary } from "@/lib/receivables-calculations";
 import { filterFinanceByBranches, getFinanceScopeLabel } from "@/lib/finance-scope";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
-import type { MockCashTxWithAccount } from "@/lib/mock-finance";
-import type { CashAccount } from "@/types/database";
 
 export interface FinanceBranchSummary {
   branchId: string;
@@ -89,12 +84,12 @@ export function useFinance() {
 
   const scopeLabel = getFinanceScopeLabel(isConsolidated && isOwner, activeBranch);
 
-  const [apiAccounts, setApiAccounts] = useState<CashAccount[]>([]);
-  const [apiTransactions, setApiTransactions] = useState<MockCashTxWithAccount[]>([]);
-  const [apiReceivablesSummary, setApiReceivablesSummary] = useState<ReceivablesSummary | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
+  const financeQuery = useQuery({
+    queryKey: queryKeys.financeOverview(tenantId, branchIds),
+    queryFn: () => fetchFinanceOverview(tenantId, branchIds),
+    enabled: !isMockTenant && Boolean(tenantId) && branchIds.length > 0,
+    staleTime: 60_000,
+  });
 
   const mockScopedAccounts = useMemo(
     () => filterFinanceByBranches(mockAccounts, branchIds),
@@ -119,61 +114,11 @@ export function useFinance() {
     [isMockTenant, mockSales, tenantId, branchIds],
   );
 
-  const loadApiData = useCallback(async () => {
-    setLoading(true);
+  const apiAccounts = financeQuery.data?.accounts ?? [];
+  const apiTransactions = financeQuery.data?.transactions ?? [];
+  const apiReceivablesSummary = financeQuery.data?.receivablesSummary ?? null;
 
-    if (branchIds.length === 0) {
-      setApiAccounts([]);
-      setApiTransactions([]);
-      setApiReceivablesSummary(null);
-      setLoading(false);
-      return;
-    }
-
-    const accountResults = await Promise.all(
-      branchIds.map((id) => getCashAccounts(tenantId, id, { activeOnly: true })),
-    );
-    const txResults = await Promise.all(
-      branchIds.map((id) => getCashTransactions(tenantId, id, { limit: 500 })),
-    );
-    const arResults = await Promise.all(branchIds.map((id) => getArSummary(tenantId, id)));
-
-    const arAgg = arResults.reduce(
-      (acc, r) => {
-        const d = r.data;
-        if (!d) return acc;
-        return {
-          totalOutstanding: acc.totalOutstanding + d.total,
-          newThisMonth: acc.newThisMonth,
-          collectedThisMonth: acc.collectedThisMonth,
-          overdue: acc.overdue + d.overdue,
-          activeInvoiceCount: acc.activeInvoiceCount + d.unpaid + d.partial,
-        };
-      },
-      {
-        totalOutstanding: 0,
-        newThisMonth: 0,
-        collectedThisMonth: 0,
-        overdue: 0,
-        activeInvoiceCount: 0,
-      } satisfies ReceivablesSummary,
-    );
-
-    setApiAccounts(accountResults.flatMap((r) => r.data ?? []));
-    setApiTransactions(
-      txResults.flatMap((r) => (r.data ?? []) as MockCashTxWithAccount[]),
-    );
-    setApiReceivablesSummary(arAgg);
-    setLoading(false);
-  }, [branchIds, tenantId]);
-
-  useEffect(() => {
-    if (isMockTenant) {
-      setLoading(false);
-      return;
-    }
-    void loadApiData();
-  }, [isMockTenant, loadApiData]);
+  const loading = isMockTenant ? false : financeQuery.isPending;
 
   const accounts = isMockTenant ? mockScopedAccounts : apiAccounts;
   const transactions = isMockTenant ? mockScopedTransactions : apiTransactions;
@@ -300,6 +245,6 @@ export function useFinance() {
     branchSummaries,
     monthRange,
     tenantSlug,
-    loadData: loadApiData,
+    loadData: financeQuery.refetch,
   };
 }

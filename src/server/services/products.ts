@@ -2,8 +2,22 @@
 // Products service — Neon/Drizzle (Phase 2)
 // =============================================================================
 
-import { and, asc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import {
+  branchProductsKey,
+  branchProductsMultiKey,
+  categoriesKey,
+} from "@/server/cache/keys";
+import {
+  CACHE_TTL,
+  getCached,
+  registerMultiBranchCacheKey,
+} from "@/server/cache/redis";
+import {
+  invalidateBranchProducts,
+  invalidateCategories,
+} from "@/server/cache/invalidate";
 import {
   toBranchProduct,
   toBranchProductWithProduct,
@@ -23,12 +37,14 @@ import type {
 } from "@/types/database";
 
 export async function listCategories(tenantId: string): Promise<ProductCategory[]> {
-  const db = getDb();
-  const rows = await db.query.productCategories.findMany({
-    where: eq(productCategories.tenantId, tenantId),
-    orderBy: asc(productCategories.name),
+  return getCached(categoriesKey(tenantId), CACHE_TTL.categories, async () => {
+    const db = getDb();
+    const rows = await db.query.productCategories.findMany({
+      where: eq(productCategories.tenantId, tenantId),
+      orderBy: asc(productCategories.name),
+    });
+    return rows.map(toProductCategory);
   });
-  return rows.map(toProductCategory);
 }
 
 export async function createCategory(
@@ -45,6 +61,7 @@ export async function createCategory(
       icon: payload.icon,
     })
     .returning();
+  await invalidateCategories(tenantId);
   return toProductCategory(row);
 }
 
@@ -111,6 +128,7 @@ export async function createProduct(
       isActive: payload.is_active ?? true,
     })
     .returning();
+  await invalidateBranchProducts(tenantId);
   return toProduct(row);
 }
 
@@ -134,15 +152,18 @@ export async function updateProduct(
     .set(patch)
     .where(and(eq(products.tenantId, tenantId), eq(products.id, productId)))
     .returning();
+  if (row) await invalidateBranchProducts(tenantId);
   return row ? toProduct(row) : null;
 }
 
-export async function listBranchProducts(
+async function fetchBranchProductsFromDb(
   tenantId: string,
-  branchId: string,
-  options?: { search?: string; lowStockOnly?: boolean },
-): Promise<BranchProductWithProduct[]> {
+  branchIds: string[],
+): Promise<Record<string, BranchProductWithProduct[]>> {
   const db = getDb();
+  const byBranch = Object.fromEntries(branchIds.map((id) => [id, [] as BranchProductWithProduct[]]));
+  if (branchIds.length === 0) return byBranch;
+
   const rows = await db
     .select({
       bp: branchProducts,
@@ -152,12 +173,21 @@ export async function listBranchProducts(
     .from(branchProducts)
     .innerJoin(products, eq(branchProducts.productId, products.id))
     .leftJoin(productCategories, eq(products.categoryId, productCategories.id))
-    .where(and(eq(branchProducts.tenantId, tenantId), eq(branchProducts.branchId, branchId)));
+    .where(
+      and(eq(branchProducts.tenantId, tenantId), inArray(branchProducts.branchId, branchIds)),
+    );
 
-  let result = rows.map(({ bp, product, category }) =>
-    toBranchProductWithProduct(bp, product, category),
-  );
+  for (const { bp, product, category } of rows) {
+    byBranch[bp.branchId]?.push(toBranchProductWithProduct(bp, product, category));
+  }
+  return byBranch;
+}
 
+function filterBranchProducts(
+  items: BranchProductWithProduct[],
+  options?: { search?: string; lowStockOnly?: boolean },
+): BranchProductWithProduct[] {
+  let result = items;
   if (options?.search) {
     const q = options.search.toLowerCase();
     result = result.filter(
@@ -165,12 +195,49 @@ export async function listBranchProducts(
         r.product.name.toLowerCase().includes(q) || r.product.sku.toLowerCase().includes(q),
     );
   }
-
   if (options?.lowStockOnly) {
     result = result.filter((r) => r.stock <= r.reorder_point);
   }
-
   return result;
+}
+
+export async function listBranchProducts(
+  tenantId: string,
+  branchId: string,
+  options?: { search?: string; lowStockOnly?: boolean },
+): Promise<BranchProductWithProduct[]> {
+  if (options?.search || options?.lowStockOnly) {
+    const byBranch = await fetchBranchProductsFromDb(tenantId, [branchId]);
+    return filterBranchProducts(byBranch[branchId] ?? [], options);
+  }
+
+  return getCached(branchProductsKey(tenantId, branchId), CACHE_TTL.branchProducts, async () => {
+    const byBranch = await fetchBranchProductsFromDb(tenantId, [branchId]);
+    return byBranch[branchId] ?? [];
+  });
+}
+
+export async function listBranchProductsForBranches(
+  tenantId: string,
+  branchIds: string[],
+  options?: { search?: string; lowStockOnly?: boolean },
+): Promise<Record<string, BranchProductWithProduct[]>> {
+  if (branchIds.length === 0) return {};
+  if (options?.search || options?.lowStockOnly) {
+    const byBranch = await fetchBranchProductsFromDb(tenantId, branchIds);
+    return Object.fromEntries(
+      Object.entries(byBranch).map(([branchId, items]) => [
+        branchId,
+        filterBranchProducts(items, options),
+      ]),
+    );
+  }
+
+  const cacheKey = branchProductsMultiKey(tenantId, branchIds);
+  registerMultiBranchCacheKey(tenantId, cacheKey);
+  return getCached(cacheKey, CACHE_TTL.branchProducts, () =>
+    fetchBranchProductsFromDb(tenantId, branchIds),
+  );
 }
 
 export async function getBranchProduct(
@@ -215,6 +282,7 @@ export async function upsertBranchProduct(
       },
     })
     .returning();
+  await invalidateBranchProducts(tenantId, branchId);
   return toBranchProduct(row);
 }
 
@@ -236,6 +304,7 @@ export async function updateBranchProductById(
     .set(patch)
     .where(and(eq(branchProducts.tenantId, tenantId), eq(branchProducts.id, branchProductId)))
     .returning();
+  if (row) await invalidateBranchProducts(tenantId, row.branchId);
   return row ? toBranchProduct(row) : null;
 }
 
@@ -257,6 +326,7 @@ export async function updateSellingPrice(
       ),
     )
     .returning();
+  if (row) await invalidateBranchProducts(tenantId, branchId);
   return row ? toBranchProduct(row) : null;
 }
 
@@ -298,6 +368,7 @@ export async function ensureCategory(
     .insert(productCategories)
     .values({ tenantId, name, icon: null })
     .returning();
+  await invalidateCategories(tenantId);
   return toProductCategory(row);
 }
 
@@ -333,5 +404,6 @@ export async function ensureBranchProductRow(
       },
     })
     .returning();
+  await invalidateBranchProducts(tenantId, branchId);
   return toBranchProduct(row);
 }

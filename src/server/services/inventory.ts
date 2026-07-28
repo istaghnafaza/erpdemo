@@ -4,6 +4,7 @@
 
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { invalidateBranchProducts } from "@/server/cache/invalidate";
 import { toBranchProduct, toStockMovement } from "@/server/db/mappers";
 import { branchProducts, stockMovements } from "@/server/db/schema";
 import type { BranchProduct, StockMovement, StockMovementInsert } from "@/types/database";
@@ -114,6 +115,7 @@ export async function adjustStock(
       userId: options?.userId ?? null,
     });
 
+    await invalidateBranchProducts(tenantId, branchId);
     return toBranchProduct(updated);
   });
 }

@@ -20,6 +20,8 @@
     "neon:health": "node scripts/health-neon.mjs",
     "neon:migrate": "node scripts/migrate-neon.mjs",
     "neon:migrate:phase7": "node scripts/migrate-phase7.mjs",
+    "neon:apply-sql": "node scripts/apply-neon-sql.mjs",
+    "neon:rollup:daily": "node scripts/rollup-daily-sales.mjs",
     "neon:seed:lumayan": "node scripts/seed-lumayan.mjs",
     "neon:uat": "node scripts/uat-neon.mjs",
     "railway:env": "node scripts/print-railway-env.mjs"
@@ -61,6 +63,7 @@
     "@tanstack/react-start": "^1.168.26",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/router-plugin": "^1.168.18",
+    "@upstash/redis": "^1.38.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

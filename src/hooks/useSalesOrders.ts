@@ -2,9 +2,9 @@
 // useSalesOrders — business logic for Sales Order module (Fase 9).
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePosStore } from "@/stores/pos.store";
@@ -14,10 +14,17 @@ import {
   type CreateSoItemDraft,
   type UpdateSoDraft,
 } from "@/stores/sales-orders.store";
-import { getSalesOrders, createSalesOrder, updateSalesOrder, processItemFulfillment, convertSalesOrderToInvoice } from "@/lib/api/sales-orders";
+import {
+  getSalesOrders,
+  createSalesOrder,
+  updateSalesOrder,
+  processItemFulfillment,
+  convertSalesOrderToInvoice,
+} from "@/lib/api/sales-orders";
 import { getSuppliers } from "@/lib/api/purchasing";
 import { getCustomers } from "@/lib/api/customers";
 import { getBranchProducts } from "@/lib/api/products";
+import { queryKeys } from "@/lib/query-keys";
 import { getMockPosCatalog } from "@/lib/mock-pos-catalog";
 import { getMockTenantCustomers } from "@/stores/customers.store";
 import { MOCK_SUPPLIERS, type MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
@@ -34,6 +41,7 @@ export interface SoProductOption {
 }
 
 export function useSalesOrders() {
+  const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.currentUser);
   const activeBranch = useBranchStore((s) => s.activeBranch);
   const mockStockDelta = usePosStore((s) => s.mockStockDelta);
@@ -51,16 +59,11 @@ export function useSalesOrders() {
   const branchId = activeBranch?.id ?? "";
   const isMockTenant = isMockTenantId(tenantId);
 
-  const [orders, setOrders] = useState<MockSalesOrderWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<DbSoStatus | "all">("all");
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<SoProductOption[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<MockSalesOrderWithDetails | null>(null);
   const [detailOrder, setDetailOrder] = useState<MockSalesOrderWithDetails | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [supplierList, setSupplierList] = useState(MOCK_SUPPLIERS);
 
   const computeStock = useCallback(
     (productId: string, baseStock: number) => {
@@ -71,69 +74,106 @@ export function useSalesOrders() {
     [mockStockDelta, mockStockAdjustments, branchId],
   );
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
-    if (isMockTenant) {
-      let list = mockOrders;
-      if (branchId) list = list.filter((o) => o.branch_id === branchId);
-      setOrders(list);
-      setLoading(false);
-      return;
-    }
-    const result = await getSalesOrders(tenantId, branchId, {
-      status: statusFilter === "all" ? undefined : statusFilter,
-    });
-    setOrders((result.data ?? []) as MockSalesOrderWithDetails[]);
-    setLoading(false);
-  }, [isMockTenant, mockOrders, branchId, tenantId, statusFilter]);
-
-  useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
-
-  useEffect(() => {
-    if (!tenantId || !branchId) return;
-    if (isMockTenant) {
-      setCustomers(
-        getMockTenantCustomers(tenantId).filter((c) => c.type === "credit" || c.type === "retail"),
-      );
-      const catalog = getMockPosCatalog(branchId);
-      setProducts(
-        catalog.map((bp) => ({
-          productId: bp.product_id,
-          sku: bp.product.sku,
-          name: bp.product.name,
-          unit: bp.product.unit,
-          sellingPrice: bp.selling_price,
-          availableStock: computeStock(bp.product_id, bp.stock),
-        })),
-      );
-    } else {
-      void getCustomers(tenantId).then((r) => setCustomers(r.data ?? []));
-      void getBranchProducts(tenantId, branchId).then((r) =>
-        setProducts(
-          (r.data ?? []).map((bp) => ({
-            productId: bp.product_id,
-            sku: bp.product.sku,
-            name: bp.product.name,
-            unit: bp.product.unit,
-            sellingPrice: bp.selling_price,
-            availableStock: bp.stock,
-          })),
-        ),
-      );
-      void getSuppliers(tenantId, { activeOnly: true }).then((r) => {
-        if (r.data?.length) setSupplierList(r.data as typeof MOCK_SUPPLIERS);
+  const ordersQuery = useQuery({
+    queryKey: queryKeys.salesOrders(tenantId, branchId, statusFilter),
+    queryFn: async () => {
+      const result = await getSalesOrders(tenantId, branchId, {
+        status: statusFilter === "all" ? undefined : statusFilter,
       });
+      if (result.error) throw new Error(result.error);
+      return (result.data ?? []) as MockSalesOrderWithDetails[];
+    },
+    enabled: !isMockTenant && Boolean(tenantId && branchId),
+    staleTime: 30_000,
+  });
+
+  const customersQuery = useQuery({
+    queryKey: queryKeys.posCustomers(tenantId),
+    queryFn: async () => {
+      const result = await getCustomers(tenantId);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: !isMockTenant && Boolean(tenantId && branchId),
+    staleTime: 60_000,
+  });
+
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.posCatalog(tenantId, branchId),
+    queryFn: async () => {
+      const result = await getBranchProducts(tenantId, branchId);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: !isMockTenant && Boolean(tenantId && branchId),
+    staleTime: 60_000,
+  });
+
+  const suppliersQuery = useQuery({
+    queryKey: queryKeys.suppliers(tenantId, true),
+    queryFn: async () => {
+      const result = await getSuppliers(tenantId, { activeOnly: true });
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: !isMockTenant && Boolean(tenantId),
+    staleTime: 60_000,
+  });
+
+  const mockOrdersFiltered = useMemo(() => {
+    let list = mockOrders;
+    if (branchId) list = list.filter((o) => o.branch_id === branchId);
+    if (statusFilter !== "all") list = list.filter((o) => o.status === statusFilter);
+    return list;
+  }, [mockOrders, branchId, statusFilter]);
+
+  const orders = isMockTenant ? mockOrdersFiltered : (ordersQuery.data ?? []);
+  const loading = isMockTenant ? false : ordersQuery.isPending;
+
+  const customers = useMemo((): Customer[] => {
+    if (!tenantId || !branchId) return [];
+    if (isMockTenant) {
+      return getMockTenantCustomers(tenantId).filter(
+        (c) => c.type === "credit" || c.type === "retail",
+      );
     }
-  }, [tenantId, branchId, isMockTenant, computeStock]);
+    return customersQuery.data ?? [];
+  }, [tenantId, branchId, isMockTenant, customersQuery.data]);
 
-  const filteredOrders = useMemo(() => {
-    if (statusFilter === "all") return orders;
-    return orders.filter((o) => o.status === statusFilter);
-  }, [orders, statusFilter]);
+  const products = useMemo((): SoProductOption[] => {
+    if (!branchId) return [];
+    if (isMockTenant) {
+      return getMockPosCatalog(branchId).map((bp) => ({
+        productId: bp.product_id,
+        sku: bp.product.sku,
+        name: bp.product.name,
+        unit: bp.product.unit,
+        sellingPrice: bp.selling_price,
+        availableStock: computeStock(bp.product_id, bp.stock),
+      }));
+    }
+    return (catalogQuery.data ?? []).map((bp) => ({
+      productId: bp.product_id,
+      sku: bp.product.sku,
+      name: bp.product.name,
+      unit: bp.product.unit,
+      sellingPrice: bp.selling_price,
+      availableStock: bp.stock,
+    }));
+  }, [branchId, isMockTenant, catalogQuery.data, computeStock]);
 
-  const suppliers = isMockTenant ? MOCK_SUPPLIERS : supplierList;
+  const suppliers = isMockTenant
+    ? MOCK_SUPPLIERS
+    : (suppliersQuery.data ?? []).length > 0
+      ? (suppliersQuery.data as typeof MOCK_SUPPLIERS)
+      : MOCK_SUPPLIERS;
+
+  const refreshOrders = useCallback(async () => {
+    if (isMockTenant) return;
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.salesOrders(tenantId, branchId),
+    });
+  }, [isMockTenant, queryClient, tenantId, branchId]);
 
   const openCreateForm = useCallback(() => {
     setEditingOrder(null);
@@ -165,7 +205,6 @@ export function useSalesOrders() {
         });
         setActionLoading(false);
         setFormOpen(false);
-        await loadOrders();
         return { success: true };
       }
 
@@ -213,10 +252,10 @@ export function useSalesOrders() {
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
       setFormOpen(false);
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [user, branchId, isMockTenant, tenantId, createMockOrder, loadOrders],
+    [user, branchId, isMockTenant, tenantId, createMockOrder, refreshOrders],
   );
 
   const updateOrder = useCallback(
@@ -231,7 +270,6 @@ export function useSalesOrders() {
         if (!result.ok) return { success: false, error: result.error };
         setFormOpen(false);
         setEditingOrder(null);
-        await loadOrders();
         const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
         if (updated) setDetailOrder(updated);
         return { success: true };
@@ -239,7 +277,7 @@ export function useSalesOrders() {
       setActionLoading(false);
       return { success: false, error: "Fitur belum tersedia untuk tenant nyata" };
     },
-    [user, branchId, isMockTenant, updateMockOrder, loadOrders],
+    [user, branchId, isMockTenant, updateMockOrder],
   );
 
   const confirmOrder = useCallback(
@@ -249,7 +287,6 @@ export function useSalesOrders() {
         const result = confirmMockOrder(soId);
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
-        await loadOrders();
         setDetailOrder((prev) =>
           prev?.id === soId ? { ...prev, status: "confirmed" } : prev,
         );
@@ -258,10 +295,10 @@ export function useSalesOrders() {
       const result = await updateSalesOrder(tenantId, soId, { status: "confirmed" });
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, confirmMockOrder, loadOrders, tenantId],
+    [isMockTenant, confirmMockOrder, refreshOrders, tenantId],
   );
 
   const cancelOrder = useCallback(
@@ -272,17 +309,16 @@ export function useSalesOrders() {
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
         setDetailOrder(null);
-        await loadOrders();
         return { success: true };
       }
       const result = await updateSalesOrder(tenantId, soId, { status: "cancelled" });
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
       setDetailOrder(null);
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, cancelMockOrder, loadOrders, tenantId],
+    [isMockTenant, cancelMockOrder, refreshOrders, tenantId],
   );
 
   const fulfillItem = useCallback(
@@ -298,7 +334,6 @@ export function useSalesOrders() {
         const result = processFulfillment(soId, soItemId, stockQty, indentQty, supplierId);
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
-        await loadOrders();
         const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
         if (updated) setDetailOrder(updated);
         return { success: true };
@@ -314,10 +349,10 @@ export function useSalesOrders() {
       );
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, processFulfillment, loadOrders, tenantId, user],
+    [isMockTenant, processFulfillment, refreshOrders, tenantId, user],
   );
 
   const invoiceFromSo = useCallback(
@@ -327,7 +362,6 @@ export function useSalesOrders() {
         const result = convertToInvoice(soId);
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
-        await loadOrders();
         const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
         if (updated) setDetailOrder(updated);
         return { success: true, invoiceNumber: result.invoiceNumber };
@@ -335,10 +369,10 @@ export function useSalesOrders() {
       const result = await convertSalesOrderToInvoice(tenantId, soId);
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await loadOrders();
+      await refreshOrders();
       return { success: true, invoiceNumber: result.data?.invoiceNumber };
     },
-    [isMockTenant, convertToInvoice, loadOrders, tenantId],
+    [isMockTenant, convertToInvoice, refreshOrders, tenantId],
   );
 
   const getProductStock = useCallback(
@@ -353,7 +387,7 @@ export function useSalesOrders() {
     user,
     branch: activeBranch,
     loading,
-    orders: filteredOrders,
+    orders,
     statusFilter,
     setStatusFilter,
     customers,
@@ -374,7 +408,7 @@ export function useSalesOrders() {
     fulfillItem,
     invoiceFromSo,
     getProductStock,
-    loadOrders,
+    loadOrders: refreshOrders,
   };
 }
 

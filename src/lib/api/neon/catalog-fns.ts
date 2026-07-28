@@ -132,6 +132,20 @@ export const neonGetBranchProducts = createServerFn({ method: "POST" })
     return listBranchProducts(data.tenantId, data.branchId, data.options);
   });
 
+export const neonGetBranchProductsMulti = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      branchIds: string[];
+      options?: { search?: string; lowStockOnly?: boolean };
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { listBranchProductsForBranches } = await import("@/server/services/products");
+    return listBranchProductsForBranches(data.tenantId, data.branchIds, data.options);
+  });
+
 export const neonGetBranchProduct = createServerFn({ method: "POST" })
   .validator((data: { tenantId: string; branchId: string; productId: string }) => data)
   .handler(async ({ data }) => {

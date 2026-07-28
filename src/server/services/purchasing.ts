@@ -4,6 +4,9 @@
 
 import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { suppliersKey } from "@/server/cache/keys";
+import { invalidateSuppliers } from "@/server/cache/invalidate";
+import { CACHE_TTL, getCached } from "@/server/cache/redis";
 import {
   toGoodsReceipt,
   toGrItem,
@@ -40,16 +43,29 @@ export async function listSuppliers(
   tenantId: string,
   options?: { activeOnly?: boolean; search?: string },
 ): Promise<Supplier[]> {
-  const db = getDb();
-  const conditions = [eq(suppliers.tenantId, tenantId)];
-  if (options?.activeOnly) conditions.push(eq(suppliers.isActive, true));
-  if (options?.search) conditions.push(ilike(suppliers.name, `%${options.search}%`));
+  if (options?.search) {
+    const db = getDb();
+    const conditions = [eq(suppliers.tenantId, tenantId), ilike(suppliers.name, `%${options.search}%`)];
+    if (options.activeOnly) conditions.push(eq(suppliers.isActive, true));
+    const rows = await db.query.suppliers.findMany({
+      where: and(...conditions),
+      orderBy: [suppliers.name],
+    });
+    return rows.map(toSupplier);
+  }
 
-  const rows = await db.query.suppliers.findMany({
-    where: and(...conditions),
-    orderBy: [suppliers.name],
+  const activeOnly = options?.activeOnly ?? false;
+  return getCached(suppliersKey(tenantId, activeOnly), CACHE_TTL.suppliers, async () => {
+    const db = getDb();
+    const conditions = [eq(suppliers.tenantId, tenantId)];
+    if (activeOnly) conditions.push(eq(suppliers.isActive, true));
+
+    const rows = await db.query.suppliers.findMany({
+      where: and(...conditions),
+      orderBy: [suppliers.name],
+    });
+    return rows.map(toSupplier);
   });
-  return rows.map(toSupplier);
 }
 
 export async function getSupplierById(
@@ -82,7 +98,9 @@ export async function createSupplierRecord(
       isActive: payload.is_active ?? true,
     })
     .returning();
-  return toSupplier(row);
+  const supplier = toSupplier(row);
+  await invalidateSuppliers(tenantId);
+  return supplier;
 }
 
 export async function updateSupplierById(
@@ -106,7 +124,9 @@ export async function updateSupplierById(
     .set(patch)
     .where(and(eq(suppliers.tenantId, tenantId), eq(suppliers.id, supplierId)))
     .returning();
-  return row ? toSupplier(row) : null;
+  if (!row) return null;
+  await invalidateSuppliers(tenantId);
+  return toSupplier(row);
 }
 
 async function loadPoItems(tenantId: string, poIds: string[]): Promise<Map<string, PoItem[]>> {

@@ -12,6 +12,7 @@ import {
   neonCreateProduct,
   neonGetBranchProduct,
   neonGetBranchProducts,
+  neonGetBranchProductsMulti,
   neonGetCategories,
   neonGetLowStockAlert,
   neonGetProduct,
@@ -30,6 +31,19 @@ import type {
   BranchProduct, BranchProductUpdate, BranchProductWithProduct,
 } from "@/types/database";
 
+function invalidateBranchProductClientCache(tenantId: string, branchId?: string) {
+  if (branchId) {
+    invalidateResponseCache(`branch-products:${tenantId}:${branchId}`);
+  } else {
+    invalidateResponseCache(`branch-products:${tenantId}:`);
+  }
+  invalidateResponseCache(`branch-products-multi:${tenantId}:`);
+}
+
+function invalidateCategoryClientCache(tenantId: string) {
+  invalidateResponseCache(`categories:${tenantId}`);
+}
+
 // ---------------------------------------------------------------------------
 // Product Categories
 // ---------------------------------------------------------------------------
@@ -38,9 +52,11 @@ export async function getCategories(
   tenantId: string
 ): Promise<ApiResponse<ProductCategory[]>> {
   if (isNeonBackend()) {
-    const result = await neonCall(() => neonGetCategories({ data: { tenantId } }));
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
+    return withResponseCache(`categories:${tenantId}`, 30_000, async () => {
+      const result = await neonCall(() => neonGetCategories({ data: { tenantId } }));
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    });
   }
   return queryMany(() =>
     supabase
@@ -61,6 +77,7 @@ export async function createCategory(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal membuat kategori");
+    invalidateCategoryClientCache(tenantId);
     return ok(result.data);
   }
   try {
@@ -194,6 +211,7 @@ export async function createProduct(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal membuat produk");
+    invalidateBranchProductClientCache(tenantId);
     return ok(result.data);
   }
   try {
@@ -220,6 +238,7 @@ export async function updateProduct(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Produk tidak ditemukan");
+    invalidateBranchProductClientCache(tenantId);
     return ok(result.data);
   }
   try {
@@ -286,6 +305,38 @@ export async function getBranchProducts(
   });
 }
 
+export async function getBranchProductsMulti(
+  tenantId: string,
+  branchIds: string[],
+  options?: { search?: string; lowStockOnly?: boolean },
+): Promise<ApiResponse<Record<string, BranchProductWithProduct[]>>> {
+  if (branchIds.length === 0) return ok({});
+
+  if (isNeonBackend()) {
+    const cacheKey = `branch-products-multi:${tenantId}:${[...branchIds].sort().join(",")}`;
+    const useCache = !options?.search && !options?.lowStockOnly;
+    const load = async () => {
+      const result = await neonCall(() =>
+        neonGetBranchProductsMulti({ data: { tenantId, branchIds, options } }),
+      );
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? {});
+    };
+    if (useCache) {
+      return withResponseCache(cacheKey, 30_000, load);
+    }
+    return load();
+  }
+
+  const entries = await Promise.all(
+    branchIds.map(async (branchId) => {
+      const result = await getBranchProducts(tenantId, branchId, options);
+      return [branchId, result.data ?? []] as const;
+    }),
+  );
+  return ok(Object.fromEntries(entries));
+}
+
 export async function getBranchProduct(
   tenantId: string,
   branchId: string,
@@ -328,6 +379,7 @@ export async function upsertBranchProduct(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal menyimpan stok cabang");
+    invalidateBranchProductClientCache(tenantId, branchId);
     return ok(result.data);
   }
   try {
@@ -359,6 +411,7 @@ export async function updateBranchProduct(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Stok cabang tidak ditemukan");
+    invalidateBranchProductClientCache(tenantId);
     return ok(result.data);
   }
   try {
@@ -390,6 +443,7 @@ export async function updateSellingPrice(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Stok cabang tidak ditemukan");
+    invalidateBranchProductClientCache(tenantId, branchId);
     return ok(result.data);
   }
   try {

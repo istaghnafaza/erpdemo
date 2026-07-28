@@ -5,6 +5,10 @@
 import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import {
+  invalidateBranchProducts,
+  invalidateCustomers,
+} from "@/server/cache/invalidate";
+import {
   toCashierSession,
   toPosCart,
   toSalesItem,
@@ -628,7 +632,7 @@ export async function createSaleTransaction(
     if (existing) return toSalesTransaction(existing);
   }
 
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const transactionNumber = await resolveTransactionNumber(
       tx,
       tenantId,
@@ -791,6 +795,12 @@ export async function createSaleTransaction(
 
     return toSalesTransaction(txRow);
   });
+
+  await invalidateBranchProducts(tenantId, transaction.branch_id);
+  if (transaction.payment_method === "credit" && transaction.customer_id) {
+    await invalidateCustomers(tenantId);
+  }
+  return saved;
 }
 
 export async function voidSaleTransaction(
@@ -800,7 +810,7 @@ export async function voidSaleTransaction(
 ): Promise<SalesTransaction | null> {
   const db = getDb();
 
-  return db.transaction(async (tx) => {
+  const voided = await db.transaction(async (tx) => {
     const txRow = await tx.query.salesTransactions.findFirst({
       where: and(
         eq(salesTransactions.tenantId, tenantId),
@@ -862,4 +872,27 @@ export async function voidSaleTransaction(
 
     return updated ? toSalesTransaction(updated) : null;
   });
+
+  if (voided) {
+    await invalidateBranchProducts(tenantId, voided.branch_id);
+    if (voided.payment_method === "credit" && voided.customer_id) {
+      await invalidateCustomers(tenantId);
+    }
+    const { recordAuditEvent } = await import("@/server/services/audit-log");
+    const { getClientIp } = await import("@/server/rate-limit");
+    await recordAuditEvent({
+      tenantId,
+      actorId: userId,
+      action: "void_sale",
+      entityType: "sales_transaction",
+      entityId: transactionId,
+      metadata: {
+        transactionNumber: voided.transaction_number,
+        branchId: voided.branch_id,
+        grandTotal: voided.grand_total,
+      },
+      ipAddress: await getClientIp(),
+    });
+  }
+  return voided;
 }

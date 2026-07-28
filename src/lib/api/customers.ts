@@ -4,7 +4,7 @@
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
 import { neonCall } from "./backend";
-import { withResponseCache } from "./response-cache";
+import { withResponseCache, invalidateResponseCache } from "./response-cache";
 import {
   neonAdjustOutstandingDebt,
   neonCreateCustomer,
@@ -90,6 +90,7 @@ export async function createCustomer(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal membuat pelanggan");
+    invalidateResponseCache(`customers:${tenantId}`);
     return ok(result.data);
   }
   try {
@@ -116,6 +117,7 @@ export async function updateCustomer(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Pelanggan tidak ditemukan");
+    invalidateResponseCache(`customers:${tenantId}`);
     return ok(result.data);
   }
   try {
@@ -145,6 +147,7 @@ export async function adjustOutstandingDebt(
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Pelanggan tidak ditemukan");
+    invalidateResponseCache(`customers:${tenantId}`);
     return ok(result.data);
   }
   try {

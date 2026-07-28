@@ -3,8 +3,8 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePosStore } from "@/stores/pos.store";
@@ -16,13 +16,14 @@ import {
 } from "@/stores/inventory.store";
 import { useProductAttributesStore } from "@/stores/product-attributes.store";
 import {
-  getBranchProducts,
+  getBranchProductsMulti,
   getCategories,
   deactivateProduct,
   updateProduct,
   createProduct,
   upsertBranchProduct,
 } from "@/lib/api/products";
+import { queryKeys } from "@/lib/query-keys";
 import { getStockMovements } from "@/lib/api/inventory";
 import {
   getMockPosCatalog,
@@ -90,9 +91,8 @@ export function useInventoryProducts() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
   const [branchFilter, setBranchFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [rawRows, setRawRows] = useState<InventoryProductRow[]>([]);
-  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [mockLoading, setMockLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -134,140 +134,158 @@ export function useInventoryProducts() {
     seedAttributes();
   }, [seedAttributes]);
 
-  useEffect(() => {
-    if (!tenantId || effectiveBranchIds.length === 0) return;
-    let cancelled = false;
-    setLoading(true);
-
-    if (isMockTenant) {
-      const rows: InventoryProductRow[] = [];
-      for (const branchId of effectiveBranchIds) {
-        const branch = branchList.find((b) => b.id === branchId);
-        const catalog = getMockPosCatalog(branchId);
-        for (const bp of catalog) {
-          const override = mockProductOverrides[bp.product_id];
-          if (mockDeactivatedIds[bp.product_id] || override?.isActive === false) continue;
-
-          const stock = computeStock(branchId, bp.product_id, bp.stock);
-          const reorderPoint = override?.reorderPoint ?? bp.reorder_point;
-
-          rows.push({
-            branchProductId: bp.id,
-            productId: bp.product_id,
-            branchId,
-            branchName: branch?.name ?? "Cabang",
-            sku: override?.sku ?? bp.product.sku,
-            barcode: override?.barcode ?? bp.product.barcode,
-            name: override?.name ?? bp.product.name,
-            category: override?.categoryName ?? MOCK_SKU_CATEGORY[bp.product.sku] ?? "Lainnya",
-            categoryId: bp.product.category_id,
-            unit: override?.unit ?? bp.product.unit,
-            stock,
-            reorderPoint,
-            purchasePrice: override?.purchasePrice ?? bp.product.purchase_price,
-            sellingPrice: override?.sellingPrice ?? bp.selling_price,
-            warehouseLocation: override?.warehouseLocation ?? bp.warehouse_location ?? "",
-            isActive: true,
-            stockStatus: inventoryStockStatus(stock, reorderPoint),
-          });
-        }
-
-        for (const [pid, override] of Object.entries(mockProductOverrides)) {
-          if (override.isActive === false) continue;
-          if (rows.some((r) => r.productId === pid && r.branchId === branchId)) continue;
-          if (!override.sku || !override.name) continue;
-
-          const stock = computeStock(branchId, pid, override.initialStock ?? 0);
-          rows.push({
-            branchProductId: `new-${branchId}-${pid}`,
-            productId: pid,
-            branchId,
-            branchName: branch?.name ?? "Cabang",
-            sku: override.sku,
-            barcode: override.barcode ?? null,
-            name: override.name,
-            category: override.categoryName ?? "Lainnya",
-            categoryId: null,
-            unit: override.unit ?? "pcs",
-            stock,
-            reorderPoint: override.reorderPoint ?? 5,
-            purchasePrice: override.purchasePrice ?? 0,
-            sellingPrice: override.sellingPrice ?? 0,
-            warehouseLocation: override.warehouseLocation ?? "",
-            isActive: true,
-            stockStatus: inventoryStockStatus(stock, override.reorderPoint ?? 5),
-          });
-        }
-      }
-
-      if (!cancelled) {
-        setRawRows(rows);
-        const mergedCategoryNames = Array.from(
-          new Set([...MOCK_CATEGORIES, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES]),
-        ).sort();
-        setCategories(
-          mergedCategoryNames.map((name, i) => ({
-            id: `cat-${i}`,
-            tenant_id: MOCK_TENANT_ID,
-            name,
-            icon: null,
-            created_at: new Date().toISOString(),
-          })),
-        );
-        setLoading(false);
-      }
-    } else {
-      void Promise.all([
+  const inventoryQuery = useQuery({
+    queryKey: queryKeys.inventoryCatalog(tenantId, effectiveBranchIds),
+    queryFn: async () => {
+      const [catResult, bpResult] = await Promise.all([
         getCategories(tenantId),
-        ...effectiveBranchIds.map((bid) => getBranchProducts(tenantId, bid)),
-      ]).then(([catResult, ...bpResults]) => {
-        if (cancelled) return;
-        setCategories(catResult.data ?? []);
-        const rows: InventoryProductRow[] = [];
-        bpResults.forEach((result, idx) => {
-          const branchId = effectiveBranchIds[idx];
-          const branch = branchList.find((b) => b.id === branchId);
-          for (const bp of result.data ?? []) {
-            const cat = (bp.product as { category?: { name: string } }).category?.name ?? "Lainnya";
-            if (!bp.product.is_active) continue;
-            rows.push({
-              branchProductId: bp.id,
-              productId: bp.product_id,
-              branchId,
-              branchName: branch?.name ?? "Cabang",
-              sku: bp.product.sku,
-              barcode: bp.product.barcode,
-              name: bp.product.name,
-              category: cat,
-              categoryId: bp.product.category_id,
-              unit: bp.product.unit,
-              stock: bp.stock,
-              reorderPoint: bp.reorder_point,
-              purchasePrice: bp.product.purchase_price,
-              sellingPrice: bp.selling_price,
-              warehouseLocation: bp.warehouse_location ?? "",
-              isActive: bp.product.is_active,
-              stockStatus: inventoryStockStatus(bp.stock, bp.reorder_point),
-            });
-          }
-        });
-        setRawRows(rows);
-        setLoading(false);
-      });
-    }
+        getBranchProductsMulti(tenantId, effectiveBranchIds),
+      ]);
+      if (catResult.error) throw new Error(catResult.error);
+      if (bpResult.error) throw new Error(bpResult.error);
+      return {
+        categories: catResult.data ?? [],
+        byBranch: bpResult.data ?? {},
+      };
+    },
+    enabled: !isMockTenant && Boolean(tenantId) && effectiveBranchIds.length > 0,
+  });
 
-    return () => {
-      cancelled = true;
-    };
+  const mockRawRows = useMemo(() => {
+    if (!isMockTenant || effectiveBranchIds.length === 0) return [] as InventoryProductRow[];
+    const rows: InventoryProductRow[] = [];
+    for (const branchId of effectiveBranchIds) {
+      const branch = branchList.find((b) => b.id === branchId);
+      const catalog = getMockPosCatalog(branchId);
+      for (const bp of catalog) {
+        const override = mockProductOverrides[bp.product_id];
+        if (mockDeactivatedIds[bp.product_id] || override?.isActive === false) continue;
+
+        const stock = computeStock(branchId, bp.product_id, bp.stock);
+        const reorderPoint = override?.reorderPoint ?? bp.reorder_point;
+
+        rows.push({
+          branchProductId: bp.id,
+          productId: bp.product_id,
+          branchId,
+          branchName: branch?.name ?? "Cabang",
+          sku: override?.sku ?? bp.product.sku,
+          barcode: override?.barcode ?? bp.product.barcode,
+          name: override?.name ?? bp.product.name,
+          category: override?.categoryName ?? MOCK_SKU_CATEGORY[bp.product.sku] ?? "Lainnya",
+          categoryId: bp.product.category_id,
+          unit: override?.unit ?? bp.product.unit,
+          stock,
+          reorderPoint,
+          purchasePrice: override?.purchasePrice ?? bp.product.purchase_price,
+          sellingPrice: override?.sellingPrice ?? bp.selling_price,
+          warehouseLocation: override?.warehouseLocation ?? bp.warehouse_location ?? "",
+          isActive: true,
+          stockStatus: inventoryStockStatus(stock, reorderPoint),
+        });
+      }
+
+      for (const [pid, override] of Object.entries(mockProductOverrides)) {
+        if (override.isActive === false) continue;
+        if (rows.some((r) => r.productId === pid && r.branchId === branchId)) continue;
+        if (!override.sku || !override.name) continue;
+
+        const stock = computeStock(branchId, pid, override.initialStock ?? 0);
+        rows.push({
+          branchProductId: `new-${branchId}-${pid}`,
+          productId: pid,
+          branchId,
+          branchName: branch?.name ?? "Cabang",
+          sku: override.sku,
+          barcode: override.barcode ?? null,
+          name: override.name,
+          category: override.categoryName ?? "Lainnya",
+          categoryId: null,
+          unit: override.unit ?? "pcs",
+          stock,
+          reorderPoint: override.reorderPoint ?? 5,
+          purchasePrice: override.purchasePrice ?? 0,
+          sellingPrice: override.sellingPrice ?? 0,
+          warehouseLocation: override.warehouseLocation ?? "",
+          isActive: true,
+          stockStatus: inventoryStockStatus(stock, override.reorderPoint ?? 5),
+        });
+      }
+    }
+    return rows;
   }, [
-    tenantId,
-    effectiveBranchIds,
     isMockTenant,
+    effectiveBranchIds,
     branchList,
     mockProductOverrides,
     mockDeactivatedIds,
     computeStock,
   ]);
+
+  useEffect(() => {
+    if (!isMockTenant) return;
+    const timer = setTimeout(() => setMockLoading(false), 400);
+    return () => clearTimeout(timer);
+  }, [isMockTenant, effectiveBranchIds]);
+
+  const categories = useMemo((): ProductCategory[] => {
+    if (isMockTenant) {
+      const mergedCategoryNames = Array.from(
+        new Set([...MOCK_CATEGORIES, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES]),
+      ).sort();
+      return mergedCategoryNames.map((name, i) => ({
+        id: `cat-${i}`,
+        tenant_id: MOCK_TENANT_ID,
+        name,
+        icon: null,
+        created_at: new Date().toISOString(),
+      }));
+    }
+    return inventoryQuery.data?.categories ?? [];
+  }, [isMockTenant, inventoryQuery.data]);
+
+  const rawRows = useMemo((): InventoryProductRow[] => {
+    if (isMockTenant) return mockRawRows;
+    const byBranch = inventoryQuery.data?.byBranch ?? {};
+    const rows: InventoryProductRow[] = [];
+    for (const branchId of effectiveBranchIds) {
+      const branch = branchList.find((b) => b.id === branchId);
+      for (const bp of byBranch[branchId] ?? []) {
+        const cat = (bp.product as { category?: { name: string } }).category?.name ?? "Lainnya";
+        if (!bp.product.is_active) continue;
+        rows.push({
+          branchProductId: bp.id,
+          productId: bp.product_id,
+          branchId,
+          branchName: branch?.name ?? "Cabang",
+          sku: bp.product.sku,
+          barcode: bp.product.barcode,
+          name: bp.product.name,
+          category: cat,
+          categoryId: bp.product.category_id,
+          unit: bp.product.unit,
+          stock: bp.stock,
+          reorderPoint: bp.reorder_point,
+          purchasePrice: bp.product.purchase_price,
+          sellingPrice: bp.selling_price,
+          warehouseLocation: bp.warehouse_location ?? "",
+          isActive: bp.product.is_active,
+          stockStatus: inventoryStockStatus(bp.stock, bp.reorder_point),
+        });
+      }
+    }
+    return rows;
+  }, [isMockTenant, mockRawRows, inventoryQuery.data, effectiveBranchIds, branchList]);
+
+  const loading = isMockTenant ? mockLoading : inventoryQuery.isPending;
+
+  const invalidateInventory = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.inventoryCatalog(tenantId, effectiveBranchIds),
+    });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.categories(tenantId) });
+    void queryClient.invalidateQueries({ queryKey: ["pos-catalog", tenantId] });
+  }, [queryClient, tenantId, effectiveBranchIds]);
 
   const categoryNames = useMemo(() => {
     if (isMockTenant) {
@@ -370,9 +388,10 @@ export function useInventoryProducts() {
         return { success: true };
       }
       const result = await deactivateProduct(tenantId, productIdVal);
+      if (!result.error) invalidateInventory();
       return { success: !result.error, error: result.error ?? undefined };
     },
-    [isMockTenant, tenantId, deactivateMockProduct],
+    [isMockTenant, tenantId, deactivateMockProduct, invalidateInventory],
   );
 
   const handleSaveProduct = useCallback(
@@ -434,6 +453,7 @@ export function useInventoryProducts() {
           });
         }
       }
+      invalidateInventory();
       return { success: true };
     },
     [
@@ -447,6 +467,7 @@ export function useInventoryProducts() {
       tenantId,
       categories,
       existingSkus,
+      invalidateInventory,
     ],
   );
 

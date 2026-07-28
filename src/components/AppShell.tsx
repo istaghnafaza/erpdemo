@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -42,6 +42,14 @@ import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
 import { OnboardingProgressWidget } from "@/components/onboarding/OnboardingProgressWidget";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useModuleNavBadges } from "@/hooks/useModuleNavBadges";
+import { resolveScopedBranchIds } from "@/lib/branch-scope";
+import {
+  prefetchFinanceModule,
+  prefetchInventoryModule,
+  prefetchPosModule,
+  prefetchPurchaseOrdersModule,
+  prefetchSalesOrdersModule,
+} from "@/lib/prefetch-module-queries";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -214,6 +222,9 @@ export function AppShell({
   const navigate = useNavigate();
   const startWizardSetup = useOnboardingStore((s) => s.startWizardSetup);
   const needsBranchSetup = useBranchStore((s) => !s.isLoading && s.branches.length === 0);
+  const branches = useBranchStore((s) => s.branches);
+  const activeBranch = useBranchStore((s) => s.activeBranch);
+  const isConsolidated = useBranchStore((s) => s.isConsolidated);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const currentTenant = useAuthStore((s) => s.currentTenant);
   const tenantSlug = currentTenant?.slug ?? pathname.split("/")[1] ?? "";
@@ -245,6 +256,27 @@ export function AppShell({
 
   const moduleBadges = useModuleNavBadges();
 
+  const tenantId = currentUser?.tenantId ?? "";
+  const branchId = activeBranch?.id ?? "";
+  const branchIds = useMemo(
+    () =>
+      resolveScopedBranchIds({
+        branches,
+        activeBranch,
+        isConsolidated,
+        isOwner,
+      }),
+    [branches, activeBranch, isConsolidated, isOwner],
+  );
+
+  const prefetchNavModule = (suffix: string) => {
+    if (suffix.endsWith("/pos")) prefetchPosModule(tenantId, branchId);
+    if (suffix.includes("/inventory")) prefetchInventoryModule(tenantId, branchIds);
+    if (suffix.endsWith("/finance")) prefetchFinanceModule(tenantId, branchIds);
+    if (suffix.endsWith("/sales-orders")) prefetchSalesOrdersModule(tenantId, branchId);
+    if (suffix.includes("/purchase-orders")) prefetchPurchaseOrdersModule(tenantId, branchId);
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar - desktop */}
@@ -257,6 +289,7 @@ export function AppShell({
           needsBranchSetup={needsBranchSetup}
           isOwner={isOwner}
           onBranchSetup={goToBranchSetup}
+          onPrefetchModule={prefetchNavModule}
         />
       </aside>
 
@@ -280,6 +313,7 @@ export function AppShell({
               needsBranchSetup={needsBranchSetup}
               isOwner={isOwner}
               onBranchSetup={goToBranchSetup}
+              onPrefetchModule={prefetchNavModule}
             />
           </aside>
         </div>
@@ -413,6 +447,7 @@ function SidebarContent({
   needsBranchSetup,
   isOwner,
   onBranchSetup,
+  onPrefetchModule,
 }: {
   nav: NavItem[];
   pathname: string;
@@ -422,6 +457,7 @@ function SidebarContent({
   needsBranchSetup?: boolean;
   isOwner?: boolean;
   onBranchSetup?: () => void;
+  onPrefetchModule?: (suffix: string) => void;
 }) {
   return (
     <>
@@ -469,6 +505,10 @@ function SidebarContent({
               key={item.to}
               to={item.to}
               onClick={onNavigate}
+              onMouseEnter={() => {
+                const suffix = item.to.replace(/^\/[^/]+/, "");
+                onPrefetchModule?.(suffix);
+              }}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                 active

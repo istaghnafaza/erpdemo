@@ -3,7 +3,11 @@
 // =============================================================================
 
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
+import { getModuleNavCounts } from "@/lib/api/nav-counts";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useDeliveriesStore } from "@/stores/deliveries.store";
@@ -21,10 +25,26 @@ export function useModuleNavBadges() {
   const deliveries = useDeliveriesStore((s) => s.deliveries);
   const salesOrders = useSalesOrdersStore((s) => s.mockOrders);
   const onlineOrders = useCustomerPortalStore((s) => s.orders);
-  const useMockBadges = !isNeonBackend();
+  const useNeonBadges = isNeonBackend() && tenantId && !isMockTenantId(tenantId);
+
+  const neonQuery = useQuery({
+    queryKey: queryKeys.moduleNavCounts(tenantId ?? "", branchId ?? ""),
+    queryFn: async () => {
+      const result = await getModuleNavCounts(tenantId!, branchId!);
+      if (result.error) throw new Error(result.error);
+      return result.data!;
+    },
+    enabled: Boolean(useNeonBadges && tenantId && branchId),
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
 
   return useMemo(() => {
-    if (!tenantId || !branchId || !useMockBadges) {
+    if (useNeonBadges && neonQuery.data) {
+      return neonQuery.data;
+    }
+
+    if (!tenantId || !branchId || useNeonBadges) {
       return { deliveries: 0, sales_orders: 0, online_orders: 0 };
     }
 
@@ -54,5 +74,13 @@ export function useModuleNavBadges() {
       sales_orders: salesOrderCount,
       online_orders: onlineOrderCount,
     };
-  }, [tenantId, branchId, useMockBadges, deliveries, salesOrders, onlineOrders]);
+  }, [
+    tenantId,
+    branchId,
+    useNeonBadges,
+    neonQuery.data,
+    deliveries,
+    salesOrders,
+    onlineOrders,
+  ]);
 }

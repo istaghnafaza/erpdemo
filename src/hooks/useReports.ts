@@ -5,9 +5,11 @@
 // =============================================================================
 
 import { useMemo, useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
-import { loadNeonReports } from "@/lib/reports-neon-loader";
+import { getReportsBundle } from "@/lib/api/reports";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useFinanceStore } from "@/stores/finance.store";
@@ -47,10 +49,6 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
   const useNeonData = isNeonBackend() && !isMockTenant;
 
   const [period, setPeriod] = useState<ReportPeriod>(initialPeriod);
-  const [neonReports, setNeonReports] = useState<Awaited<ReturnType<typeof loadNeonReports>> | null>(
-    null,
-  );
-  const [neonLoading, setNeonLoading] = useState(useNeonData);
 
   useEffect(() => {
     if (!isMockTenant) return;
@@ -88,26 +86,19 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
   const consolidated = isConsolidated && isOwner;
   const monthRange = useMemo(() => getMonthDateRange(), []);
 
-  useEffect(() => {
-    if (!useNeonData || !tenantId) {
-      setNeonReports(null);
-      setNeonLoading(false);
-      return;
-    }
+  const reportsQuery = useQuery({
+    queryKey: queryKeys.reportsBundle(tenantId, branchIds, period, monthRange),
+    queryFn: async () => {
+      const result = await getReportsBundle(tenantId, branchIds, Number(period), monthRange);
+      if (result.error) throw new Error(result.error);
+      return result.data!;
+    },
+    enabled: useNeonData && Boolean(tenantId) && branchIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    let cancelled = false;
-    setNeonLoading(true);
-
-    void loadNeonReports(tenantId, branchIds, period, monthRange).then((data) => {
-      if (cancelled) return;
-      setNeonReports(data);
-      setNeonLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [useNeonData, tenantId, branchIds, period, monthRange]);
+  const neonReports = reportsQuery.data ?? null;
+  const neonLoading = reportsQuery.isPending;
 
   const scopedTransactions = useMemo(
     () => (isMockTenant ? filterFinanceByBranches(mockTransactions, branchIds) : []),
@@ -190,9 +181,9 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
     ? (neonReports?.profitLoss ?? emptyNeonProfitLoss)
     : mockProfitLoss;
   const cashierAudit = useNeonData
-    ? (neonReports?.cashierAudit ?? { cashiers: [], transactions: [] })
+    ? { cashiers: [], transactions: [] }
     : mockCashierAudit;
-  const opnameVariance = useNeonData ? (neonReports?.opnameVariance ?? []) : mockOpnameVariance;
+  const opnameVariance = useNeonData ? [] : mockOpnameVariance;
 
   const totalOpnameLoss = useMemo(
     () => opnameVariance.reduce((s, r) => s + r.estimatedLoss, 0),

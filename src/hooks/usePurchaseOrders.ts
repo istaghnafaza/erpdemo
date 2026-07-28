@@ -2,9 +2,9 @@
 // usePurchaseOrders — business logic PO (Fase 10).
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
-import { isNeonBackend } from "@/lib/api/backend";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import {
@@ -12,8 +12,14 @@ import {
   type CreatePoDraft,
 } from "@/stores/purchasing.store";
 import { useSalesOrdersStore } from "@/stores/sales-orders.store";
-import { getPurchaseOrders, createPurchaseOrder, updatePurchaseOrderStatus, getSuppliers } from "@/lib/api/purchasing";
+import {
+  getPurchaseOrders,
+  createPurchaseOrder,
+  updatePurchaseOrderStatus,
+  getSuppliers,
+} from "@/lib/api/purchasing";
 import { getBranchProducts } from "@/lib/api/products";
+import { queryKeys } from "@/lib/query-keys";
 import { getMockPosCatalog } from "@/lib/mock-pos-catalog";
 import { MOCK_SUPPLIER_LIST, type MockPoWithItems } from "@/lib/mock-purchasing";
 import { collectActiveIndentPoSoItemIds } from "@/lib/indent-po-guard";
@@ -44,6 +50,7 @@ export interface IndentSoItemOption {
 }
 
 export function usePurchaseOrders() {
+  const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.currentUser);
   const activeBranch = useBranchStore((s) => s.activeBranch);
   const mockPurchaseOrders = usePurchasingStore((s) => s.mockPurchaseOrders);
@@ -58,73 +65,94 @@ export function usePurchaseOrders() {
   const branchId = activeBranch?.id ?? "";
   const isMockTenant = isMockTenantId(tenantId);
 
-  const [orders, setOrders] = useState<MockPoWithItems[]>([]);
-  const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<DbPoType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<DbPoStatus | "all">("all");
   const [formOpen, setFormOpen] = useState(false);
   const [detailPo, setDetailPo] = useState<MockPoWithItems | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [products, setProducts] = useState<PoProductOption[]>([]);
-  const [supplierList, setSupplierList] = useState(MOCK_SUPPLIER_LIST);
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
+  const ordersQuery = useQuery({
+    queryKey: queryKeys.purchaseOrders(tenantId, branchId),
+    queryFn: async () => {
+      const result = await getPurchaseOrders(tenantId, branchId);
+      if (result.error) throw new Error(result.error);
+      return (result.data ?? []) as MockPoWithItems[];
+    },
+    enabled: !isMockTenant && Boolean(tenantId && branchId),
+    staleTime: 30_000,
+  });
+
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.posCatalog(tenantId, branchId),
+    queryFn: async () => {
+      const result = await getBranchProducts(tenantId, branchId);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: !isMockTenant && Boolean(tenantId && branchId),
+    staleTime: 60_000,
+  });
+
+  const suppliersQuery = useQuery({
+    queryKey: queryKeys.suppliers(tenantId, true),
+    queryFn: async () => {
+      const result = await getSuppliers(tenantId, { activeOnly: true });
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+    enabled: !isMockTenant && Boolean(tenantId),
+    staleTime: 60_000,
+  });
+
+  const mockOrdersFiltered = useMemo(() => {
+    let list = getAllMockPos();
+    if (branchId) list = list.filter((p) => p.branch_id === branchId);
+    return list;
+  }, [getAllMockPos, branchId, mockPurchaseOrders]);
+
+  const ordersRaw = isMockTenant ? mockOrdersFiltered : (ordersQuery.data ?? []);
+  const loading = isMockTenant ? false : ordersQuery.isPending;
+
+  const products = useMemo((): PoProductOption[] => {
+    if (!branchId) return [];
     if (isMockTenant) {
-      let list = getAllMockPos();
-      if (branchId) list = list.filter((p) => p.branch_id === branchId);
-      setOrders(list);
-      setLoading(false);
-      return;
+      return getMockPosCatalog(branchId).map((bp) => ({
+        productId: bp.product_id,
+        sku: bp.product.sku,
+        name: bp.product.name,
+        unit: bp.product.unit,
+        purchasePrice: bp.product.purchase_price,
+      }));
     }
-    const result = await getPurchaseOrders(tenantId, branchId);
-    setOrders((result.data ?? []) as MockPoWithItems[]);
-    setLoading(false);
-  }, [isMockTenant, getAllMockPos, branchId, tenantId]);
+    return (catalogQuery.data ?? []).map((bp) => ({
+      productId: bp.product_id,
+      sku: bp.product.sku,
+      name: bp.product.name,
+      unit: bp.product.unit,
+      purchasePrice: bp.product.purchase_price,
+    }));
+  }, [branchId, isMockTenant, catalogQuery.data]);
 
-  useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
-
-  useEffect(() => {
-    if (!branchId) return;
-    if (isMockTenant) {
-      setProducts(
-        getMockPosCatalog(branchId).map((bp) => ({
-          productId: bp.product_id,
-          sku: bp.product.sku,
-          name: bp.product.name,
-          unit: bp.product.unit,
-          purchasePrice: bp.product.purchase_price,
-        })),
-      );
-    } else {
-      void getBranchProducts(tenantId, branchId).then((r) =>
-        setProducts(
-          (r.data ?? []).map((bp) => ({
-            productId: bp.product_id,
-            sku: bp.product.sku,
-            name: bp.product.name,
-            unit: bp.product.unit,
-            purchasePrice: bp.product.purchase_price,
-          })),
-        ),
-      );
-      void getSuppliers(tenantId, { activeOnly: true }).then((r) => {
-        if (r.data?.length) setSupplierList(r.data);
-      });
-    }
-  }, [branchId, isMockTenant, tenantId]);
+  const suppliers = isMockTenant
+    ? MOCK_SUPPLIER_LIST
+    : (suppliersQuery.data ?? []).length > 0
+      ? suppliersQuery.data!
+      : MOCK_SUPPLIER_LIST;
 
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return ordersRaw.filter((o) => {
       if (typeFilter !== "all" && o.type !== typeFilter) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       return true;
     });
-  }, [orders, typeFilter, statusFilter]);
+  }, [ordersRaw, typeFilter, statusFilter]);
 
-  const suppliers = isMockTenant ? MOCK_SUPPLIER_LIST : supplierList;
+  const refreshOrders = useCallback(async () => {
+    if (isMockTenant) return;
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.purchaseOrders(tenantId, branchId),
+    });
+  }, [isMockTenant, queryClient, tenantId, branchId]);
 
   const indentSoItemOptions = useMemo((): IndentSoItemOption[] => {
     const activeSoItemIds = collectActiveIndentPoSoItemIds(
@@ -199,7 +227,6 @@ export function usePurchaseOrders() {
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
         setFormOpen(false);
-        await loadOrders();
         return { success: true };
       }
 
@@ -234,10 +261,10 @@ export function usePurchaseOrders() {
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
       setFormOpen(false);
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [user, branchId, isMockTenant, tenantId, createMockPo, loadOrders],
+    [user, branchId, isMockTenant, tenantId, createMockPo, refreshOrders],
   );
 
   const sendPo = useCallback(
@@ -247,7 +274,6 @@ export function usePurchaseOrders() {
         const result = sendMockPo(poId);
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
-        await loadOrders();
         const updated = getAllMockPos().find((p) => p.id === poId);
         if (updated) setDetailPo(updated);
         return { success: true };
@@ -255,10 +281,10 @@ export function usePurchaseOrders() {
       const result = await updatePurchaseOrderStatus(tenantId, poId, "sent");
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, sendMockPo, loadOrders, getAllMockPos, tenantId],
+    [isMockTenant, sendMockPo, refreshOrders, getAllMockPos, tenantId],
   );
 
   const cancelPo = useCallback(
@@ -269,27 +295,26 @@ export function usePurchaseOrders() {
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
         setDetailPo(null);
-        await loadOrders();
         return { success: true };
       }
       const result = await updatePurchaseOrderStatus(tenantId, poId, "cancelled");
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
       setDetailPo(null);
-      await loadOrders();
+      await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, cancelMockPo, loadOrders, tenantId],
+    [isMockTenant, cancelMockPo, refreshOrders, tenantId],
   );
 
   const receivablePos = useMemo(
     () =>
-      orders.filter(
+      ordersRaw.filter(
         (p) =>
           p.status === "sent" ||
           p.status === "partial_received",
       ),
-    [orders],
+    [ordersRaw],
   );
 
   return {
@@ -315,6 +340,6 @@ export function usePurchaseOrders() {
     createPo,
     sendPo,
     cancelPo,
-    loadOrders,
+    loadOrders: refreshOrders,
   };
 }

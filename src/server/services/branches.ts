@@ -4,6 +4,9 @@
 
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { branchesKey, branchesWithManagerKey } from "@/server/cache/keys";
+import { invalidateBranches } from "@/server/cache/invalidate";
+import { CACHE_TTL, getCached } from "@/server/cache/redis";
 import { toBranch } from "@/server/db/mappers";
 import {
   branches,
@@ -33,7 +36,7 @@ export function ensureUniqueBranchCode(preferred: string, existingCodes: string[
   throw new Error("Terlalu banyak cabang dengan kode serupa — coba nama cabang lain");
 }
 
-export async function listBranches(tenantId: string, activeOnly = false): Promise<Branch[]> {
+async function queryBranchesFromDb(tenantId: string, activeOnly = false): Promise<Branch[]> {
   const db = getDb();
   const rows = await db.query.branches.findMany({
     where: activeOnly
@@ -42,6 +45,12 @@ export async function listBranches(tenantId: string, activeOnly = false): Promis
     orderBy: asc(branches.name),
   });
   return rows.map(toBranch);
+}
+
+export async function listBranches(tenantId: string, activeOnly = false): Promise<Branch[]> {
+  return getCached(branchesKey(tenantId, activeOnly), CACHE_TTL.branches, () =>
+    queryBranchesFromDb(tenantId, activeOnly),
+  );
 }
 
 export async function getBranch(tenantId: string, branchId: string): Promise<Branch | null> {
@@ -66,8 +75,9 @@ export async function countActiveBranches(tenantId: string): Promise<number> {
 }
 
 export async function listBranchesWithManager(tenantId: string): Promise<BranchWithManager[]> {
-  const db = getDb();
-  const rows = await db
+  return getCached(branchesWithManagerKey(tenantId), CACHE_TTL.branches, async () => {
+    const db = getDb();
+    const rows = await db
     .select({
       branch: branches,
       manager: {
@@ -85,6 +95,7 @@ export async function listBranchesWithManager(tenantId: string): Promise<BranchW
     ...toBranch(branch),
     manager: manager?.id ? manager : null,
   }));
+  });
 }
 
 export async function listUserBranches(tenantId: string, userId: string): Promise<Branch[]> {
@@ -103,7 +114,7 @@ export async function createBranch(
   payload: Omit<BranchInsert, "tenant_id">,
 ): Promise<Branch> {
   const db = getDb();
-  const all = await listBranches(tenantId);
+  const all = await queryBranchesFromDb(tenantId);
   const preferred = payload.code?.trim() || deriveBranchCode(payload.name);
   const code = ensureUniqueBranchCode(preferred, all.map((b) => b.code));
 
@@ -121,7 +132,9 @@ export async function createBranch(
         isActive: payload.is_active ?? true,
       })
       .returning();
-    return toBranch(row);
+    const branch = toBranch(row);
+    await invalidateBranches(tenantId);
+    return branch;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("unique") || msg.includes("23505")) {
@@ -141,7 +154,7 @@ export async function finalizeOnboardingPrimaryBranch(
   tenantId: string,
   payload: Omit<BranchInsert, "tenant_id">,
 ): Promise<Branch> {
-  const all = await listBranches(tenantId);
+  const all = await queryBranchesFromDb(tenantId);
 
   const sameCode = all.find((b) => b.code === payload.code);
   if (sameCode) {
@@ -186,7 +199,7 @@ export async function finalizeOnboardingPrimaryBranch(
 }
 
 async function deactivatePlaceholderBranches(tenantId: string, keepBranchId: string): Promise<void> {
-  const all = await listBranches(tenantId);
+  const all = await queryBranchesFromDb(tenantId);
   for (const b of all) {
     if (b.id === keepBranchId) continue;
     if (b.code === "HQ" && b.name === "Cabang Utama" && b.is_active) {
@@ -384,7 +397,9 @@ export async function updateBranch(
     .set(patch)
     .where(and(eq(branches.tenantId, tenantId), eq(branches.id, branchId)))
     .returning();
-  return row ? toBranch(row) : null;
+  if (!row) return null;
+  await invalidateBranches(tenantId);
+  return toBranch(row);
 }
 
 export async function assignUserToBranch(

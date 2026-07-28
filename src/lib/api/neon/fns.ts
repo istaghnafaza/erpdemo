@@ -41,6 +41,18 @@ async function sessionHelpers() {
 export const neonSignIn = createServerFn({ method: "POST" })
   .validator((data: { email: string; password: string }) => data)
   .handler(async ({ data }): Promise<AuthUser> => {
+    const { checkRateLimitAsync, clearRateLimit, getClientIp } = await import("@/server/rate-limit");
+    const ip = await getClientIp();
+    const limit = await checkRateLimitAsync(`sign-in:${ip}`, {
+      maxAttempts: 10,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!limit.allowed) {
+      throw new Error(
+        `Terlalu banyak percobaan login. Coba lagi dalam ${limit.retryAfterSec ?? 60} detik.`,
+      );
+    }
+
     const { validateLoginForm } = await import("@/lib/validation/login-form");
     const parsed = validateLoginForm(data);
     if (!parsed.success) {
@@ -54,6 +66,7 @@ export const neonSignIn = createServerFn({ method: "POST" })
     const result = await signInWithPassword(parsed.data.email, parsed.data.password);
     if (!result) throw new Error("Email atau password salah");
 
+    clearRateLimit(`sign-in:${ip}`);
     setResponseHeader("Set-Cookie", sessionCookieHeader(result.token));
     return result.user;
   });
@@ -78,6 +91,8 @@ export const neonGetCurrentUser = createServerFn({ method: "GET" }).handler(
 export const neonSignInWithPin = createServerFn({ method: "POST" })
   .validator((data: { tenantId: string; email: string; pin: string }) => data)
   .handler(async ({ data }): Promise<AppProfile> => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("sign-in-pin");
     const { signInWithPin } = await import("@/server/services/auth");
     const profile = await signInWithPin(data.tenantId, data.email, data.pin);
     if (!profile) throw new Error("PIN tidak valid");
@@ -387,6 +402,8 @@ export const neonHealthCheck = createServerFn({ method: "GET" }).handler(async (
 export const neonRegister = createServerFn({ method: "POST" })
   .validator((data: RegisterInput) => data)
   .handler(async ({ data }): Promise<AuthUser> => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("register");
     const { registerWithEmail } = await import("@/server/services/register");
     const { sessionCookieHeader } = await import("@/server/auth/session");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -418,4 +435,14 @@ export const neonGoogleOAuthCallback = createServerFn({ method: "POST" })
     const result = await signInWithGoogleAuthCode(data.code, data.redirectUri);
     setResponseHeader("Set-Cookie", sessionCookieHeader(result.token));
     return { ...result.user, isNewUser: result.isNewUser };
+  });
+
+export const neonGetModuleNavCounts = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string; branchId: string }) => data)
+  .handler(async ({ data }) => {
+    const { assertTenant, requireRequestSession } = await sessionHelpers();
+    const session = await requireRequestSession();
+    assertTenant(session, data.tenantId);
+    const { getModuleNavCountsReport } = await import("@/server/services/nav-counts");
+    return getModuleNavCountsReport(data.tenantId, data.branchId);
   });

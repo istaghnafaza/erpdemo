@@ -10,6 +10,7 @@ import {
   neonGetCashAccount,
   neonGetCashAccounts,
   neonGetCashTransactions,
+  neonGetFinanceOverview,
   neonRecordCashTransaction,
   neonUpdateCashAccount,
 } from "@/lib/api/neon/finance-fns";
@@ -237,4 +238,54 @@ export async function getBranchCashSummary(
   } catch (err) {
     return fail(err);
   }
+}
+
+export async function getFinanceOverview(
+  tenantId: string,
+  branchIds: readonly string[],
+  options?: {
+    txLimit?: number;
+    dateRange?: DateRangeFilter;
+    includeAr?: boolean;
+  },
+): Promise<ApiResponse<import("@/lib/finance-overview-client").FinanceOverviewReport>> {
+  if (branchIds.length === 0) {
+    return ok({ branches: [] });
+  }
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonGetFinanceOverview({
+        data: { tenantId, branchIds: [...branchIds], options },
+      }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data ?? { branches: [] });
+  }
+
+  const { getArSummary } = await import("@/lib/api/receivables");
+
+  const branches = await Promise.all(
+    branchIds.map(async (branchId) => {
+      const [accountsResult, txResult, arResult] = await Promise.all([
+        getCashAccounts(tenantId, branchId, { activeOnly: true }),
+        getCashTransactions(tenantId, branchId, {
+          dateRange: options?.dateRange,
+          limit: options?.txLimit ?? 500,
+        }),
+        options?.includeAr !== false
+          ? getArSummary(tenantId, branchId)
+          : Promise.resolve({ data: { total: 0, overdue: 0, unpaid: 0, partial: 0 } }),
+      ]);
+      if (accountsResult.error) throw new Error(accountsResult.error);
+      if (txResult.error) throw new Error(txResult.error);
+      return {
+        branchId,
+        accounts: accountsResult.data ?? [],
+        transactions: txResult.data ?? [],
+        arSummary: arResult.data ?? { total: 0, overdue: 0, unpaid: 0, partial: 0 },
+      };
+    }),
+  );
+
+  return ok({ branches });
 }

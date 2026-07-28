@@ -41,9 +41,14 @@ export function getDatabaseUrl(): string | undefined {
   return readEnv("DATABASE_URL_DIRECT") || readEnv("DATABASE_URL");
 }
 
+export function getReadDatabaseUrl(): string | undefined {
+  return readEnv("DATABASE_URL_REPLICA");
+}
+
 const SERVER_ENV_KEYS = [
   "DATABASE_URL",
   "DATABASE_URL_DIRECT",
+  "DATABASE_URL_REPLICA",
   "AUTH_SECRET",
   "AUTH_URL",
   "GOOGLE_CLIENT_ID",
@@ -55,6 +60,8 @@ const SERVER_ENV_KEYS = [
   "HOST",
   "NITRO_HOST",
   "NODE_ENV",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
 ] as const;
 
 /** Which expected keys exist in process.env (helps debug Railway misconfiguration). */
@@ -82,11 +89,13 @@ export function getEnvDiagnostics() {
   return {
     databaseConfigured: Boolean(databaseUrlDirect || databaseUrl),
     databaseUrlSource,
+    readReplicaConfigured: Boolean(readEnv("DATABASE_URL_REPLICA")),
     authSecretConfigured: Boolean(authSecret && authSecret.length >= 16),
     authUrl: authUrl ?? null,
     viteDataBackend: readEnv("VITE_DATA_BACKEND") ?? null,
     nodeEnv: readEnv("NODE_ENV") ?? null,
     port: readEnv("PORT") ?? null,
+    redisConfigured: hasEnv("UPSTASH_REDIS_REST_URL") && hasEnv("UPSTASH_REDIS_REST_TOKEN"),
     /** Raw presence — "missing" = key tidak ada di container (salah service / belum redeploy). */
     keys: getEnvKeyPresence(),
   };
