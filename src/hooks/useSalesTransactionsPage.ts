@@ -8,7 +8,7 @@ import { useBranchStore } from "@/stores/branch.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import { listSalesTransactions } from "@/lib/api/sales-transactions";
 import { isNeonBackend } from "@/lib/api/backend";
-import { MOCK_TENANT_ID } from "@/lib/mock-ids";
+import { isMockTenantId } from "@/lib/mock-session";
 import { getFinanceScopeLabel } from "@/lib/finance-scope";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
 import { computeTransactionsMarginSummary } from "@/lib/sales-margin";
@@ -49,8 +49,7 @@ export function useSalesTransactionsPage() {
     [consolidated, isOwner, branches, activeBranch],
   );
 
-  const useNeonApi =
-    isNeonBackend() && tenantId !== MOCK_TENANT_ID;
+  const useNeonApi = isNeonBackend() && !isMockTenantId(tenantId);
 
   useEffect(() => {
     if (!useNeonApi || !tenantId || branchIds.length === 0) {

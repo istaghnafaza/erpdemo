@@ -20,6 +20,7 @@ import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { getTenant, getTenantBySlug } from "@/lib/api/tenants";
 import { syncAuthFromServer } from "@/lib/auth-bootstrap";
+import { isMockBackend } from "@/lib/api/backend";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
 import { seedMockNotifications } from "@/lib/mock-notifications";
 import type { UserRole } from "@/types/app";
@@ -93,7 +94,7 @@ export const Route = createFileRoute("/$tenantSlug")({
     await syncAuthFromServer();
     const { currentTenant } = useAuthStore.getState();
 
-    const isMockSession = user.tenantId === MOCK_TENANT_ID && !!currentTenant;
+    const isMockSession = isMockBackend() && user.tenantId === MOCK_TENANT_ID && !!currentTenant;
 
     // Demo/mock session: skip Supabase — no real tenant row for custom wizard slugs.
     if (isMockSession) {

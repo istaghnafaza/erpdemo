@@ -4,15 +4,13 @@ import { toast } from "sonner";
 import { AuthDivider, AuthShell } from "@/components/auth/AuthShell";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { GoogleOAuthRedirectHint } from "@/components/auth/GoogleOAuthRedirectHint";
-import { useAuthStore, type MockRole, MOCK_USER_ID_PREFIX } from "@/stores/auth.store";
-import { roleLabel, initials } from "@/types/app";
+import { useAuthStore } from "@/stores/auth.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { redirectIfAuthenticated, syncAuthFromServer } from "@/lib/auth-bootstrap";
-import { isNeonBackend } from "@/lib/api/backend";
-import { isDemoQuickLoginEnabled } from "@/lib/mock-session";
+import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
@@ -29,66 +27,45 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const DEMO_TENANT_SLUG = "toko-simetri";
-
-const QUICK_LOGIN_OPTIONS: { role: MockRole; name: string; buttonLabel: string }[] = [
-  { role: "owner", name: "Budi Santoso", buttonLabel: "Login sebagai Owner" },
-  { role: "manager", name: "Siti Rahma", buttonLabel: "Login sebagai Manager" },
-  { role: "cashier", name: "Andi Pratama", buttonLabel: "Login sebagai Kasir" },
-];
-
 function LoginPage() {
   const login = useAuthStore((s) => s.login);
-  const loginAsMock = useAuthStore((s) => s.loginAsMock);
   const loginWithMockCredentials = useAuthStore((s) => s.loginWithMockCredentials);
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const showQuickLogin = isDemoQuickLoginEnabled();
   const showNeonLogin = isNeonBackend();
+  const showMockCredentials = isMockBackend();
 
-  const goToMockApp = (role: MockRole) => {
-    navigate({
-      to: role === "cashier" ? "/$tenantSlug/pos" : "/$tenantSlug/dashboard",
-      params: { tenantSlug: DEMO_TENANT_SLUG },
-    });
-  };
-
-  const goToApp = async (role: MockRole | "owner" | "manager" | "cashier" | "warehouse" | "accountant") => {
-    if (showNeonLogin && !useAuthStore.getState().currentUser?.id.startsWith(MOCK_USER_ID_PREFIX)) {
-      const dest = await resolvePostAuthDestination(role);
-      navigate(dest);
-      return;
-    }
-    goToMockApp(role as MockRole);
+  const goToApp = async (role: Parameters<typeof resolvePostAuthDestination>[0]) => {
+    const dest = await resolvePostAuthDestination(role);
+    navigate(dest);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim();
-    let ok = loginWithMockCredentials(trimmedEmail, password);
-    if (!ok && showNeonLogin) {
+
+    let ok = false;
+    if (showNeonLogin) {
       ok = await login(trimmedEmail, password);
+    } else if (showMockCredentials) {
+      ok = loginWithMockCredentials(trimmedEmail, password);
     }
+
     if (!ok) {
-      const err = useAuthStore.getState().error ?? "Email atau PIN/password salah";
+      const err = useAuthStore.getState().error ?? "Email atau password salah";
       toast.error(
         err.includes("DATABASE_URL")
-          ? "Login Neon belum siap (DATABASE_URL). Pakai tombol demo Owner/Manager/Kasir di atas, atau isi Variables di Railway lalu Redeploy."
+          ? "Database belum terhubung. Pastikan DATABASE_URL sudah diisi di Railway, lalu Redeploy."
           : err,
       );
       return;
     }
+
     const { currentUser } = useAuthStore.getState();
     toast.success(`Selamat datang, ${currentUser?.profile.name}`);
     await goToApp(currentUser!.profile.role);
-  };
-
-  const handleQuickLogin = async (role: MockRole, name: string) => {
-    loginAsMock(role);
-    toast.success(`Masuk sebagai ${name} (demo mock)`);
-    goToMockApp(role);
   };
 
   return (
@@ -113,34 +90,11 @@ function LoginPage() {
         </a>
       </p>
 
-      {showQuickLogin ? (
-        <div className="mb-6">
-          <AuthDivider label="Masuk cepat demo (mock — tanpa database)" />
-          <div className="space-y-2">
-            {QUICK_LOGIN_OPTIONS.map((u) => (
-              <Button
-                key={u.role}
-                type="button"
-                variant="outline"
-                onClick={() => handleQuickLogin(u.role, u.name)}
-                className="w-full justify-start gap-3 h-11"
-              >
-                <div className="h-7 w-7 rounded-full bg-gradient-primary text-white grid place-items-center text-[10px] font-bold shrink-0">
-                  {initials(u.name)}
-                </div>
-                <span className="flex-1 text-left">{u.buttonLabel}</span>
-                <span className="text-[10px] text-muted-foreground">{roleLabel(u.role)}</span>
-              </Button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {showNeonLogin ? (
         <>
           <GoogleSignInButton mode="login" />
           <GoogleOAuthRedirectHint />
-          <AuthDivider label="Atau masuk dengan email (Neon)" />
+          <AuthDivider label="Atau masuk dengan email" />
         </>
       ) : null}
 
@@ -154,17 +108,19 @@ function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
+            required
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password / PIN</Label>
+          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
-            placeholder={showNeonLogin ? "Password akun Neon" : "PIN 6 digit (demo pegawai)"}
+            placeholder={showNeonLogin ? "Password akun Anda" : "PIN 6 digit (demo lokal)"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
+            required
           />
         </div>
         <Button
@@ -176,9 +132,9 @@ function LoginPage() {
         </Button>
       </form>
 
-      {showNeonLogin && !showQuickLogin ? (
+      {showNeonLogin ? (
         <p className="mt-4 text-xs text-muted-foreground text-center">
-          Demo seed: <strong>budi@simetri.id</strong> / <strong>DemoSES2025!</strong>
+          Akun demo: <strong>budi@simetri.id</strong> / <strong>DemoSES2025!</strong>
         </p>
       ) : null}
     </AuthShell>

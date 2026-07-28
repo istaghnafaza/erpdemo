@@ -54,7 +54,7 @@ const lines = [
   "PORT=8080",
   "VITE_DATA_BACKEND=neon",
   "VITE_APP_NAME=SEPS",
-  "VITE_APP_ENV=staging",
+  "VITE_APP_ENV=production",
   "NODE_ENV=production",
 ];
 
