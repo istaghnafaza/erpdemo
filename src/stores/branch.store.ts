@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { getActiveBranches } from "@/lib/api/branches";
-import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { MOCK_BRANCH_ONBOARDING } from "@/lib/mock-ids";
 import { MOCK_BRANCHES } from "@/stores/auth.store";
 import { resolveEffectiveActiveBranch, resolveScopedBranchIds } from "@/lib/branch-scope";
@@ -86,8 +86,7 @@ export const useBranchStore = create<BranchState>()(
         // Demo/mock session shortcut: mock users have no real Supabase Auth
         // session, so RLS blocks the query below and returns an empty set.
         // Use the in-memory seed mirror instead — see auth.store.ts.
-        const isMockTenant =
-          !isNeonBackend() && MOCK_BRANCHES.some((b) => b.tenant_id === tenantId);
+        const isMockTenant = isMockTenantId(tenantId);
         if (isMockTenant) {
           const { onboardingBranches } = get();
           let branches = mergeMockBranches(tenantId, onboardingBranches).filter(

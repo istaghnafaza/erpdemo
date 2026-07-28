@@ -68,11 +68,16 @@ function LoginPage() {
     e.preventDefault();
     const trimmedEmail = email.trim();
     let ok = loginWithMockCredentials(trimmedEmail, password);
-    if (!ok) {
+    if (!ok && showNeonLogin) {
       ok = await login(trimmedEmail, password);
     }
     if (!ok) {
-      toast.error(useAuthStore.getState().error ?? "Email atau PIN/password salah");
+      const err = useAuthStore.getState().error ?? "Email atau PIN/password salah";
+      toast.error(
+        err.includes("DATABASE_URL")
+          ? "Login Neon belum siap (DATABASE_URL). Pakai tombol demo Owner/Manager/Kasir di atas, atau isi Variables di Railway lalu Redeploy."
+          : err,
+      );
       return;
     }
     const { currentUser } = useAuthStore.getState();
