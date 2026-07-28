@@ -4,6 +4,7 @@
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
 import { neonCall } from "./backend";
+import { withResponseCache } from "./response-cache";
 import {
   neonAdjustOutstandingDebt,
   neonCreateCustomer,
@@ -19,11 +20,19 @@ export async function getCustomers(
   options?: { search?: string; type?: "retail" | "credit" }
 ): Promise<ApiResponse<Customer[]>> {
   if (isNeonBackend()) {
-    const result = await neonCall(() =>
-      neonGetCustomers({ data: { tenantId, options } }),
-    );
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
+    const cacheKey = `customers:${tenantId}`;
+    const useCache = !options?.search && !options?.type;
+    const load = async () => {
+      const result = await neonCall(() =>
+        neonGetCustomers({ data: { tenantId, options } }),
+      );
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    };
+    if (useCache) {
+      return withResponseCache(cacheKey, 30_000, load);
+    }
+    return load();
   }
   return queryMany(() => {
     let q = supabase

@@ -41,11 +41,17 @@ async function sessionHelpers() {
 export const neonSignIn = createServerFn({ method: "POST" })
   .validator((data: { email: string; password: string }) => data)
   .handler(async ({ data }): Promise<AuthUser> => {
+    const { validateLoginForm } = await import("@/lib/validation/login-form");
+    const parsed = validateLoginForm(data);
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "Data login tidak valid");
+    }
+
     const { signInWithPassword } = await import("@/server/services/auth");
     const { sessionCookieHeader } = await import("@/server/auth/session");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
 
-    const result = await signInWithPassword(data.email, data.password);
+    const result = await signInWithPassword(parsed.data.email, parsed.data.password);
     if (!result) throw new Error("Email atau password salah");
 
     setResponseHeader("Set-Cookie", sessionCookieHeader(result.token));

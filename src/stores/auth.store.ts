@@ -13,6 +13,10 @@ import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { usePosStore } from "@/stores/pos.store";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
+import { markAuthSynced, resetAuthSyncCache } from "@/lib/auth-sync-cache";
+
+const AUTH_REFRESH_TTL_MS = 45_000;
+let lastRefreshAt = 0;
 import { tenantUserToAuthUser } from "@/lib/mock-users";
 import type { AuthUser, RegisterInput } from "@/types/app";
 import type { Branch, Tenant } from "@/types/database";
@@ -200,7 +204,7 @@ interface AuthState {
   /** Demo login dengan email + PIN pegawai (dari modul Users / onboarding). */
   loginWithMockCredentials(email: string, pin: string): boolean;
   logout(): Promise<void>;
-  refreshUser(): Promise<void>;
+  refreshUser(options?: { force?: boolean }): Promise<void>;
   /** Demo: tambahkan cabang onboarding ke daftar cabang yang boleh diakses owner. */
   grantMockBranchAccess(branchId: string): void;
   /** Demo: aktifkan legacy stock & tandai onboarding selesai di tenant mock. */
@@ -248,6 +252,8 @@ async function applyAuthSession(user: AuthUser): Promise<boolean> {
     isLoading: false,
     error: null,
   });
+  lastRefreshAt = Date.now();
+  markAuthSynced();
   return true;
 }
 
@@ -384,6 +390,8 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
         await signOut();
+        resetAuthSyncCache();
+        lastRefreshAt = 0;
         useBranchStore.getState().clearBranches();
         useNotificationStore.getState().unsubscribe();
         useNotificationStore.getState().clearAll();
@@ -400,12 +408,17 @@ export const useAuthStore = create<AuthState>()(
       // -----------------------------------------------------------------------
       // refreshUser — re-reads from Supabase session (called on app mount)
       // -----------------------------------------------------------------------
-      refreshUser: async () => {
+      refreshUser: async (options) => {
         if (!isNeonBackend()) {
           // Mock backend — pertahankan sesi demo lokal tanpa server
           if (get().isAuthenticated && get().currentUser?.id.startsWith(MOCK_USER_ID_PREFIX)) {
             return;
           }
+          return;
+        }
+
+        const now = Date.now();
+        if (!options?.force && get().isAuthenticated && now - lastRefreshAt < AUTH_REFRESH_TTL_MS) {
           return;
         }
 
@@ -440,6 +453,8 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             error: null,
           });
+          lastRefreshAt = Date.now();
+          markAuthSynced();
         } catch {
           // ignore — public pages stay usable on slow mobile networks
         }

@@ -22,6 +22,7 @@ import {
   stockMovements,
 } from "@/server/db/schema";
 import type { DateRangeFilter } from "@/types/app";
+import { generateTransactionNumber } from "@/lib/transaction-number";
 import type {
   CashierSession,
   CashierSessionInsert,
@@ -560,7 +561,17 @@ export async function getNextTransactionSequence(
   branchId: string,
   date: Date,
 ): Promise<number> {
-  const db = getDb();
+  return countDailyTransactions(getDb(), tenantId, branchId, date);
+}
+
+type DrizzleDb = ReturnType<typeof getDb>;
+
+async function countDailyTransactions(
+  db: DrizzleDb,
+  tenantId: string,
+  branchId: string,
+  date: Date,
+): Promise<number> {
   const dayStart = new Date(date);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(date);
@@ -581,6 +592,25 @@ export async function getNextTransactionSequence(
   return (result?.count ?? 0) + 1;
 }
 
+async function resolveTransactionNumber(
+  db: DrizzleDb,
+  tenantId: string,
+  branchId: string,
+  requested: string | undefined | null,
+): Promise<string> {
+  const trimmed = requested?.trim();
+  if (trimmed) return trimmed;
+
+  const branch = await db.query.branches.findFirst({
+    where: and(eq(branches.tenantId, tenantId), eq(branches.id, branchId)),
+  });
+  if (!branch) throw new Error("Cabang tidak ditemukan");
+
+  const now = new Date();
+  const seq = await countDailyTransactions(db, tenantId, branchId, now);
+  return generateTransactionNumber(branch.code, now, seq);
+}
+
 export async function createSaleTransaction(
   tenantId: string,
   transaction: Omit<SalesTransactionInsert, "tenant_id">,
@@ -599,6 +629,13 @@ export async function createSaleTransaction(
   }
 
   return db.transaction(async (tx) => {
+    const transactionNumber = await resolveTransactionNumber(
+      tx,
+      tenantId,
+      transaction.branch_id,
+      transaction.transaction_number,
+    );
+
     const session = await tx.query.cashierSessions.findFirst({
       where: and(
         eq(cashierSessions.tenantId, tenantId),
@@ -647,7 +684,7 @@ export async function createSaleTransaction(
         branchId: transaction.branch_id,
         sessionId: transaction.session_id,
         cartId: transaction.cart_id,
-        transactionNumber: transaction.transaction_number,
+        transactionNumber,
         clientTxId: transaction.client_tx_id ?? null,
         customerId: transaction.customer_id,
         customerName: transaction.customer_name,
@@ -702,7 +739,7 @@ export async function createSaleTransaction(
         item.product_id,
         item.qty,
         item.stock_source,
-        transaction.transaction_number,
+        transactionNumber,
         transaction.paid_by,
       );
     }
@@ -727,7 +764,7 @@ export async function createSaleTransaction(
           customerId: transaction.customer_id,
           customerName: transaction.customer_name ?? "Pelanggan Kredit",
           salesTransactionId: txRow.id,
-          invoiceNumber: `AR-${transaction.transaction_number}`,
+          invoiceNumber: `AR-${transactionNumber}`,
           amount: creditDebt,
         });
       }

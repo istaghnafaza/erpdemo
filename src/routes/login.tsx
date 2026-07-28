@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { redirectIfAuthenticated, syncAuthFromServer } from "@/lib/auth-bootstrap";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
+import { validateLoginForm } from "@/lib/validation/login-form";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
@@ -34,6 +35,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const showNeonLogin = isNeonBackend();
   const showMockCredentials = isMockBackend();
 
@@ -44,13 +46,29 @@ function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedEmail = email.trim();
+    setFieldErrors({});
+
+    const parsed = validateLoginForm({ email, password });
+    if (!parsed.success) {
+      const errs: { email?: string; password?: string } = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0];
+        if (key === "email" || key === "password") {
+          errs[key] = issue.message;
+        }
+      }
+      setFieldErrors(errs);
+      toast.error("Periksa email dan password");
+      return;
+    }
+
+    const { email: trimmedEmail, password: trimmedPassword } = parsed.data;
 
     let ok = false;
     if (showNeonLogin) {
-      ok = await login(trimmedEmail, password);
+      ok = await login(trimmedEmail, trimmedPassword);
     } else if (showMockCredentials) {
-      ok = loginWithMockCredentials(trimmedEmail, password);
+      ok = loginWithMockCredentials(trimmedEmail, trimmedPassword);
     }
 
     if (!ok) {
@@ -98,30 +116,57 @@ function LoginPage() {
         </>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            placeholder="contoh: budi@simetri.id"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="contoh: owner@seps.id"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+            }}
             autoComplete="username"
-            required
+            maxLength={254}
+            aria-invalid={Boolean(fieldErrors.email)}
+            aria-describedby={fieldErrors.email ? "email-error" : undefined}
           />
+          {fieldErrors.email ? (
+            <p id="email-error" className="text-xs text-destructive">
+              {fieldErrors.email}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">Password (PIN, maks. 6 digit)</Label>
           <Input
             id="password"
             type="password"
-            placeholder={showNeonLogin ? "Password akun Anda" : "PIN 6 digit (demo lokal)"}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="6 digit angka"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+              setPassword(digits);
+              if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+            }}
             autoComplete="current-password"
-            required
+            maxLength={6}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "password-error" : undefined}
           />
+          {fieldErrors.password ? (
+            <p id="password-error" className="text-xs text-destructive">
+              {fieldErrors.password}
+            </p>
+          ) : null}
         </div>
         <Button
           type="submit"
@@ -134,7 +179,7 @@ function LoginPage() {
 
       {showNeonLogin ? (
         <p className="mt-4 text-xs text-muted-foreground text-center">
-          Akun demo: <strong>budi@simetri.id</strong> / <strong>DemoSES2025!</strong>
+          Contoh: <strong>owner@seps.id</strong> / <strong>111111</strong>
         </p>
       ) : null}
     </AuthShell>

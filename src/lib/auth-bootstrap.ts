@@ -7,6 +7,7 @@ import { isNeonBackend } from "@/lib/api/backend";
 import { getPostAuthDestination } from "@/lib/auth-navigate";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
+import { markAuthSynced, shouldSkipAuthSync } from "@/lib/auth-sync-cache";
 
 export function waitForAuthHydration(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
@@ -17,22 +18,26 @@ export function waitForAuthHydration(): Promise<void> {
   });
 }
 
-/** Muat ulang user + tenant dari server (Neon). */
-export async function syncAuthFromServer(): Promise<void> {
+/** Muat ulang user + tenant dari server (Neon). Throttle agar navigasi modul tidak lambat. */
+export async function syncAuthFromServer(options?: { force?: boolean }): Promise<void> {
   // SSR: skip server-fn auth sync — client hydrates then refreshUser runs in __root.
   if (typeof window === "undefined") return;
 
   await waitForAuthHydration();
-  if (isNeonBackend()) {
-    await useAuthStore.getState().refreshUser();
-    const tenant = useAuthStore.getState().currentTenant;
+  if (!isNeonBackend()) return;
+
+  if (shouldSkipAuthSync(options?.force)) {
+    return;
+  }
+
+  await useAuthStore.getState().refreshUser({ force: options?.force });
+  markAuthSynced();
     if (tenant?.onboarding_complete) {
       const { wizardResumeMode } = useOnboardingStore.getState();
       if (!wizardResumeMode) {
         useOnboardingStore.getState().completeOnboarding();
       }
     }
-  }
 }
 
 type AuthRedirect =

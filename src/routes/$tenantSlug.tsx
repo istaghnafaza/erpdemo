@@ -91,13 +91,38 @@ export const Route = createFileRoute("/$tenantSlug")({
     }
 
     const user = requireAuth();
+
+    const { currentTenant: cachedTenant } = useAuthStore.getState();
+    const isMockSession =
+      isMockBackend() && user.tenantId === MOCK_TENANT_ID && !!cachedTenant;
+
+    if (isMockSession) {
+      if (params.tenantSlug !== cachedTenant!.slug) {
+        throw redirect({
+          to: "/$tenantSlug/dashboard",
+          params: { tenantSlug: cachedTenant!.slug },
+        });
+      }
+      return { tenant: cachedTenant };
+    }
+
+    // Tenant sudah di cache & slug cocok — skip round-trip Neon
+    if (
+      cachedTenant &&
+      cachedTenant.slug === params.tenantSlug &&
+      user.tenantId === cachedTenant.id
+    ) {
+      return { tenant: cachedTenant };
+    }
+
     await syncAuthFromServer();
+
     const { currentTenant } = useAuthStore.getState();
 
-    const isMockSession = isMockBackend() && user.tenantId === MOCK_TENANT_ID && !!currentTenant;
+    const isMockAfterSync =
+      isMockBackend() && user.tenantId === MOCK_TENANT_ID && !!currentTenant;
 
-    // Demo/mock session: skip Supabase — no real tenant row for custom wizard slugs.
-    if (isMockSession) {
+    if (isMockAfterSync) {
       if (params.tenantSlug !== currentTenant!.slug) {
         throw redirect({
           to: "/$tenantSlug/dashboard",

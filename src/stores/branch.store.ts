@@ -12,6 +12,10 @@ import { MOCK_BRANCHES } from "@/stores/auth.store";
 import { resolveEffectiveActiveBranch, resolveScopedBranchIds } from "@/lib/branch-scope";
 import type { Branch } from "@/types/database";
 
+const BRANCH_CACHE_TTL_MS = 60_000;
+let branchesCachedTenantId: string | null = null;
+let branchesCachedAt = 0;
+
 function branchCodeFromName(name: string): string {
   const letters = name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   return (letters.slice(0, 3) || "CBG").padEnd(3, "X").slice(0, 3);
@@ -81,6 +85,16 @@ export const useBranchStore = create<BranchState>()(
       // loadBranches — fetches from API and sets activeBranch to first allowed
       // -----------------------------------------------------------------------
       loadBranches: async (tenantId, allowedBranchIds, includeOnboardingForOwner = false) => {
+        const state = get();
+        const now = Date.now();
+        if (
+          branchesCachedTenantId === tenantId &&
+          state.branches.length > 0 &&
+          now - branchesCachedAt < BRANCH_CACHE_TTL_MS
+        ) {
+          return;
+        }
+
         set({ isLoading: true, error: null });
 
         // Demo/mock session shortcut: mock users have no real Supabase Auth
@@ -108,6 +122,8 @@ export const useBranchStore = create<BranchState>()(
             isConsolidated: isConsolidated && branches.length > 0,
             isLoading: false,
           });
+          branchesCachedTenantId = tenantId;
+          branchesCachedAt = Date.now();
           return;
         }
 
@@ -135,6 +151,8 @@ export const useBranchStore = create<BranchState>()(
             isConsolidated: isConsolidated && branches.length > 0,
             isLoading: false,
           });
+          branchesCachedTenantId = tenantId;
+          branchesCachedAt = Date.now();
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Gagal memuat cabang";
           set({ error: msg, isLoading: false });
@@ -199,13 +217,16 @@ export const useBranchStore = create<BranchState>()(
         set({ isConsolidated: value });
       },
 
-      clearBranches: () =>
+      clearBranches: () => {
+        branchesCachedTenantId = null;
+        branchesCachedAt = 0;
         set((s) => ({
           branches: [],
           activeBranch: null,
           isConsolidated: false,
           // onboardingBranches tetap di localStorage — cabang dari wizard setup
-        })),
+        }));
+      },
     }),
 
     {

@@ -3,6 +3,9 @@
 // =============================================================================
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
+import { withResponseCache, invalidateResponseCache } from "./response-cache";
+
+export { invalidateResponseCache };
 import { neonCall } from "./backend";
 import {
   neonCreateCategory,
@@ -252,11 +255,19 @@ export async function getBranchProducts(
   options?: { search?: string; lowStockOnly?: boolean }
 ): Promise<ApiResponse<BranchProductWithProduct[]>> {
   if (isNeonBackend()) {
-    const result = await neonCall(() =>
-      neonGetBranchProducts({ data: { tenantId, branchId, options } }),
-    );
-    if (result.error) return fail(result.error);
-    return ok(result.data ?? []);
+    const cacheKey = `branch-products:${tenantId}:${branchId}`;
+    const useCache = !options?.search && !options?.lowStockOnly;
+    const load = async () => {
+      const result = await neonCall(() =>
+        neonGetBranchProducts({ data: { tenantId, branchId, options } }),
+      );
+      if (result.error) return fail(result.error);
+      return ok(result.data ?? []);
+    };
+    if (useCache) {
+      return withResponseCache(cacheKey, 30_000, load);
+    }
+    return load();
   }
   return queryMany(() => {
     let q = supabase

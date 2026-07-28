@@ -22,7 +22,6 @@ import {
   updateCart,
   createTransaction,
   generateTransactionNumber,
-  getNextTransactionSequence,
   getNextLocalTransactionSequence,
   isAtomicPosBackend,
 } from "@/lib/api/transactions";
@@ -33,6 +32,7 @@ import { useFinanceStore } from "@/stores/finance.store";
 import { useReceivablesStore } from "@/stores/receivables.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
+import { invalidateResponseCache } from "@/lib/api/response-cache";
 import { useDeliveriesStore } from "@/stores/deliveries.store";
 import { useCustomerDeliverySitesStore } from "@/stores/customer-delivery-sites.store";
 import {
@@ -1159,11 +1159,13 @@ export const usePosStore = create<PosState>()(
       }
 
       // ---------------------------------------------------------------------
-      // Real tenant, online: full Supabase write path.
+      // Real tenant, online: full Neon/Supabase write path.
+      // Neon: nomor transaksi digenerate server-side (1 round-trip, bukan 2).
       // ---------------------------------------------------------------------
       try {
-        const seq = await getNextTransactionSequence(tenantId, branchId, new Date());
-        const txNumber = generateTransactionNumber(branchCode, new Date(), seq);
+        const txNumber = isAtomicPosBackend()
+          ? ""
+          : generateTransactionNumber(branchCode, new Date(), getNextLocalTransactionSequence(branchId));
 
         const txResult = await createTransaction(
           tenantId,
@@ -1213,13 +1215,15 @@ export const usePosStore = create<PosState>()(
           return { success: false, error: txResult.error };
         }
 
+        const savedTxNumber = txResult.data!.transaction_number;
+
         if (!isAtomicPosBackend()) {
           // Deduct stock for each item (Supabase non-atomic path)
           for (const item of cart.items) {
             const src = item.stock_source === "legacy" ? "legacy" : "verified";
             await adjustStock(tenantId, branchId, item.product_id, -item.qty, "out", {
               stockSource: src,
-              reference: txNumber,
+              reference: savedTxNumber,
               userId: cashierId,
             });
           }
@@ -1232,9 +1236,10 @@ export const usePosStore = create<PosState>()(
           }
         }
 
-        recordSaleHistory(txNumber, false);
-        finalize(txNumber, false);
-        return { success: true, transactionNumber: txNumber, change: changeAmount };
+        recordSaleHistory(savedTxNumber, false);
+        finalize(savedTxNumber, false);
+        invalidateResponseCache(`branch-products:${tenantId}:${branchId}`);
+        return { success: true, transactionNumber: savedTxNumber, change: changeAmount };
       } catch (err) {
         set((s) => {
           s.isProcessing = false;
