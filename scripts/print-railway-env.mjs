@@ -77,6 +77,7 @@ console.log("");
 console.log("PENTING:");
 console.log("  - Buka service erpdemo (bukan project-level saja)");
 console.log("  - Raw Editor → paste → Save (mengganti SEMUA variable service)");
+console.log("  - JANGAN pakai tanda kutip di value (salah: DATABASE_URL=\"...\", benar: DATABASE_URL=...)");
 console.log("  - Deployments → Redeploy");
 console.log("  - Deploy Logs harus tampil: [SEPS] env database=ok auth=ok");
 console.log("  - Uji https://seps.fazagroup.id/login");

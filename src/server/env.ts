@@ -41,6 +41,34 @@ export function getDatabaseUrl(): string | undefined {
   return readEnv("DATABASE_URL_DIRECT") || readEnv("DATABASE_URL");
 }
 
+const SERVER_ENV_KEYS = [
+  "DATABASE_URL",
+  "DATABASE_URL_DIRECT",
+  "AUTH_SECRET",
+  "AUTH_URL",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "VITE_DATA_BACKEND",
+  "VITE_GOOGLE_CLIENT_ID",
+  "VITE_PUBLIC_APP_URL",
+  "PORT",
+  "HOST",
+  "NITRO_HOST",
+  "NODE_ENV",
+] as const;
+
+/** Which expected keys exist in process.env (helps debug Railway misconfiguration). */
+export function getEnvKeyPresence(): Record<string, "missing" | "empty" | "set"> {
+  const out: Record<string, "missing" | "empty" | "set"> = {};
+  for (const key of SERVER_ENV_KEYS) {
+    const raw = process.env[key];
+    if (raw == null) out[key] = "missing";
+    else if (raw.trim() === "") out[key] = "empty";
+    else out[key] = "set";
+  }
+  return out;
+}
+
 export function getEnvDiagnostics() {
   const databaseUrlDirect = readEnv("DATABASE_URL_DIRECT");
   const databaseUrl = readEnv("DATABASE_URL");
@@ -59,5 +87,11 @@ export function getEnvDiagnostics() {
     viteDataBackend: readEnv("VITE_DATA_BACKEND") ?? null,
     nodeEnv: readEnv("NODE_ENV") ?? null,
     port: readEnv("PORT") ?? null,
+    /** Raw presence — "missing" = key tidak ada di container (salah service / belum redeploy). */
+    keys: getEnvKeyPresence(),
   };
+}
+
+if (typeof process !== "undefined" && process.env) {
+  sanitizeProcessEnv([...SERVER_ENV_KEYS]);
 }

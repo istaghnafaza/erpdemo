@@ -15,7 +15,7 @@ COPY . .
 # Vite inlines VITE_* at build time — Railway passes matching service vars as build ARGs
 ARG VITE_DATA_BACKEND=neon
 ARG VITE_APP_NAME=SEPS
-ARG VITE_APP_ENV=staging
+ARG VITE_APP_ENV=production
 ARG VITE_GOOGLE_CLIENT_ID=""
 ARG VITE_PUBLIC_APP_URL=""
 ENV VITE_DATA_BACKEND=$VITE_DATA_BACKEND \
