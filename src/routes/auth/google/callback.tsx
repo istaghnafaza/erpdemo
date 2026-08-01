@@ -9,6 +9,7 @@ import {
 } from "@/lib/google-auth-client";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { useAuthStore } from "@/stores/auth.store";
+import { useOnboardingStore } from "@/stores/onboarding.store";
 
 type GoogleCallbackSearch = {
   code?: string;
@@ -79,9 +80,7 @@ function GoogleCallbackPage() {
 
       const { currentUser } = useAuthStore.getState();
       if (result.isNewUser) {
-        toast.success(`Selamat datang, ${currentUser?.profile.name}! Lanjut setup toko.`);
-        navigate({ to: "/onboarding" });
-        return;
+        useOnboardingStore.getState().resetOnboarding();
       }
 
       toast.success(`Selamat datang, ${currentUser?.profile.name}`);

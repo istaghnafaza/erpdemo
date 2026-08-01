@@ -12,6 +12,7 @@ export interface SessionPayload {
   sub: string;
   email: string;
   tenantId: string;
+  isPlatformAdmin?: boolean;
 }
 
 function getSecret(): Uint8Array {
@@ -26,6 +27,7 @@ export async function createSessionToken(payload: SessionPayload): Promise<strin
   return new SignJWT({
     email: payload.email,
     tenantId: payload.tenantId,
+    isPlatformAdmin: payload.isPlatformAdmin ?? false,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
@@ -40,10 +42,19 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     const sub = payload.sub;
     const email = payload.email;
     const tenantId = payload.tenantId;
-    if (typeof sub !== "string" || typeof email !== "string" || typeof tenantId !== "string") {
+    const isPlatformAdmin = payload.isPlatformAdmin === true;
+    if (typeof sub !== "string" || typeof email !== "string") {
       return null;
     }
-    return { sub, email, tenantId };
+    if (typeof tenantId !== "string" && !isPlatformAdmin) {
+      return null;
+    }
+    return {
+      sub,
+      email,
+      tenantId: typeof tenantId === "string" ? tenantId : "",
+      isPlatformAdmin,
+    };
   } catch {
     return null;
   }

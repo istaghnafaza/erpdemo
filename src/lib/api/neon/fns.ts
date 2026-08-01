@@ -39,7 +39,7 @@ async function sessionHelpers() {
 // ---------------------------------------------------------------------------
 
 export const neonSignIn = createServerFn({ method: "POST" })
-  .validator((data: { email: string; password: string }) => data)
+  .validator((data: { username: string; password: string }) => data)
   .handler(async ({ data }): Promise<AuthUser> => {
     const { checkRateLimitAsync, clearRateLimit, getClientIp } = await import("@/server/rate-limit");
     const ip = await getClientIp();
@@ -63,8 +63,8 @@ export const neonSignIn = createServerFn({ method: "POST" })
     const { sessionCookieHeader } = await import("@/server/auth/session");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
 
-    const result = await signInWithPassword(parsed.data.email, parsed.data.password);
-    if (!result) throw new Error("Email atau password salah");
+    const result = await signInWithPassword(parsed.data.username, parsed.data.password);
+    if (!result) throw new Error("Username atau PIN salah");
 
     clearRateLimit(`sign-in:${ip}`);
     setResponseHeader("Set-Cookie", sessionCookieHeader(result.token));
@@ -131,8 +131,8 @@ export const neonGetTenant = createServerFn({ method: "POST" })
 export const neonGetAllTenants = createServerFn({ method: "GET" }).handler(
   async (): Promise<Tenant[]> => {
     const { listTenants } = await import("@/server/services/tenants");
-    const { requireRequestSession } = await sessionHelpers();
-    await requireRequestSession();
+    const { requirePlatformAdminSession } = await import("@/server/auth/platform-session");
+    await requirePlatformAdminSession();
     return listTenants();
   },
 );
@@ -165,6 +165,30 @@ export const neonGetTenantBySlug = createServerFn({ method: "POST" })
     const tenant = await getTenantBySlug(data.slug);
     if (!tenant) throw new Error("Tenant tidak ditemukan");
     return tenant;
+  });
+
+export const neonCheckTenantSlugAvailable = createServerFn({ method: "POST" })
+  .validator((data: { slug: string; tenantId?: string }) => data)
+  .handler(async ({ data }): Promise<{ available: boolean }> => {
+    const { isTenantSlugAvailable } = await import("@/server/services/tenants");
+    const { requireRequestSession, assertTenant } = await sessionHelpers();
+    const session = await requireRequestSession();
+    if (data.tenantId) {
+      assertTenant(session, data.tenantId);
+    }
+    const available = await isTenantSlugAvailable(data.slug, data.tenantId);
+    return { available };
+  });
+
+// ---------------------------------------------------------------------------
+// Indonesia wilayah (public — used on register before auth)
+// ---------------------------------------------------------------------------
+
+export const neonFetchIndonesiaWilayah = createServerFn({ method: "POST" })
+  .validator((data: { path: string }) => data)
+  .handler(async ({ data }): Promise<{ code: string; name: string }[]> => {
+    const { fetchWilayahFromApi } = await import("@/server/services/indonesia-wilayah");
+    return fetchWilayahFromApi(data.path);
   });
 
 // ---------------------------------------------------------------------------
@@ -349,6 +373,18 @@ export const neonSetTenantUserActive = createServerFn({ method: "POST" })
     const user = await setTenantUserActive(data.tenantId, data.userId, data.isActive);
     if (!user) throw new Error("Pegawai tidak ditemukan");
     return user;
+  });
+
+export const neonGetTenantPlanUsage = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string }) => data)
+  .handler(async ({ data }) => {
+    const { getTenantPlanUsage } = await import("@/server/services/plan-limits");
+    const { assertTenant, requireRequestSession } = await sessionHelpers();
+    const session = await requireRequestSession();
+    assertTenant(session, data.tenantId);
+    const usage = await getTenantPlanUsage(data.tenantId);
+    if (!usage) throw new Error("Tenant tidak ditemukan");
+    return usage;
   });
 
 // ---------------------------------------------------------------------------

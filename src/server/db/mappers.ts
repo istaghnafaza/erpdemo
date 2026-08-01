@@ -133,6 +133,9 @@ export function toProfile(row: ProfileRow): Profile {
     email: row.email,
     role: row.role,
     pin: row.pin,
+    phone: row.phone ?? null,
+    address: row.address ?? null,
+    date_of_birth: row.dateOfBirth ? String(row.dateOfBirth) : null,
     is_active: row.isActive,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -209,6 +212,7 @@ export function toCustomer(row: CustomerRow): Customer {
     credit_limit: row.creditLimit,
     outstanding_debt: row.outstandingDebt,
     created_at: row.createdAt.toISOString(),
+    pricing_tier_id: row.pricingTierId ?? null,
   };
 }
 
@@ -320,6 +324,7 @@ export function toSalesItem(row: SalesItemRow): SalesItem {
     discount: row.discount,
     subtotal: row.subtotal,
     stock_source: row.stockSource,
+    is_so_line: row.isSoLine,
   };
 }
 

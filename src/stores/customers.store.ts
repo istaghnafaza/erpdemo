@@ -13,6 +13,7 @@ import type { Customer, DbCustomerType } from "@/types/database";
 
 export interface TenantCustomerRecord extends Customer {
   segment: CustomerSegment;
+  pricing_tier_id?: string | null;
 }
 
 export interface CreateCustomerInput {
@@ -35,12 +36,16 @@ export interface UpdateCustomerInput {
 
 interface CustomersState {
   customers: TenantCustomerRecord[];
+  /** Segment UI-only untuk pelanggan Neon (key = customer id). */
+  segmentById: Record<string, CustomerSegment>;
   seedIfEmpty: () => void;
   listForTenant: (tenantId: string) => TenantCustomerRecord[];
   findById: (id: string) => TenantCustomerRecord | undefined;
   getSegment: (customerId: string) => CustomerSegment | null;
   addCustomer: (tenantId: string, input: CreateCustomerInput) => { ok: boolean; error?: string; customer?: TenantCustomerRecord };
   updateCustomer: (id: string, input: UpdateCustomerInput) => { ok: boolean; error?: string };
+  /** Simpan segment UI untuk pelanggan dari API Neon (segment tidak ada di DB). */
+  rememberSegment: (customerId: string, segment: CustomerSegment) => void;
 }
 
 let nextCustomCustomerId = 100;
@@ -72,6 +77,7 @@ export const useCustomersStore = create<CustomersState>()(
   persist(
     (set, get) => ({
       customers: [],
+      segmentById: {},
 
       seedIfEmpty: () => {
         if (!allowMockDataSeeding()) return;
@@ -86,7 +92,13 @@ export const useCustomersStore = create<CustomersState>()(
 
       findById: (id) => get().customers.find((c) => c.id === id),
 
-      getSegment: (customerId) => get().findById(customerId)?.segment ?? null,
+      getSegment: (customerId) =>
+        get().findById(customerId)?.segment ?? get().segmentById[customerId] ?? null,
+
+      rememberSegment: (customerId, segment) =>
+        set((s) => ({
+          segmentById: { ...s.segmentById, [customerId]: segment },
+        })),
 
       addCustomer: (tenantId, input) => {
         const err = validateCreate(input);

@@ -26,6 +26,7 @@ export type RbacFeature =
   | "customers"
   | "online_orders"
   | "settings"
+  | "pricing_rules"
   | "toko_saya";
 
 const ACCESS_MATRIX: Record<RbacFeature, UserRole[]> = {
@@ -50,6 +51,7 @@ const ACCESS_MATRIX: Record<RbacFeature, UserRole[]> = {
   customers: ["owner", "manager", "accountant"],
   online_orders: ["owner", "manager", "cashier"],
   settings: ["owner", "manager"],
+  pricing_rules: ["owner", "manager"],
   toko_saya: ["owner"],
 };
 
@@ -64,6 +66,7 @@ const EDIT_MATRIX: Partial<Record<RbacFeature, UserRole[]>> = {
   customers: ["owner", "manager"],
   online_orders: ["owner", "manager"],
   settings: ["owner", "manager"],
+  pricing_rules: ["owner", "manager"],
   toko_saya: ["owner"],
 };
 
@@ -102,4 +105,9 @@ export function canSeePurchasePrice(role: UserRole | string | undefined): boolea
 
 export function canEditProducts(role: UserRole | string | undefined): boolean {
   return canEdit(role, "product_edit");
+}
+
+/** Keuntungan & margin di histori penjualan — hanya owner & manager. */
+export function canViewSalesMargin(role: UserRole | string | undefined): boolean {
+  return role === "owner" || role === "manager";
 }

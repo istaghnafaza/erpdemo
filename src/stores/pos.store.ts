@@ -33,6 +33,10 @@ import { useReceivablesStore } from "@/stores/receivables.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import { invalidateResponseCache } from "@/lib/api/response-cache";
+import { invalidatePosAfterCheckout } from "@/lib/invalidate-pos-queries";
+import { repriceCartItems } from "@/lib/apply-cart-pricing";
+import type { PricingBundle } from "@/types/pricing";
+import { useNotificationStore } from "@/stores/notification.store";
 import { useDeliveriesStore } from "@/stores/deliveries.store";
 import { useCustomerDeliverySitesStore } from "@/stores/customer-delivery-sites.store";
 import {
@@ -43,6 +47,7 @@ import {
 import { resolveCashAccountForPayment } from "@/lib/mock-finance";
 import { MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { buildPosCheckoutExtras } from "@/lib/build-pos-checkout-extras";
 import { isMockTenantId } from "@/lib/mock-session";
 import type { CashierSession, PosCart, Customer, CartItem } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
@@ -137,6 +142,9 @@ export interface PosState {
     deliveryAddress: string | null;
     branchName: string;
     branchAddress: string | null;
+    branchPhone: string | null;
+    storeName: string;
+    createdAt: string;
   } | null;
 
   // Context (set from outside — from auth + branch stores)
@@ -144,6 +152,8 @@ export interface PosState {
   branchId: string;
   branchName: string;
   branchAddress: string | null;
+  branchPhone: string | null;
+  storeName: string;
   cashierId: string;
   cashierName: string;
   branchCode: string;
@@ -161,6 +171,8 @@ export interface PosState {
     branchId: string;
     branchName: string;
     branchAddress: string | null;
+    branchPhone: string | null;
+    storeName: string;
     cashierId: string;
     cashierName: string;
     branchCode: string;
@@ -203,6 +215,7 @@ export interface PosState {
     patch: { selected?: boolean; shipQty?: number },
   ): void;
   toggleItemSoLine(cartIndex: number, itemIndex: number): void;
+  repriceCart(cartIndex: number, bundle: PricingBundle): void;
 
   // -----------------------------------------------------------------------
   // Payment
@@ -298,6 +311,8 @@ export const usePosStore = create<PosState>()(
     branchId: "",
     branchName: "",
     branchAddress: null,
+    branchPhone: null,
+    storeName: "",
     cashierId: "",
     cashierName: "",
     branchCode: "",
@@ -308,7 +323,7 @@ export const usePosStore = create<PosState>()(
     // -------------------------------------------------------------------------
     // initContext — called when cashier logs in / branch changes
     // -------------------------------------------------------------------------
-    initContext: ({ tenantId, branchId, branchName, branchAddress, cashierId, cashierName, branchCode }) => {
+    initContext: ({ tenantId, branchId, branchName, branchAddress, branchPhone, storeName, cashierId, cashierName, branchCode }) => {
       set((s) => {
         if (s.activeSession && s.activeSession.cashier_id !== cashierId) {
           s.activeSession = null;
@@ -319,6 +334,8 @@ export const usePosStore = create<PosState>()(
         s.branchId = branchId;
         s.branchName = branchName;
         s.branchAddress = branchAddress;
+        s.branchPhone = branchPhone;
+        s.storeName = storeName;
         s.cashierId = cashierId;
         s.cashierName = cashierName;
         s.branchCode = branchCode;
@@ -780,6 +797,15 @@ export const usePosStore = create<PosState>()(
       });
     },
 
+    repriceCart: (cartIndex, bundle) => {
+      set((s) => {
+        const cart = s.carts[cartIndex];
+        if (cart.items.length === 0) return;
+        cart.items = repriceCartItems(cart.items, cart.customer, bundle);
+        applyPartialShipSync(cart);
+      });
+    },
+
     // -------------------------------------------------------------------------
     // processPayment — the core POS checkout flow
     // -------------------------------------------------------------------------
@@ -986,7 +1012,8 @@ export const usePosStore = create<PosState>()(
           orderRequiresPhysicalDelivery(cart.orderFulfillmentType) &&
           shippableEntries.length > 0
         ) {
-          useDeliveriesStore.getState().createFromCheckout(
+          if (isMockSession || !isNeonBackend()) {
+            useDeliveriesStore.getState().createFromCheckout(
             {
               tenantId,
               branchId,
@@ -1018,9 +1045,11 @@ export const usePosStore = create<PosState>()(
             },
             branchCode,
           );
+          }
         }
 
         if (hasCartSoLines(cart.items)) {
+          if (isMockSession || !isNeonBackend()) {
           const { soDiscountAmount, soGrandTotal } = allocateCartDiscountToSoLines(
             cart.items,
             discountAmount,
@@ -1044,6 +1073,7 @@ export const usePosStore = create<PosState>()(
             pos_transaction_number: txNumber,
             items: cartItemsToSoDrafts(cart.items),
           });
+          }
         }
 
         if (cart.deliverySiteId && !cart.isManualDeliveryAddress) {
@@ -1080,6 +1110,9 @@ export const usePosStore = create<PosState>()(
             deliveryAddress: cart.deliveryAddress,
             branchName: get().branchName,
             branchAddress: get().branchAddress,
+            branchPhone: get().branchPhone,
+            storeName: get().storeName,
+            createdAt: new Date().toISOString(),
           };
         });
       };
@@ -1134,6 +1167,7 @@ export const usePosStore = create<PosState>()(
             discount: item.discount,
             subtotal: item.subtotal,
             stock_source: item.stock_source,
+            is_so_line: item.is_so_line === true,
           })),
         });
 
@@ -1166,6 +1200,21 @@ export const usePosStore = create<PosState>()(
         const txNumber = isAtomicPosBackend()
           ? ""
           : generateTransactionNumber(branchCode, new Date(), getNextLocalTransactionSequence(branchId));
+
+        const checkoutExtras =
+          isNeonBackend() && !isMockSession
+            ? buildPosCheckoutExtras({
+                tenantId,
+                branchId,
+                cashierId,
+                cart,
+                paymentMethod,
+                discountAmount,
+                grandTotal,
+                amountPaid,
+                transactionNumber: txNumber || "pending",
+              })
+            : undefined;
 
         const txResult = await createTransaction(
           tenantId,
@@ -1205,7 +1254,9 @@ export const usePosStore = create<PosState>()(
             discount: item.discount,
             subtotal: item.subtotal,
             stock_source: item.stock_source,
+            is_so_line: item.is_so_line === true,
           })),
+          checkoutExtras,
         );
 
         if (txResult.error) {
@@ -1219,7 +1270,7 @@ export const usePosStore = create<PosState>()(
 
         if (!isAtomicPosBackend()) {
           // Deduct stock for each item (Supabase non-atomic path)
-          for (const item of cart.items) {
+          for (const item of cartStockLines(cart.items)) {
             const src = item.stock_source === "legacy" ? "legacy" : "verified";
             await adjustStock(tenantId, branchId, item.product_id, -item.qty, "out", {
               stockSource: src,
@@ -1239,17 +1290,17 @@ export const usePosStore = create<PosState>()(
         recordSaleHistory(savedTxNumber, false);
         finalize(savedTxNumber, false);
         invalidateResponseCache(`branch-products:${tenantId}:${branchId}`);
-        try {
-          const { getQueryClient } = await import("@/lib/query-client");
-          const { queryKeys } = await import("@/lib/query-keys");
-          const qc = getQueryClient();
-          qc.invalidateQueries({
-            queryKey: queryKeys.posCatalog(tenantId, branchId),
+        const hadSalesOrder = Boolean(checkoutExtras?.salesOrder);
+        void invalidatePosAfterCheckout(tenantId, branchId, { hadSalesOrder });
+        if (hadSalesOrder) {
+          useNotificationStore.getState().addNotification({
+            type: "info",
+            title: "Sales Order baru",
+            message: `SO dari checkout POS ${savedTxNumber} — siap diproses fulfillment`,
+            branchId,
+            entityId: null,
+            entityType: "sales_order",
           });
-          qc.invalidateQueries({ queryKey: ["inventory-catalog", tenantId] });
-          qc.invalidateQueries({ queryKey: queryKeys.posCustomers(tenantId) });
-        } catch {
-          // query client only available in browser
         }
         return { success: true, transactionNumber: savedTxNumber, change: changeAmount };
       } catch (err) {

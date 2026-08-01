@@ -36,11 +36,13 @@ import { canAccess, type RbacFeature } from "@/lib/rbac";
 import { STORE } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { isBranchSetupExemptPath, navigateToBranchSetup } from "@/lib/branch-setup-utils";
+import { checkCanAddBranchClient } from "@/lib/plan-guard";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { BranchSetupRequired } from "@/components/branches/BranchSetupRequired";
 import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
 import { OnboardingProgressWidget } from "@/components/onboarding/OnboardingProgressWidget";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
+import { PlanBanner } from "@/components/subscription/PlanBanner";
 import { useModuleNavBadges } from "@/hooks/useModuleNavBadges";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
 import {
@@ -59,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface NavItem {
   suffix: string;
@@ -66,10 +69,10 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   feature: RbacFeature;
-  /** Per-module accent color, applied to the active nav item + icon (per PRD). */
   accent: string;
-  /** Badge count di sidebar (pengingat modul). */
   badgeKey?: "deliveries" | "sales_orders" | "online_orders";
+  /** Highlight sidebar item when pathname includes this segment (e.g. all /settings/*). */
+  activePrefix?: string;
 }
 
 // Module color mapping per PRD "Visual Identity" table.
@@ -183,11 +186,12 @@ const NAV_DEFINITIONS: Omit<NavItem, "to">[] = [
     accent: "orange",
   },
   {
-    suffix: "/settings/master-data/product-attributes",
+    suffix: "/settings/pricing",
     label: "Pengaturan",
     icon: Settings,
     feature: "settings",
     accent: "slate",
+    activePrefix: "/settings",
   },
 ];
 
@@ -221,8 +225,8 @@ export function AppShell({
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const startWizardSetup = useOnboardingStore((s) => s.startWizardSetup);
-  const needsBranchSetup = useBranchStore((s) => !s.isLoading && s.branches.length === 0);
   const branches = useBranchStore((s) => s.branches);
+  const branchLoading = useBranchStore((s) => s.isLoading);
   const activeBranch = useBranchStore((s) => s.activeBranch);
   const isConsolidated = useBranchStore((s) => s.isConsolidated);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -231,10 +235,27 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isOwner = currentUser?.profile.role === "owner";
+  const onboardingComplete = currentTenant?.onboarding_complete ?? false;
+  const needsOnboarding = currentTenant != null && !onboardingComplete;
+  const needsActiveBranch = currentTenant != null && !branchLoading && branches.length === 0;
+  const needsStoreSetup = needsOnboarding || needsActiveBranch;
   const showBranchSetupGate =
-    needsBranchSetup && !isBranchSetupExemptPath(pathname, tenantSlug);
+    needsStoreSetup && !isBranchSetupExemptPath(pathname, tenantSlug);
 
   const goToBranchSetup = () => {
+    if (onboardingComplete) {
+      const activeCount = branches.filter((b) => b.is_active).length;
+      const guard = checkCanAddBranchClient(currentTenant, activeCount);
+      if (!guard.ok) {
+        toast.error(guard.message, {
+          action: { label: "Lihat Paket", onClick: () => navigate({ to: "/pricing" }) },
+        });
+        return;
+      }
+      useOnboardingStore.getState().startAddBranchSetup();
+      navigate({ to: "/onboarding" });
+      return;
+    }
     navigateToBranchSetup({
       navigate,
       tenant: currentTenant,
@@ -286,7 +307,8 @@ export function AppShell({
           pathname={pathname}
           logoHref={`/${tenantSlug}/dashboard`}
           moduleBadges={moduleBadges}
-          needsBranchSetup={needsBranchSetup}
+          needsBranchSetup={needsStoreSetup}
+          onboardingComplete={onboardingComplete}
           isOwner={isOwner}
           onBranchSetup={goToBranchSetup}
           onPrefetchModule={prefetchNavModule}
@@ -310,7 +332,7 @@ export function AppShell({
               onNavigate={() => setMobileOpen(false)}
               logoHref={`/${tenantSlug}/dashboard`}
               moduleBadges={moduleBadges}
-              needsBranchSetup={needsBranchSetup}
+              needsBranchSetup={needsStoreSetup}
               isOwner={isOwner}
               onBranchSetup={goToBranchSetup}
               onPrefetchModule={prefetchNavModule}
@@ -392,7 +414,7 @@ export function AppShell({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={goToBranchSetup}>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  {needsBranchSetup ? "Wizard Setup Toko" : "Lanjutkan Setup"}
+                  {needsStoreSetup ? (onboardingComplete ? "Tambah Cabang" : "Setup Toko") : "Lanjutkan Setup"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={async () => {
@@ -410,6 +432,8 @@ export function AppShell({
 
         <OfflineIndicator />
 
+        <PlanBanner />
+
         {/* Page header */}
         <div className="px-4 lg:px-8 pt-6 pb-4 flex flex-wrap items-end gap-4 justify-between">
           <div>
@@ -425,7 +449,7 @@ export function AppShell({
           {showBranchSetupGate ? (
             <BranchSetupRequired
               isOwner={isOwner}
-              onboardingComplete={currentTenant?.onboarding_complete ?? false}
+              onboardingComplete={onboardingComplete}
               onSetup={goToBranchSetup}
             />
           ) : (
@@ -445,6 +469,7 @@ function SidebarContent({
   logoHref,
   moduleBadges,
   needsBranchSetup,
+  onboardingComplete,
   isOwner,
   onBranchSetup,
   onPrefetchModule,
@@ -455,6 +480,7 @@ function SidebarContent({
   logoHref?: string;
   moduleBadges: { deliveries: number; sales_orders: number; online_orders: number };
   needsBranchSetup?: boolean;
+  onboardingComplete?: boolean;
   isOwner?: boolean;
   onBranchSetup?: () => void;
   onPrefetchModule?: (suffix: string) => void;
@@ -476,11 +502,13 @@ function SidebarContent({
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {needsBranchSetup && (
           <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
-            <p className="text-xs font-semibold text-amber-100 mb-1">Belum ada toko aktif</p>
+            <p className="text-xs font-semibold text-amber-100 mb-1">
+              {isOwner ? "Modul belum dapat digunakan" : "Toko belum aktif"}
+            </p>
             <p className="text-[11px] text-sidebar-foreground/70 leading-relaxed mb-2">
               {isOwner
-                ? "Setup cabang/toko dulu sebelum modul operasional dapat dipakai."
-                : "Hubungi owner untuk menambahkan atau mengaktifkan toko."}
+                ? "Selesaikan setup toko atau aktifkan cabang dari Toko Saya agar modul operasional dapat dipakai."
+                : "Hubungi owner untuk menyelesaikan setup toko atau mengaktifkan cabang."}
             </p>
             {isOwner && onBranchSetup && (
               <button
@@ -491,13 +519,15 @@ function SidebarContent({
                 }}
                 className="w-full rounded-lg bg-gradient-primary text-white text-xs font-semibold py-2 px-3 hover:opacity-90 transition-opacity"
               >
-                Wizard Setup Toko
+                {onboardingComplete ? "Tambah Cabang" : "Setup Toko"}
               </button>
             )}
           </div>
         )}
         {nav.map((item) => {
-          const active = pathname.startsWith(item.to);
+          const active = item.activePrefix
+            ? pathname.includes(item.activePrefix)
+            : pathname.startsWith(item.to);
           const Icon = item.icon;
           const badgeCount = item.badgeKey ? moduleBadges[item.badgeKey] : 0;
           return (

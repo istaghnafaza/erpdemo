@@ -10,6 +10,7 @@ import { ProductCatalog } from "@/components/pos/ProductCatalog";
 import { PosCartColumn } from "@/components/pos/PosCartColumn";
 import { ReceiptModal } from "@/components/pos/ReceiptModal";
 import { TakeoverModal } from "@/components/pos/TakeoverModal";
+import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -56,6 +57,12 @@ function POSPage() {
     catalogLoading,
     categories,
     customers,
+    customerFormOpen,
+    setCustomerFormOpen,
+    customerSaving,
+    customerTierOptions,
+    openAddCustomer,
+    handleCustomerFormSubmit,
     carts,
     activeCartIndex,
     activeCart,
@@ -137,6 +144,7 @@ function POSPage() {
     onRemoveItem: removeActiveItem,
     onSetDiscount: setActiveDiscount,
     onSetCustomer: setActiveCustomer,
+    onAddCustomer: openAddCustomer,
     onSetDeliverySite: setActiveDeliverySite,
     onManualDeliveryAddressChange: setActiveManualDeliveryAddress,
     onSaveNewDeliverySite: saveNewDeliverySiteFromPos,
@@ -253,6 +261,14 @@ function POSPage() {
       </Sheet>
 
       <ReceiptModal receipt={lastReceipt} onClose={clearReceipt} onNewTransaction={clearReceipt} />
+
+      <CustomerFormDialog
+        open={customerFormOpen}
+        onOpenChange={setCustomerFormOpen}
+        editing={null}
+        customerTierOptions={customerTierOptions}
+        onSubmit={(values) => void handleCustomerFormSubmit(values)}
+      />
 
       <TakeoverModal
         open={showTakeover}

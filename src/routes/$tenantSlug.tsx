@@ -40,6 +40,9 @@ export function requireAuth(): NonNullable<
 > {
   const { currentUser, isAuthenticated } = useAuthStore.getState();
   if (!isAuthenticated || !currentUser) throw redirect({ to: "/login" });
+  if (currentUser.isPlatformAdmin) {
+    throw redirect({ to: "/platform/dashboard" });
+  }
   return currentUser;
 }
 

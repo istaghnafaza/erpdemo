@@ -26,6 +26,7 @@ import {
   stockMovements,
 } from "@/server/db/schema";
 import type { DateRangeFilter } from "@/types/app";
+import type { PosCheckoutExtras } from "@/types/pos-checkout-extras";
 import { generateTransactionNumber } from "@/lib/transaction-number";
 import type {
   CashierSession,
@@ -90,6 +91,10 @@ function computeSessionDeltas(
     base.expectedCashDelta = grandTotal;
   }
   return base;
+}
+
+function isSoLineItem(item: Pick<SalesItemInsert, "is_so_line">): boolean {
+  return item.is_so_line === true;
 }
 
 async function deductStockInTx(
@@ -619,6 +624,7 @@ export async function createSaleTransaction(
   tenantId: string,
   transaction: Omit<SalesTransactionInsert, "tenant_id">,
   items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
+  extras?: PosCheckoutExtras,
 ): Promise<SalesTransaction> {
   const db = getDb();
 
@@ -667,7 +673,7 @@ export async function createSaleTransaction(
     }
 
     for (const item of items) {
-      if (!item.product_id) continue;
+      if (!item.product_id || isSoLineItem(item)) continue;
       const bp = await tx.query.branchProducts.findFirst({
         where: and(
           eq(branchProducts.tenantId, tenantId),
@@ -730,12 +736,13 @@ export async function createSaleTransaction(
           discount: item.discount,
           subtotal: item.subtotal,
           stockSource: item.stock_source,
+          isSoLine: item.is_so_line === true,
         })),
       );
     }
 
     for (const item of items) {
-      if (!item.product_id) continue;
+      if (!item.product_id || isSoLineItem(item)) continue;
       await deductStockInTx(
         tx,
         tenantId,
@@ -793,7 +800,21 @@ export async function createSaleTransaction(
       })
       .where(eq(cashierSessions.id, session.id));
 
-    return toSalesTransaction(txRow);
+    const sale = toSalesTransaction(txRow);
+
+    const { applyPosCheckoutSideEffectsInTx } = await import(
+      "@/server/services/pos-checkout-side-effects"
+    );
+    await applyPosCheckoutSideEffectsInTx(
+      tx,
+      tenantId,
+      transaction.branch_id,
+      sale,
+      extras,
+      transaction.paid_by,
+    );
+
+    return sale;
   });
 
   await invalidateBranchProducts(tenantId, transaction.branch_id);
@@ -827,6 +848,7 @@ export async function voidSaleTransaction(
     const items = itemRows.map(toSalesItem);
 
     for (const item of items) {
+      if (item.is_so_line) continue;
       await restoreStockInTx(
         tx,
         tenantId,

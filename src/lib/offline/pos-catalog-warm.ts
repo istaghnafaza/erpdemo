@@ -52,5 +52,7 @@ export async function fetchPosCatalogWithWarm(
   void writePosCatalogToIdb(tenantId, branchId, fresh);
   onFresh?.(fresh);
 
-  return cached.length > 0 ? cached : fresh;
+  // Always return server data when available — returning stale IDB here overwrote
+  // fresh setQueryData from onFresh after checkout invalidation.
+  return fresh.length > 0 || cached.length === 0 ? fresh : cached;
 }

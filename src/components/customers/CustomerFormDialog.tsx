@@ -28,12 +28,14 @@ export interface CustomerFormValues {
   type: DbCustomerType;
   credit_limit: number;
   segment: CustomerSegment;
+  pricing_tier_id: string | null;
 }
 
 export interface CustomerFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: TenantCustomerRecord | null;
+  customerTierOptions: { id: string; label: string }[];
   onSubmit: (values: CustomerFormValues) => void;
 }
 
@@ -41,6 +43,7 @@ export function CustomerFormDialog({
   open,
   onOpenChange,
   editing,
+  customerTierOptions,
   onSubmit,
 }: CustomerFormDialogProps) {
   const [name, setName] = useState("");
@@ -49,6 +52,7 @@ export function CustomerFormDialog({
   const [type, setType] = useState<DbCustomerType>("retail");
   const [creditLimit, setCreditLimit] = useState("");
   const [segment, setSegment] = useState<CustomerSegment>("umum");
+  const [pricingTierId, setPricingTierId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,8 +63,9 @@ export function CustomerFormDialog({
     setType(editing?.type ?? "retail");
     setCreditLimit(editing?.credit_limit ? String(editing.credit_limit) : "");
     setSegment(editing?.segment ?? "umum");
+    setPricingTierId(editing?.pricing_tier_id ?? customerTierOptions[0]?.id ?? "");
     setError(null);
-  }, [open, editing]);
+  }, [open, editing, customerTierOptions]);
 
   const title = useMemo(() => (editing ? "Edit pelanggan" : "Tambah pelanggan"), [editing]);
 
@@ -81,6 +86,7 @@ export function CustomerFormDialog({
       type,
       credit_limit: limit,
       segment,
+      pricing_tier_id: pricingTierId || null,
     });
     onOpenChange(false);
   };
@@ -145,6 +151,21 @@ export function CustomerFormDialog({
                 />
               </div>
             )}
+            <div className="space-y-1.5">
+              <Label htmlFor="cust-tier">Tier harga</Label>
+              <Select value={pricingTierId} onValueChange={setPricingTierId}>
+                <SelectTrigger id="cust-tier">
+                  <SelectValue placeholder="Pilih tier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerTierOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>

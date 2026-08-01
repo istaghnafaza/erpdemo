@@ -21,6 +21,7 @@ import {
   neonVoidTransaction,
 } from "@/lib/api/neon/transaction-fns";
 import type { ApiResponse, DateRangeFilter } from "@/types/app";
+import type { PosCheckoutExtras } from "@/types/pos-checkout-extras";
 import type {
   CashierSession,
   CashierSessionInsert,
@@ -354,10 +355,11 @@ export async function createTransaction(
   tenantId: string,
   transaction: Omit<SalesTransactionInsert, "tenant_id">,
   items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
+  extras?: PosCheckoutExtras,
 ): Promise<ApiResponse<SalesTransaction>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>
-      neonCreateTransaction({ data: { tenantId, transaction, items } }),
+      neonCreateTransaction({ data: { tenantId, transaction, items, extras } }),
     );
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Gagal menyimpan transaksi");

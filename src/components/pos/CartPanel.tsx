@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Minus,
   Plus,
@@ -10,6 +10,7 @@ import {
   Percent,
   MapPin,
   Package,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { PosLinePricingBreakdown } from "@/components/pos/PosLinePricingBreakdown";
 import { rupiah } from "@/lib/format";
+import { cartTierDiscountTotal } from "@/lib/pos-line-pricing-display";
 import { orderRequiresPhysicalDelivery } from "@/lib/sales-transaction-utils";
 import { DeliverySiteSelector } from "@/components/pos/DeliverySiteSelector";
 import type { ActiveCart } from "@/stores/pos.store";
@@ -55,6 +52,7 @@ export interface CartPanelProps {
   onRemoveItem: (itemIndex: number) => void;
   onSetDiscount: (percent: number) => void;
   onSetCustomer: (customer: Customer | null) => void;
+  onAddCustomer: () => void;
   onSetDeliverySite: (siteId: string) => void;
   onManualDeliveryAddressChange: (address: string) => void;
   onSaveNewDeliverySite: (payload: {
@@ -83,6 +81,7 @@ export function CartPanel({
   onRemoveItem,
   onSetDiscount,
   onSetCustomer,
+  onAddCustomer,
   onSetDeliverySite,
   onManualDeliveryAddressChange,
   onSaveNewDeliverySite,
@@ -94,6 +93,19 @@ export function CartPanel({
 }: CartPanelProps) {
   const [discountMode, setDiscountMode] = useState<"percent" | "amount">("percent");
   const [discountInput, setDiscountInput] = useState("");
+
+  const tierDiscountTotal = useMemo(() => cartTierDiscountTotal(cart.items), [cart.items]);
+
+  const customerOptions = useMemo(
+    () => [
+      { value: "walk-in", label: "Pelanggan Umum" },
+      ...customers.map((c) => ({
+        value: c.id,
+        label: `${c.name}${c.type === "credit" ? " (Kredit)" : ""}`,
+      })),
+    ],
+    [customers],
+  );
 
   const handleDiscountChange = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -110,28 +122,30 @@ export function CartPanel({
   return (
     <>
       <div className="p-3 border-b space-y-2">
-        <Select
-          value={cart.customer?.id ?? "walk-in"}
-          onValueChange={(v) =>
-            onSetCustomer(v === "walk-in" ? null : (customers.find((c) => c.id === v) ?? null))
-          }
-        >
-          <SelectTrigger className="h-9">
-            <div className="flex items-center gap-2">
-              <UserCircle className="h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Pelanggan Umum" />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="walk-in">Pelanggan Umum</SelectItem>
-            {customers.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-                {c.type === "credit" ? " (Kredit)" : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <SearchableCombobox
+            value={cart.customer?.id ?? "walk-in"}
+            options={customerOptions}
+            placeholder="Pelanggan Umum"
+            searchPlaceholder="Cari pelanggan..."
+            emptyText="Pelanggan tidak ditemukan."
+            className="h-9 flex-1"
+            onChange={(v) =>
+              onSetCustomer(v === "walk-in" ? null : (customers.find((c) => c.id === v) ?? null))
+            }
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            title="Tambah pelanggan baru"
+            onClick={onAddCustomer}
+          >
+            <UserPlus className="h-4 w-4" />
+          </Button>
+        </div>
 
         {cart.customer && (
           <DeliverySiteSelector
@@ -209,10 +223,12 @@ export function CartPanel({
                       </Badge>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {rupiah(item.selling_price)} / {item.unit}
-                    {item.is_so_line && " · indent / fulfillment gudang"}
-                  </div>
+                  <PosLinePricingBreakdown item={item} variant="cart" className="mt-1" />
+                  {item.is_so_line && (
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      indent / fulfillment gudang
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-start gap-0.5 shrink-0">
                   <Button
@@ -307,7 +323,7 @@ export function CartPanel({
             </button>
           </div>
           <Input
-            placeholder={discountMode === "percent" ? "Diskon %" : "Diskon Rp"}
+            placeholder={discountMode === "percent" ? "Diskon keranjang %" : "Diskon keranjang Rp"}
             inputMode="numeric"
             value={discountInput}
             onChange={(e) => handleDiscountChange(e.target.value)}
@@ -328,9 +344,15 @@ export function CartPanel({
             <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Kosongkan
           </Button>
         </div>
+        {tierDiscountTotal > 0 && (
+          <div className="flex justify-between text-xs text-destructive/90 pt-1">
+            <span>Diskon tier barang</span>
+            <span>−{rupiah(tierDiscountTotal)}</span>
+          </div>
+        )}
         {discountAmount > 0 && (
           <div className="flex justify-between text-xs text-destructive pt-1">
-            <span>Diskon</span>
+            <span>Diskon keranjang</span>
             <span>−{rupiah(discountAmount)}</span>
           </div>
         )}

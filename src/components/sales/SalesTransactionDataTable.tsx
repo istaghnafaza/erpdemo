@@ -48,6 +48,7 @@ import { Receipt } from "lucide-react";
 interface SalesTransactionDataTableProps {
   data: SalesTransactionRecord[];
   isConsolidated: boolean;
+  showMargin: boolean;
   onRowClick: (row: SalesTransactionRecord) => void;
 }
 
@@ -56,6 +57,7 @@ const PAGE_SIZES = [10, 20, 50, 100];
 export function SalesTransactionDataTable({
   data,
   isConsolidated,
+  showMargin,
   onRowClick,
 }: SalesTransactionDataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -142,29 +144,33 @@ export function SalesTransactionDataTable({
         cell: ({ row }) =>
           orderFulfillmentLabel(row.original.orderFulfillmentType ?? "cod"),
       },
-      {
-        id: "margin",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-3 h-8 float-right"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Keuntungan
-            <ArrowUpDown className="ml-2 h-3.5 w-3.5" />
-          </Button>
-        ),
-        accessorFn: (row) => computeTransactionMargin(row),
-        cell: ({ row }) => {
-          const margin = computeTransactionMargin(row.original);
-          return (
-            <div className="text-right text-info">
-              <CurrencyDisplay value={margin} />
-            </div>
-          );
-        },
-      },
+      ...(showMargin
+        ? [
+            {
+              id: "margin",
+              header: ({ column }) => (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 h-8 float-right"
+                  onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                >
+                  Keuntungan
+                  <ArrowUpDown className="ml-2 h-3.5 w-3.5" />
+                </Button>
+              ),
+              accessorFn: (row: SalesTransactionRecord) => computeTransactionMargin(row),
+              cell: ({ row }: { row: { original: SalesTransactionRecord } }) => {
+                const margin = computeTransactionMargin(row.original);
+                return (
+                  <div className="text-right text-info">
+                    <CurrencyDisplay value={margin} />
+                  </div>
+                );
+              },
+            } satisfies ColumnDef<SalesTransactionRecord>,
+          ]
+        : []),
       {
         accessorKey: "grandTotal",
         header: ({ column }) => (
@@ -218,7 +224,7 @@ export function SalesTransactionDataTable({
           ) : null,
       },
     ],
-    [isConsolidated],
+    [isConsolidated, showMargin],
   );
 
   const table = useReactTable({
@@ -459,17 +465,19 @@ export function SalesTransactionDataTable({
               <tfoot>
                 <TableRow className="bg-muted/30 font-semibold border-t">
                   <TableCell
-                    colSpan={isConsolidated ? 8 : 7}
+                    colSpan={(isConsolidated ? 8 : 7) - (showMargin ? 0 : 1)}
                     className="text-right text-muted-foreground"
                   >
                     Total ({footerTotals.count} transaksi)
                   </TableCell>
-                  <TableCell className="text-right text-info">
-                    <CurrencyDisplay value={footerTotals.totalMargin} />
-                    <span className="block text-[11px] font-normal text-muted-foreground">
-                      Margin {footerTotals.marginPct}%
-                    </span>
-                  </TableCell>
+                  {showMargin && (
+                    <TableCell className="text-right text-info">
+                      <CurrencyDisplay value={footerTotals.totalMargin} />
+                      <span className="block text-[11px] font-normal text-muted-foreground">
+                        Margin {footerTotals.marginPct}%
+                      </span>
+                    </TableCell>
+                  )}
                   <TableCell className="text-right">
                     <CurrencyDisplay value={footerTotals.totalRevenue} />
                   </TableCell>

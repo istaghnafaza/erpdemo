@@ -10,7 +10,7 @@ import {
   neonSetTenantUserActive,
   neonUpdateTenantUser,
 } from "@/lib/api/neon/fns";
-import { MOCK_TENANT_ID } from "@/lib/mock-ids";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useUsersStore } from "@/stores/users.store";
 import type { ApiResponse, CreateTenantUserInput, TenantUserRecord, UpdateTenantUserInput } from "@/types/app";
 import type { Profile } from "@/types/database";

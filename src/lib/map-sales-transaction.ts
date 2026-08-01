@@ -47,6 +47,7 @@ export function mapSalesHistoryToRecord(row: SalesHistoryRow): SalesTransactionR
       sellingPrice: item.selling_price,
       discount: item.discount,
       subtotal: item.subtotal,
+      isSoLine: item.is_so_line === true,
     })),
   };
 }

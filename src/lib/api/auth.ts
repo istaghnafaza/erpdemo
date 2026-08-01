@@ -21,11 +21,11 @@ import type { Profile } from "@/types/database";
 // signInWithPassword
 // ---------------------------------------------------------------------------
 export async function signIn(
-  email: string,
+  loginId: string,
   password: string,
 ): Promise<ApiResponse<AuthUser>> {
   if (isNeonBackend()) {
-    const result = await neonCall(() => neonSignIn({ data: { email, password } }));
+    const result = await neonCall(() => neonSignIn({ data: { username: loginId, password } }));
     if (result.error) return fail(result.error);
     if (!result.data) return fail("Login gagal");
     return ok(result.data);

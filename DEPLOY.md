@@ -140,6 +140,8 @@ Railway auto-rebuild & redeploy setiap push ke branch yang di-connect.
 
 Develop lokal tetap: `npm run dev` → `http://localhost:8081`
 
+Panduan lengkap (analogi toko, PC ↔ MacBook, checklist pre-push): **[docs/WORKFLOW_GIT.md](./docs/WORKFLOW_GIT.md)**
+
 ---
 
 ## 5. Domain custom — `seps.fazagroup.id`

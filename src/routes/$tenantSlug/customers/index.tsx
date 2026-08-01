@@ -58,6 +58,7 @@ function CustomersPage() {
     handleSiteFormSubmit,
     handleCustomerFormSubmit,
     removeSite,
+    customerTierOptions,
     siteTypeLabels,
     projectSiteStatusLabel,
     getLastUsedSiteId,
@@ -262,9 +263,9 @@ function CustomersPage() {
         open={customerFormOpen}
         onOpenChange={setCustomerFormOpen}
         editing={editingCustomer}
+        customerTierOptions={customerTierOptions}
         onSubmit={(values) => {
-          handleCustomerFormSubmit(values);
-          toast.success(editingCustomer ? "Pelanggan diperbarui" : "Pelanggan ditambahkan");
+          void handleCustomerFormSubmit(values);
         }}
       />
 

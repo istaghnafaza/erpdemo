@@ -2,12 +2,13 @@
 // Auth service — Neon/Drizzle
 // =============================================================================
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toProfile } from "@/server/db/mappers";
 import { authUsers, profiles, userBranches } from "@/server/db/schema";
 import { verifyPassword } from "@/server/auth/password";
 import { createSessionToken } from "@/server/auth/session";
+import { getPlatformAdminDisplayName } from "@/server/services/platform-admin";
 import type { AuthUser, AppProfile } from "@/types/app";
 import type { Profile, ProfileUpdate } from "@/types/database";
 
@@ -16,6 +17,7 @@ function buildAuthUser(profile: Profile, branchIds: string[]): AuthUser {
     id: profile.id,
     email: profile.email,
     tenantId: profile.tenant_id,
+    isPlatformAdmin: false,
     profile: {
       id: profile.id,
       tenantId: profile.tenant_id,
@@ -37,6 +39,39 @@ function buildAuthUser(profile: Profile, branchIds: string[]): AuthUser {
   };
 }
 
+function buildPlatformAuthUser(authRow: {
+  id: string;
+  email: string;
+  username: string | null;
+}): AuthUser {
+  const name = getPlatformAdminDisplayName(authRow.username ?? "", authRow.email);
+  const now = new Date().toISOString();
+  return {
+    id: authRow.id,
+    email: authRow.email,
+    tenantId: "",
+    isPlatformAdmin: true,
+    profile: {
+      id: authRow.id,
+      tenantId: "",
+      name,
+      email: authRow.email,
+      role: "owner",
+      pin: null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    activeBranchId: null,
+    allowedBranchIds: [],
+    isOwner: false,
+    isManager: false,
+    isCashier: false,
+    isWarehouse: false,
+    isAccountant: false,
+  };
+}
+
 async function getBranchIdsForUser(userId: string): Promise<string[]> {
   const db = getDb();
   const rows = await db
@@ -46,19 +81,52 @@ async function getBranchIdsForUser(userId: string): Promise<string[]> {
   return rows.map((r) => r.branchId);
 }
 
+async function findAuthUserByLoginId(loginId: string) {
+  const db = getDb();
+  const trimmed = loginId.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if (trimmed.includes("@")) {
+    return (
+      (await db.query.authUsers.findFirst({
+        where: eq(authUsers.email, trimmed),
+      })) ?? null
+    );
+  }
+
+  const byUsername = await db.query.authUsers.findFirst({
+    where: sql`lower(${authUsers.username}) = ${trimmed}`,
+  });
+  if (byUsername) return byUsername;
+
+  const byEmailLocal = await db.query.authUsers.findFirst({
+    where: sql`lower(split_part(${authUsers.email}, '@', 1)) = ${trimmed}`,
+  });
+  return byEmailLocal ?? null;
+}
+
 export async function signInWithPassword(
-  email: string,
+  loginId: string,
   password: string,
 ): Promise<{ user: AuthUser; token: string } | null> {
-  const db = getDb();
-  const authRow = await db.query.authUsers.findFirst({
-    where: eq(authUsers.email, email.toLowerCase().trim()),
-  });
+  const authRow = await findAuthUserByLoginId(loginId);
   if (!authRow) return null;
 
   const valid = await verifyPassword(password, authRow.passwordHash);
   if (!valid) return null;
 
+  if (authRow.isPlatformAdmin) {
+    const user = buildPlatformAuthUser(authRow);
+    const token = await createSessionToken({
+      sub: authRow.id,
+      email: authRow.email,
+      tenantId: "",
+      isPlatformAdmin: true,
+    });
+    return { user, token };
+  }
+
+  const db = getDb();
   const profileRow = await db.query.profiles.findFirst({
     where: and(eq(profiles.id, authRow.id), eq(profiles.isActive, true)),
   });
@@ -77,6 +145,15 @@ export async function signInWithPassword(
 
 export async function getUserBySession(userId: string): Promise<AuthUser | null> {
   const db = getDb();
+  const authRow = await db.query.authUsers.findFirst({
+    where: eq(authUsers.id, userId),
+  });
+  if (!authRow) return null;
+
+  if (authRow.isPlatformAdmin) {
+    return buildPlatformAuthUser(authRow);
+  }
+
   const profileRow = await db.query.profiles.findFirst({
     where: and(eq(profiles.id, userId), eq(profiles.isActive, true)),
   });

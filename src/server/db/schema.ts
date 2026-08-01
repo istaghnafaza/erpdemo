@@ -53,9 +53,11 @@ export const tenants = pgTable("tenants", {
 export const authUsers = pgTable("auth_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
+  username: varchar("username", { length: 32 }),
   passwordHash: text("password_hash").notNull(),
   googleSub: text("google_sub").unique(),
   tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -89,6 +91,9 @@ export const profiles = pgTable("profiles", {
   email: text("email").notNull(),
   role: userRoleEnum("role").notNull().default("cashier"),
   pin: varchar("pin", { length: 6 }),
+  phone: text("phone"),
+  address: text("address"),
+  dateOfBirth: date("date_of_birth"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -196,6 +201,7 @@ export const customers = pgTable("customers", {
   type: customerTypeEnum("type").notNull().default("retail"),
   creditLimit: bigint("credit_limit", { mode: "number" }).notNull().default(0),
   outstandingDebt: bigint("outstanding_debt", { mode: "number" }).notNull().default(0),
+  pricingTierId: uuid("pricing_tier_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -350,6 +356,8 @@ export const salesItems = pgTable("sales_items", {
   discount: bigint("discount", { mode: "number" }).notNull().default(0),
   subtotal: bigint("subtotal", { mode: "number" }).notNull().default(0),
   stockSource: stockSourceEnum("stock_source").notNull().default("verified"),
+  /** Baris indent/SO — tidak mengurangi stok cabang saat checkout POS */
+  isSoLine: boolean("is_so_line").notNull().default(false),
 });
 
 // ---------------------------------------------------------------------------
@@ -825,5 +833,96 @@ export const auditEvents = pgTable("audit_events", {
   entityId: uuid("entity_id"),
   metadata: text("metadata"),
   ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 — pricing tiers & margin floors
+// ---------------------------------------------------------------------------
+
+export const pricingSettings = pgTable("pricing_settings", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  maxStackDiscountPercent: integer("max_stack_discount_percent").notNull().default(12),
+  maxLineDiscountPercent: integer("max_line_discount_percent").notNull().default(10),
+  defaultMinMarginPercent: integer("default_min_margin_percent").notNull().default(10),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => profiles.id, { onDelete: "set null" }),
+});
+
+export const volumePriceTiers = pgTable(
+  "volume_price_tiers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    tierCode: text("tier_code").notNull(),
+    name: text("name").notNull(),
+    minQty: integer("min_qty").notNull().default(0),
+    minLineAmount: bigint("min_line_amount", { mode: "number" }).notNull().default(0),
+    discountPercent: integer("discount_percent").notNull().default(0),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.tenantId, t.tierCode)],
+);
+
+export const customerPriceTiers = pgTable(
+  "customer_price_tiers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    tierCode: text("tier_code").notNull(),
+    name: text("name").notNull(),
+    discountPercent: integer("discount_percent").notNull().default(0),
+    minTransactions: integer("min_transactions"),
+    minRollingOmzet: bigint("min_rolling_omzet", { mode: "number" }),
+    rollingDays: integer("rolling_days"),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.tenantId, t.tierCode)],
+);
+
+export const categoryMarginFloors = pgTable(
+  "category_margin_floors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => productCategories.id, {
+      onDelete: "cascade",
+    }),
+    minMarginPercent: integer("min_margin_percent").notNull(),
+  },
+  (t) => [unique().on(t.tenantId, t.categoryId)],
+);
+
+export const pricingOverrideLogs = pgTable("pricing_override_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  salesTransactionId: uuid("sales_transaction_id").references(() => salesTransactions.id, {
+    onDelete: "set null",
+  }),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+  sku: text("sku").notNull(),
+  basePrice: bigint("base_price", { mode: "number" }).notNull(),
+  floorPrice: bigint("floor_price", { mode: "number" }).notNull(),
+  overridePrice: bigint("override_price", { mode: "number" }).notNull(),
+  reason: text("reason").notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

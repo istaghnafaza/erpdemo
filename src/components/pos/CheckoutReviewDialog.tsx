@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { rupiah } from "@/lib/format";
 import { orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
+import { PosLinePricingBreakdown } from "@/components/pos/PosLinePricingBreakdown";
+import { cartTierDiscountTotal } from "@/lib/pos-line-pricing-display";
 import type { ActiveCart } from "@/stores/pos.store";
 import type { PaymentMethod } from "@/types/app";
 import type { OrderFulfillmentType } from "@/types/sales-transactions";
@@ -55,6 +57,8 @@ export function CheckoutReviewDialog({
   isProcessing,
   onConfirm,
 }: CheckoutReviewDialogProps) {
+  const tierDiscountTotal = cartTierDiscountTotal(cart.items);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -88,12 +92,12 @@ export function CheckoutReviewDialog({
           <div className="rounded-lg border divide-y">
             {cart.items.map((item, i) => (
               <div key={`${item.product_id}-${i}`} className="px-3 py-2 flex justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="font-medium text-sm leading-tight">{item.name}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {item.qty} × {rupiah(item.selling_price)}
+                  <div className="mt-0.5">
+                    <PosLinePricingBreakdown item={item} variant="review" />
                     {item.is_so_line && (
-                      <Badge variant="outline" className="ml-1.5 text-[10px] text-indigo-600 border-indigo-300">
+                      <Badge variant="outline" className="mt-1 text-[10px] text-indigo-600 border-indigo-300">
                         SO
                       </Badge>
                     )}
@@ -106,12 +110,18 @@ export function CheckoutReviewDialog({
 
           <div className="rounded-lg bg-muted/50 p-3 space-y-1.5">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-muted-foreground">Subtotal barang</span>
               <span>{rupiah(subtotal)}</span>
             </div>
+            {tierDiscountTotal > 0 && (
+              <div className="flex justify-between text-destructive/90 text-xs">
+                <span>Diskon tier (sudah termasuk di subtotal)</span>
+                <span>−{rupiah(tierDiscountTotal)}</span>
+              </div>
+            )}
             {discountAmount > 0 && (
               <div className="flex justify-between text-destructive">
-                <span>Diskon</span>
+                <span>Diskon keranjang</span>
                 <span>−{rupiah(discountAmount)}</span>
               </div>
             )}

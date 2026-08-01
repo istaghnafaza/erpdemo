@@ -9,6 +9,7 @@ import {
   neonGetAllTenants,
   neonGetTenant,
   neonGetTenantBySlug,
+  neonCheckTenantSlugAvailable,
   neonUpdateTenant,
 } from "@/lib/api/neon/fns";
 import type { ApiResponse } from "@/types/app";
@@ -110,6 +111,20 @@ export async function getTenantBySlug(slug: string): Promise<ApiResponse<Tenant>
   } catch (err) {
     return fail(err);
   }
+}
+
+export async function checkTenantSlugAvailable(
+  slug: string,
+  tenantId?: string,
+): Promise<ApiResponse<boolean>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonCheckTenantSlugAvailable({ data: { slug, tenantId } }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data?.available ?? false);
+  }
+  return ok(true);
 }
 
 export async function setLegacyMode(

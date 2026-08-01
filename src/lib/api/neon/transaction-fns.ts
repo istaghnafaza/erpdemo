@@ -176,12 +176,13 @@ export const neonCreateTransaction = createServerFn({ method: "POST" })
       tenantId: string;
       transaction: Omit<SalesTransactionInsert, "tenant_id">;
       items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[];
+      extras?: import("@/types/pos-checkout-extras").PosCheckoutExtras;
     }) => data,
   )
   .handler(async ({ data }) => {
     await requireTenant(data.tenantId);
     const { createSaleTransaction } = await import("@/server/services/transactions");
-    return createSaleTransaction(data.tenantId, data.transaction, data.items);
+    return createSaleTransaction(data.tenantId, data.transaction, data.items, data.extras);
   });
 
 export const neonVoidTransaction = createServerFn({ method: "POST" })

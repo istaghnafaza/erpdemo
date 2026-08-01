@@ -23,6 +23,12 @@ interface UsersState {
     email: string,
     pin: string,
   ) => TenantUserRecord | null;
+  /** Username atau email + PIN (demo). */
+  findByLoginIdAndPin: (
+    tenantId: string,
+    loginId: string,
+    pin: string,
+  ) => TenantUserRecord | null;
   findById: (id: string) => TenantUserRecord | undefined;
   createUser: (tenantId: string, input: CreateTenantUserInput) => { ok: boolean; error?: string; user?: TenantUserRecord };
   updateUser: (id: string, input: UpdateTenantUserInput) => { ok: boolean; error?: string };
@@ -33,6 +39,18 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function emailLocalPart(email: string): string {
+  const at = email.indexOf("@");
+  return at >= 0 ? email.slice(0, at).toLowerCase() : email.toLowerCase();
+}
+
+function matchesLoginId(userEmail: string, loginId: string): boolean {
+  const id = loginId.trim().toLowerCase();
+  const normalized = normalizeEmail(userEmail);
+  if (id.includes("@")) return normalized === id;
+  return emailLocalPart(normalized) === id;
+}
+
 function newCustomUserId(): string {
   const suffix = Date.now().toString(16).padStart(12, "0").slice(-12);
   return `33339999-0000-0000-0000-${suffix}`;
@@ -40,8 +58,13 @@ function newCustomUserId(): string {
 
 function validateInput(input: CreateTenantUserInput): string | null {
   if (!input.name.trim()) return "Nama wajib diisi";
-  if (!input.email.trim()) return "Email wajib diisi";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) return "Format email tidak valid";
+  if (!input.username?.trim()) return "Username wajib diisi";
+  if (!/^[a-z0-9._-]{3,32}$/.test(input.username.trim().toLowerCase())) {
+    return "Username 3–32 karakter: huruf, angka, titik, strip, underscore";
+  }
+  if (input.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) {
+    return "Format email tidak valid";
+  }
   if (!/^\d{6}$/.test(input.pin)) return "PIN harus 6 digit angka";
   if (input.branchIds.length === 0) return "Pilih minimal 1 cabang";
   if (input.role === "owner") return "Role owner tidak bisa ditambahkan";
@@ -80,24 +103,52 @@ export const useUsersStore = create<UsersState>()(
         );
       },
 
+      findByLoginIdAndPin: (tenantId, loginId, pin) => {
+        const trimmedPin = pin.trim();
+        const id = loginId.trim().toLowerCase();
+        return (
+          get().users.find(
+            (u) =>
+              u.tenantId === tenantId &&
+              (u.username.toLowerCase() === id ||
+                matchesLoginId(u.email, loginId)) &&
+              u.pin === trimmedPin &&
+              u.isActive,
+          ) ?? null
+        );
+      },
+
       findById: (id) => get().users.find((u) => u.id === id),
 
       createUser: (tenantId, input) => {
         const err = validateInput(input);
         if (err) return { ok: false, error: err };
 
-        const normalized = normalizeEmail(input.email);
+        const userId = newCustomUserId();
+        const username = input.username.trim().toLowerCase();
+        const usernameTaken = get().users.some(
+          (u) => u.tenantId === tenantId && u.username.toLowerCase() === username,
+        );
+        if (usernameTaken) return { ok: false, error: "Username sudah dipakai pegawai lain" };
+
+        const normalized = input.email?.trim()
+          ? input.email.trim().toLowerCase()
+          : `${input.name.trim().toLowerCase().replace(/\s+/g, ".")}.${userId.slice(-8)}@staff.local`;
         const duplicate = get().users.some(
-          (u) => u.tenantId === tenantId && normalizeEmail(u.email) === normalized,
+          (u) => u.tenantId === tenantId && u.email.toLowerCase() === normalized,
         );
         if (duplicate) return { ok: false, error: "Email sudah dipakai pegawai lain" };
 
         const now = new Date().toISOString();
         const user: TenantUserRecord = {
-          id: newCustomUserId(),
+          id: userId,
           tenantId,
           name: input.name.trim(),
+          username,
           email: normalized,
+          phone: input.phone?.trim() || null,
+          address: input.address?.trim() || null,
+          dateOfBirth: input.dateOfBirth || null,
           role: input.role,
           pin: input.pin,
           branchIds: input.branchIds,
@@ -123,6 +174,16 @@ export const useUsersStore = create<UsersState>()(
         if (input.pin && !/^\d{6}$/.test(input.pin)) {
           return { ok: false, error: "PIN harus 6 digit angka" };
         }
+        if (input.username) {
+          const username = input.username.trim().toLowerCase();
+          const usernameTaken = get().users.some(
+            (u) =>
+              u.id !== id &&
+              u.tenantId === existing.tenantId &&
+              u.username.toLowerCase() === username,
+          );
+          if (usernameTaken) return { ok: false, error: "Username sudah dipakai pegawai lain" };
+        }
         if (input.email) {
           const normalized = normalizeEmail(input.email);
           const duplicate = get().users.some(
@@ -140,7 +201,11 @@ export const useUsersStore = create<UsersState>()(
             return {
               ...u,
               name: input.name?.trim() ?? u.name,
+              username: input.username?.trim().toLowerCase() ?? u.username,
               email: input.email ? normalizeEmail(input.email) : u.email,
+              phone: input.phone !== undefined ? input.phone?.trim() || null : u.phone,
+              address: input.address !== undefined ? input.address?.trim() || null : u.address,
+              dateOfBirth: input.dateOfBirth !== undefined ? input.dateOfBirth || null : u.dateOfBirth,
               role: (input.role ?? u.role) as UserRole,
               pin: input.pin ?? u.pin,
               branchIds: input.branchIds ?? u.branchIds,

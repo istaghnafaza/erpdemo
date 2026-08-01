@@ -17,7 +17,7 @@ import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
 import { isMockDemoUser } from "@/lib/mock-session";
 import { createBranch, assignUserToBranch, finalizeOnboardingPrimaryBranch } from "@/lib/api/branches";
-import { setLegacyMode, setOnboardingComplete } from "@/lib/api/tenants";
+import { setLegacyMode, updateTenant } from "@/lib/api/tenants";
 import { createTenantUser } from "@/lib/api/users";
 import { useBranchStore } from "@/stores/branch.store";
 import { useUsersStore } from "@/stores/users.store";
@@ -57,6 +57,8 @@ import {
 } from "@/lib/onboarding-validation";
 import { AddBranchSetupPanel } from "@/components/onboarding/AddBranchSetupPanel";
 import { redirectIfOnboardingComplete, syncAuthFromServer } from "@/lib/auth-bootstrap";
+import { isPendingTenantName } from "@/lib/tenant-placeholder";
+import { useTenantSlugAvailability } from "@/hooks/useTenantSlugAvailability";
 import type { UserRole } from "@/types/app";
 
 export const Route = createFileRoute("/onboarding/")({
@@ -144,10 +146,33 @@ function OnboardingPage() {
   const setSingleBranchMode = useOnboardingStore((s) => s.setSingleBranchMode);
 
   const [storeErrors, setStoreErrors] = useState<StoreInfoErrors>({});
+  const slugAvailability = useTenantSlugAvailability(storeSlug, currentUser?.tenantId);
 
   useEffect(() => {
     if (!currentUser) navigate({ to: "/login" });
   }, [currentUser, navigate]);
+
+  useEffect(() => {
+    if (!currentTenant || addBranchOnly) return;
+
+    if (isPendingTenantName(currentTenant.name)) {
+      if (!storeSlug.trim()) {
+        updateStoreInfo({
+          storeSlug: currentTenant.slug,
+          storePhone: currentTenant.phone ?? "",
+        });
+      }
+      return;
+    }
+
+    if (storeName.trim()) return;
+    updateStoreInfo({
+      storeName: currentTenant.name,
+      storeSlug: currentTenant.slug,
+      storePhone: currentTenant.phone ?? "",
+      branchName: currentTenant.name,
+    });
+  }, [currentTenant, addBranchOnly, storeName, storeSlug, updateStoreInfo]);
 
   if (!currentUser) return null;
   if (addBranchOnly) return <AddBranchSetupPanel />;
@@ -176,19 +201,40 @@ function OnboardingPage() {
         toast.error(firstValidationMessage(errors) ?? "Periksa data toko");
         return;
       }
+      if (slugAvailability.isBlocking) {
+        toast.error(
+          slugAvailability.status === "taken"
+            ? "URL toko sudah dipakai — pilih URL lain"
+            : "Tunggu pemeriksaan ketersediaan URL...",
+        );
+        if (slugAvailability.status === "taken") {
+          setStoreErrors((prev) => ({
+            ...prev,
+            storeSlug: "URL sudah dipakai — pilih URL lain",
+          }));
+        }
+        return;
+      }
+      if (slugAvailability.status !== "available" && slugAvailability.status !== "idle") {
+        toast.error("Periksa URL toko terlebih dahulu");
+        return;
+      }
       setStoreErrors({});
       setStep(3);
     } else if (step === 3) {
       setStep(4);
     } else if (step === 4) {
       if (!path) return toast.error("Jalur setup tidak ditemukan");
-      const productErr = validateProductsStep({
-        path,
-        products: useOnboardingStore.getState().products,
-        bookRows: useOnboardingStore.getState().bookRows,
-        excelRows: useOnboardingStore.getState().excelRows,
-      });
-      if (productErr) return toast.error(productErr);
+      const { skippedProducts: skipped } = useOnboardingStore.getState();
+      if (!skipped) {
+        const productErr = validateProductsStep({
+          path,
+          products: useOnboardingStore.getState().products,
+          bookRows: useOnboardingStore.getState().bookRows,
+          excelRows: useOnboardingStore.getState().excelRows,
+        });
+        if (productErr) return toast.error(productErr);
+      }
       setStep(5);
     }
   };
@@ -215,7 +261,7 @@ function OnboardingPage() {
       toast.error(firstValidationMessage(storeValidation) ?? "Lengkapi data toko terlebih dahulu");
       return;
     }
-    if (onboardingState.path) {
+    if (onboardingState.path && !onboardingState.skippedProducts) {
       const productErr = validateProductsStep({
         path: onboardingState.path,
         products: onboardingState.products,
@@ -279,11 +325,18 @@ function OnboardingPage() {
 
     if (isNeonBackend()) {
       await setLegacyMode(currentUser.tenantId, onboardingState.legacyMode);
-      const completeResult = await setOnboardingComplete(currentUser.tenantId);
-      if (completeResult.data) {
-        useAuthStore.setState({ currentTenant: completeResult.data });
-        useOnboardingStore.getState().completeOnboarding();
+      const tenantResult = await updateTenant(currentUser.tenantId, {
+        name: onboardingState.storeName.trim(),
+        slug: onboardingState.storeSlug.trim(),
+        phone: onboardingState.storePhone.trim() || null,
+        onboarding_complete: true,
+      });
+      if (tenantResult.error || !tenantResult.data) {
+        toast.error(tenantResult.error ?? "Gagal menyimpan profil toko");
+        return;
       }
+      useAuthStore.setState({ currentTenant: tenantResult.data });
+      useOnboardingStore.getState().completeOnboarding();
       await useBranchStore.getState().loadBranches(currentUser.tenantId);
     } else if (currentUser.tenantId === MOCK_TENANT_ID) {
       useAuthStore.getState().grantMockBranchAccess(MOCK_BRANCH_ONBOARDING);
@@ -449,6 +502,7 @@ function OnboardingPage() {
                   });
                 }
               }}
+              slugAvailability={slugAvailability}
             />
           )}
           {step === 3 && <StepUsers />}
@@ -458,17 +512,21 @@ function OnboardingPage() {
           )}
 
           <div className="flex gap-2 mt-6">
-            {step > 1 && step < 5 && (
+            {step > 1 && (
               <Button variant="outline" className="flex-1" onClick={goBack}>
                 Kembali
               </Button>
             )}
             {step < 5 ? (
-              <Button className="flex-1 bg-gradient-primary" onClick={goNext}>
+              <Button
+                className="flex-1 bg-gradient-primary"
+                onClick={goNext}
+                disabled={step === 2 && slugAvailability.isBlocking}
+              >
                 Lanjut
               </Button>
             ) : (
-              <Button className="w-full bg-gradient-primary text-base h-12" onClick={handleFinish}>
+              <Button className="flex-1 bg-gradient-primary text-base h-12" onClick={handleFinish}>
                 Mulai Gunakan SES! 🚀
               </Button>
             )}
@@ -552,6 +610,7 @@ function StepStoreInfo({
   branchAddress,
   singleBranchMode,
   errors,
+  slugAvailability,
   onChange,
   onSingleBranchModeChange,
 }: {
@@ -564,11 +623,20 @@ function StepStoreInfo({
   branchAddress: string;
   singleBranchMode: boolean;
   errors: StoreInfoErrors;
+  slugAvailability: ReturnType<typeof useTenantSlugAvailability>;
   onChange: ReturnType<typeof useOnboardingStore.getState>["updateStoreInfo"];
   onSingleBranchModeChange: ReturnType<typeof useOnboardingStore.getState>["setSingleBranchMode"];
 }) {
   const inputClass = (field: StoreInfoField) =>
     cn(errors[field] && "border-destructive focus-visible:ring-destructive/30");
+
+  const slugHint =
+    errors.storeSlug ??
+    (slugAvailability.status === "taken" ? slugAvailability.message : undefined);
+  const slugSuccess =
+    !errors.storeSlug &&
+    slugAvailability.status === "available" &&
+    storeSlug.trim().length >= 3;
 
   return (
     <div className="space-y-4">
@@ -592,6 +660,9 @@ function StepStoreInfo({
             aria-invalid={!!errors.storeName}
           />
           <FieldHint error={errors.storeName} />
+          <p className="text-xs text-muted-foreground">
+            Nama toko boleh sama dengan toko lain — yang harus unik hanya URL di bawah.
+          </p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="onb-store-slug">
@@ -607,11 +678,22 @@ function StepStoreInfo({
                   storeSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
                 })
               }
-              className={cn("flex-1", inputClass("storeSlug"))}
-              aria-invalid={!!errors.storeSlug}
+              className={cn(
+                "flex-1",
+                inputClass("storeSlug"),
+                slugAvailability.status === "taken" && "border-destructive",
+                slugSuccess && "border-success",
+              )}
+              aria-invalid={!!errors.storeSlug || slugAvailability.status === "taken"}
             />
           </div>
-          <FieldHint error={errors.storeSlug} />
+          <FieldHint error={slugHint} />
+          {slugSuccess && (
+            <p className="text-xs text-success mt-1">{slugAvailability.message}</p>
+          )}
+          {slugAvailability.status === "checking" && (
+            <p className="text-xs text-muted-foreground mt-1">{slugAvailability.message}</p>
+          )}
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="onb-store-address">
@@ -768,11 +850,11 @@ function StepUsers() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Email</Label>
+          <Label>Email (opsional)</Label>
           <Input
             value={draft.email}
             onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-            placeholder="andi@toko.id"
+            placeholder="andi@toko.id — kosongkan jika belum ada"
           />
         </div>
         <div className="space-y-1.5">
@@ -827,21 +909,54 @@ function StepUsers() {
 }
 
 function StepProducts({ path }: { path: OnboardingPath }) {
-  if (path === "new") return <StepProductsLibrary />;
-  if (path === "no-records") return <StepProductsNoRecords />;
-  if (path === "book") return <StepProductsBook />;
-  return <StepProductsExcel />;
+  const skippedProducts = useOnboardingStore((s) => s.skippedProducts);
+  const setSkippedProducts = useOnboardingStore((s) => s.setSkippedProducts);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-lg">Setup Produk</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Opsional — bisa skip dan tambah produk nanti dari modul inventory
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSkippedProducts(true);
+            toast.info("Produk dilewati — bisa ditambah nanti dari inventory");
+          }}
+        >
+          Skip
+        </Button>
+      </div>
+
+      {skippedProducts && (
+        <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+          Anda memilih skip — tidak ada produk awal yang akan ditambahkan.
+        </div>
+      )}
+
+      {!skippedProducts && path === "new" && <StepProductsLibrary />}
+      {!skippedProducts && path === "no-records" && <StepProductsNoRecords />}
+      {!skippedProducts && path === "book" && <StepProductsBook />}
+      {!skippedProducts && path === "excel" && <StepProductsExcel />}
+    </div>
+  );
 }
 
 function StepProductsLibrary() {
   const products = useOnboardingStore((s) => s.products);
   const toggleProduct = useOnboardingStore((s) => s.toggleProduct);
   const updateProduct = useOnboardingStore((s) => s.updateProduct);
+  const setSkippedProducts = useOnboardingStore((s) => s.setSkippedProducts);
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-semibold text-lg">Library Produk Toko Bangunan</h2>
+        <h3 className="font-medium text-base">Library Produk Toko Bangunan</h3>
         <p className="text-sm text-muted-foreground mt-0.5">
           Centang produk yang dijual, atur harga jual dan stok awal
         </p>
@@ -855,7 +970,13 @@ function StepProductsLibrary() {
               p.selected && "border-primary/40 bg-primary/5",
             )}
           >
-            <Checkbox checked={p.selected} onCheckedChange={() => toggleProduct(p.productId)} />
+            <Checkbox
+              checked={p.selected}
+              onCheckedChange={() => {
+                setSkippedProducts(false);
+                toggleProduct(p.productId);
+              }}
+            />
             <div className="flex-1 min-w-[140px]">
               <div className="font-medium text-sm">{p.name}</div>
               <div className="text-xs text-muted-foreground">{p.sku}</div>

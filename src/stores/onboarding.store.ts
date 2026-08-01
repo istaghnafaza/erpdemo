@@ -70,6 +70,7 @@ interface OnboardingState {
   bookRows: BookProductRow[];
   excelRows: ExcelImportRow[];
   skippedUsers: boolean;
+  skippedProducts: boolean;
   /** Mode khusus: hanya form tambah cabang (dari link di wizard). */
   addBranchOnly: boolean;
   /** Izinkan wizard penuh meski onboarding_complete (setup toko baru / reaktivasi). */
@@ -82,6 +83,7 @@ interface OnboardingState {
   addUser: (user: Omit<OnboardingUserDraft, "id">) => void;
   removeUser: (id: string) => void;
   setSkippedUsers: (v: boolean) => void;
+  setSkippedProducts: (v: boolean) => void;
   toggleProduct: (productId: string) => void;
   updateProduct: (productId: string, patch: Partial<Pick<OnboardingProductDraft, "sellPrice" | "initialStock">>) => void;
   setLegacyMode: (v: boolean) => void;
@@ -146,6 +148,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       ],
       excelRows: [],
       skippedUsers: false,
+      skippedProducts: false,
       addBranchOnly: false,
       wizardResumeMode: false,
 
@@ -196,6 +199,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         set((s) => ({ users: s.users.filter((u) => u.id !== id) })),
 
       setSkippedUsers: (v) => set({ skippedUsers: v }),
+
+      setSkippedProducts: (v) => set({ skippedProducts: v }),
 
       toggleProduct: (productId) =>
         set((s) => ({
@@ -291,6 +296,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           ],
           excelRows: [],
           skippedUsers: false,
+          skippedProducts: false,
         });
       },
 
@@ -335,6 +341,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           ],
           excelRows: [],
           skippedUsers: false,
+          skippedProducts: false,
         }),
 
       getProgressPercent: () => {
@@ -344,7 +351,8 @@ export const useOnboardingStore = create<OnboardingState>()(
         if (s.path) done++;
         if (s.storeName.trim() && (s.singleBranchMode || s.branchName.trim())) done++;
         if (s.skippedUsers || s.users.length > 0) done++;
-        if (s.path === "new" && s.products.some((p) => p.selected)) done++;
+        if (s.skippedProducts) done++;
+        else if (s.path === "new" && s.products.some((p) => p.selected)) done++;
         else if (s.path === "no-records") done++;
         else if (s.path === "book" && s.bookRows.some((r) => r.name.trim())) done++;
         else if (s.path === "excel" && s.excelRows.some((r) => r.valid)) done++;
@@ -354,10 +362,12 @@ export const useOnboardingStore = create<OnboardingState>()(
       getSummary: () => {
         const s = get();
         let productCount = 0;
-        if (s.path === "new") productCount = s.products.filter((p) => p.selected).length;
-        else if (s.path === "book") productCount = s.bookRows.filter((r) => r.name.trim()).length;
-        else if (s.path === "excel") productCount = s.excelRows.filter((r) => r.valid).length;
-        else if (s.path === "no-records") productCount = s.bookRows.filter((r) => r.name.trim()).length;
+        if (!s.skippedProducts) {
+          if (s.path === "new") productCount = s.products.filter((p) => p.selected).length;
+          else if (s.path === "book") productCount = s.bookRows.filter((r) => r.name.trim()).length;
+          else if (s.path === "excel") productCount = s.excelRows.filter((r) => r.valid).length;
+          else if (s.path === "no-records") productCount = s.bookRows.filter((r) => r.name.trim()).length;
+        }
 
         return {
           productCount,

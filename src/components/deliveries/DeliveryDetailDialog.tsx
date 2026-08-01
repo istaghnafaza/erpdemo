@@ -36,7 +36,10 @@ interface DeliveryDetailDialogProps {
   delivery: DeliveryRecord | null;
   canEdit: boolean;
   onClose: () => void;
-  onSave: (id: string, patch: UpdateDeliveryDraft) => { ok: boolean; error?: string };
+  onSave: (
+    id: string,
+    patch: UpdateDeliveryDraft,
+  ) => { ok: boolean; error?: string } | Promise<{ ok: boolean; error?: string }>;
 }
 
 export function DeliveryDetailDialog({
@@ -69,20 +72,22 @@ export function DeliveryDetailDialog({
 
   if (!delivery) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     setError(null);
-    const result = onSave(delivery.id, {
-      status,
-      scheduledDate: scheduledDate || null,
-      driverName: driverName.trim() || null,
-      vehiclePlate: vehiclePlate.trim() || null,
-      notes: notes.trim() || null,
-      items: delivery.items.map((item) => ({
-        id: item.id,
-        qtyDelivered: qtyByLine[item.id] ?? item.qtyDelivered,
-      })),
-    });
+    const result = await Promise.resolve(
+      onSave(delivery.id, {
+        status,
+        scheduledDate: scheduledDate || null,
+        driverName: driverName.trim() || null,
+        vehiclePlate: vehiclePlate.trim() || null,
+        notes: notes.trim() || null,
+        items: delivery.items.map((item) => ({
+          id: item.id,
+          qtyDelivered: qtyByLine[item.id] ?? item.qtyDelivered,
+        })),
+      }),
+    );
     setSaving(false);
     if (!result.ok) {
       setError(result.error ?? "Gagal menyimpan");

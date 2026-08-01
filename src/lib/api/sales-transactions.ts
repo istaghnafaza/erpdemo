@@ -6,6 +6,7 @@ import { isNeonBackend, isMockBackend, neonCall } from "@/lib/api/backend";
 import { neonListSalesHistory } from "@/lib/api/neon/transaction-fns";
 import { mapSalesHistoryToRecord } from "@/lib/map-sales-transaction";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
+import { isMockTenantId } from "@/lib/mock-session";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import type { SalesTransactionRecord } from "@/types/sales-transactions";
 import type { ApiResponse } from "@/types/app";

@@ -9,14 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
-import { redirectIfAuthenticated, syncAuthFromServer } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRoute } from "@/lib/auth-bootstrap";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
+import { AUTH_UI } from "@/lib/auth-features";
 import { validateLoginForm } from "@/lib/validation/login-form";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
-    await syncAuthFromServer();
-    const authedRedirect = redirectIfAuthenticated();
+    const authedRedirect = await preparePublicAuthRoute();
     if (authedRedirect) throw authedRedirect;
   },
   head: () => ({
@@ -33,9 +33,9 @@ function LoginPage() {
   const loginWithMockCredentials = useAuthStore((s) => s.loginWithMockCredentials);
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
   const showNeonLogin = isNeonBackend();
   const showMockCredentials = isMockBackend();
 
@@ -48,31 +48,31 @@ function LoginPage() {
     e.preventDefault();
     setFieldErrors({});
 
-    const parsed = validateLoginForm({ email, password });
+    const parsed = validateLoginForm({ username, password });
     if (!parsed.success) {
-      const errs: { email?: string; password?: string } = {};
+      const errs: { username?: string; password?: string } = {};
       for (const issue of parsed.error.issues) {
         const key = issue.path[0];
-        if (key === "email" || key === "password") {
+        if (key === "username" || key === "password") {
           errs[key] = issue.message;
         }
       }
       setFieldErrors(errs);
-      toast.error("Periksa email dan password");
+      toast.error(AUTH_UI.loginWithUsername ? "Periksa username dan PIN" : "Periksa email dan PIN");
       return;
     }
 
-    const { email: trimmedEmail, password: trimmedPassword } = parsed.data;
+    const { username: trimmedUsername, password: trimmedPassword } = parsed.data;
 
     let ok = false;
     if (showNeonLogin) {
-      ok = await login(trimmedEmail, trimmedPassword);
+      ok = await login(trimmedUsername, trimmedPassword);
     } else if (showMockCredentials) {
-      ok = loginWithMockCredentials(trimmedEmail, trimmedPassword);
+      ok = loginWithMockCredentials(trimmedUsername, trimmedPassword);
     }
 
     if (!ok) {
-      const err = useAuthStore.getState().error ?? "Email atau password salah";
+      const err = useAuthStore.getState().error ?? "Username atau PIN salah";
       toast.error(
         err.includes("DATABASE_URL")
           ? "Database belum terhubung. Pastikan DATABASE_URL sudah diisi di Railway, lalu Redeploy."
@@ -86,6 +86,11 @@ function LoginPage() {
     await goToApp(currentUser!.profile.role);
   };
 
+  const loginLabel = AUTH_UI.loginWithUsername ? "Username" : "Email";
+  const loginPlaceholder = AUTH_UI.loginWithUsername
+    ? "contoh: owner"
+    : "contoh: owner@seps.id";
+
   return (
     <AuthShell
       title="Masuk ke sistem"
@@ -95,6 +100,10 @@ function LoginPage() {
           Belum punya akun?{" "}
           <Link to="/register" className="text-primary font-medium hover:underline">
             Daftar gratis
+          </Link>
+          {" · "}
+          <Link to="/pricing" className="text-primary font-medium hover:underline">
+            Lihat harga
           </Link>
         </p>
       }
@@ -108,43 +117,48 @@ function LoginPage() {
         </a>
       </p>
 
-      {showNeonLogin ? (
+      {showNeonLogin && AUTH_UI.showGoogleAuth ? (
         <>
           <GoogleSignInButton mode="login" />
           <GoogleOAuthRedirectHint />
-          <AuthDivider label="Atau masuk dengan email" />
+          <AuthDivider label="Atau masuk dengan username" />
         </>
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="username">{loginLabel}</Label>
           <Input
-            id="email"
-            type="email"
-            inputMode="email"
+            id="username"
+            type="text"
+            inputMode={AUTH_UI.loginWithUsername ? "text" : "email"}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="contoh: owner@seps.id"
-            value={email}
+            placeholder={loginPlaceholder}
+            value={username}
             onChange={(e) => {
-              setEmail(e.target.value);
-              if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: undefined }));
+              setUsername(e.target.value);
+              if (fieldErrors.username) setFieldErrors((p) => ({ ...p, username: undefined }));
             }}
             autoComplete="username"
             maxLength={254}
-            aria-invalid={Boolean(fieldErrors.email)}
-            aria-describedby={fieldErrors.email ? "email-error" : undefined}
+            aria-invalid={Boolean(fieldErrors.username)}
+            aria-describedby={fieldErrors.username ? "username-error" : undefined}
           />
-          {fieldErrors.email ? (
-            <p id="email-error" className="text-xs text-destructive">
-              {fieldErrors.email}
+          {AUTH_UI.loginWithUsername ? (
+            <p className="text-xs text-muted-foreground">
+              Masukkan username. Akun lama masih bisa pakai email penuh.
+            </p>
+          ) : null}
+          {fieldErrors.username ? (
+            <p id="username-error" className="text-xs text-destructive">
+              {fieldErrors.username}
             </p>
           ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password (PIN, maks. 6 digit)</Label>
+          <Label htmlFor="password">PIN (6 digit)</Label>
           <Input
             id="password"
             type="password"
@@ -179,7 +193,7 @@ function LoginPage() {
 
       {showNeonLogin ? (
         <p className="mt-4 text-xs text-muted-foreground text-center">
-          Contoh: <strong>owner@seps.id</strong> / <strong>111111</strong>
+          Contoh: <strong>owner</strong> / <strong>111111</strong>
         </p>
       ) : null}
     </AuthShell>

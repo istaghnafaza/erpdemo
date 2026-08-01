@@ -201,8 +201,8 @@ interface AuthState {
   completeGoogleOAuth(code: string, redirectUri: string): Promise<{ ok: boolean; isNewUser?: boolean }>;
   /** Development/demo only — instantly signs in as a seeded demo user, no Supabase call. */
   loginAsMock(role: MockRole): void;
-  /** Demo login dengan email + PIN pegawai (dari modul Users / onboarding). */
-  loginWithMockCredentials(email: string, pin: string): boolean;
+  /** Demo login dengan username/email + PIN pegawai (dari modul Users / onboarding). */
+  loginWithMockCredentials(loginId: string, pin: string): boolean;
   logout(): Promise<void>;
   refreshUser(options?: { force?: boolean }): Promise<void>;
   /** Demo: tambahkan cabang onboarding ke daftar cabang yang boleh diakses owner. */
@@ -228,6 +228,20 @@ function friendlyTenantLoadError(raw: string | null | undefined): string {
 }
 
 async function applyAuthSession(user: AuthUser): Promise<boolean> {
+  if (user.isPlatformAdmin) {
+    usePosStore.getState().clearSession();
+    useAuthStore.setState({
+      currentUser: user,
+      currentTenant: null,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+    lastRefreshAt = Date.now();
+    markAuthSynced();
+    return true;
+  }
+
   let tenant = null as Awaited<ReturnType<typeof getTenant>>["data"];
   if (isNeonBackend()) {
     const tenantResult = await getTenant(user.tenantId);
@@ -369,9 +383,9 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      loginWithMockCredentials: (email, pin) => {
+      loginWithMockCredentials: (loginId, pin) => {
         useUsersStore.getState().initForTenant(MOCK_TENANT_ID);
-        const record = useUsersStore.getState().findByEmailAndPin(MOCK_TENANT_ID, email, pin);
+        const record = useUsersStore.getState().findByLoginIdAndPin(MOCK_TENANT_ID, loginId, pin);
         if (!record) return false;
         usePosStore.getState().clearSession();
         set({
@@ -434,6 +448,18 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const user = userResult.data;
+
+          if (user.isPlatformAdmin) {
+            set({
+              currentUser: user,
+              currentTenant: null,
+              isAuthenticated: true,
+              error: null,
+            });
+            lastRefreshAt = Date.now();
+            markAuthSynced();
+            return;
+          }
 
           const tenantResult = await getTenant(user.tenantId);
           const tenant = tenantResult.data ?? null;

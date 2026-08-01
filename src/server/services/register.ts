@@ -2,16 +2,18 @@
 // Registration service — email signup + Google OAuth (Neon)
 // =============================================================================
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { authUsers, branches, profiles, tenants, userBranches } from "@/server/db/schema";
 import { verifyGoogleIdToken } from "@/server/auth/google";
 import { hashPassword } from "@/server/auth/password";
 import { createSessionToken } from "@/server/auth/session";
 import { getUserBySession } from "@/server/services/auth";
+import { PENDING_TENANT_DISPLAY_NAME } from "@/lib/tenant-placeholder";
+import { formatIndonesiaAddress } from "@/lib/indonesia-wilayah";
 import type { AuthUser, RegisterInput } from "@/types/app";
 
-const TRIAL_DAYS = 14;
+import { TRIAL_DAYS } from "@/lib/plan-config";
 
 function slugify(value: string): string {
   return value
@@ -53,23 +55,25 @@ interface NewTenantBundle {
   tenantId: string;
   userId: string;
   branchId: string;
+  username: string;
   email: string;
-  name: string;
-  businessName: string;
+  ownerName: string;
   phone?: string | null;
+  ownerAddress?: string | null;
   passwordHash: string;
   googleSub?: string | null;
 }
 
 async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: AuthUser; token: string }> {
   const db = getDb();
-  const slug = await ensureUniqueSlug(input.businessName);
+  /** Slug dari username (unik) — nama toko sama boleh, diisi nanti di wizard setup. */
+  const slug = await ensureUniqueSlug(input.username);
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
 
   await db.transaction(async (tx) => {
     await tx.insert(tenants).values({
       id: input.tenantId,
-      name: input.businessName.trim(),
+      name: PENDING_TENANT_DISPLAY_NAME,
       slug,
       ownerEmail: input.email,
       phone: input.phone ?? null,
@@ -85,7 +89,7 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
       tenantId: input.tenantId,
       code: "HQ",
       name: "Cabang Utama",
-      address: null,
+      address: input.ownerAddress ?? null,
       phone: input.phone ?? null,
       isActive: true,
     });
@@ -93,6 +97,7 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
     await tx.insert(authUsers).values({
       id: input.userId,
       email: input.email,
+      username: input.username,
       passwordHash: input.passwordHash,
       googleSub: input.googleSub ?? null,
       tenantId: input.tenantId,
@@ -101,7 +106,7 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
     await tx.insert(profiles).values({
       id: input.userId,
       tenantId: input.tenantId,
-      name: input.name.trim(),
+      name: input.ownerName.trim(),
       email: input.email,
       role: "owner",
       pin: null,
@@ -121,29 +126,45 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
 export async function registerWithEmail(
   input: RegisterInput,
 ): Promise<{ user: AuthUser; token: string }> {
-  const email = input.email.trim().toLowerCase();
-  const password = input.password;
+  const { validateRegisterForm } = await import("@/lib/validation/register-form");
+  const parsed = validateRegisterForm(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Data registrasi tidak valid");
+  }
 
-  if (!input.name.trim()) throw new Error("Nama lengkap wajib diisi");
-  if (!input.businessName.trim()) throw new Error("Nama bisnis wajib diisi");
-  if (!email.includes("@")) throw new Error("Format email tidak valid");
-  if (password.length < 8) throw new Error("Password minimal 8 karakter");
-  if (password !== input.confirmPassword) throw new Error("Konfirmasi password tidak cocok");
+  const data = parsed.data;
+  const username = data.username;
+  const email = data.email ?? `${username}@noemail.local`;
+  const password = data.password;
 
   const db = getDb();
+
+  const existingUsername = await db.query.authUsers.findFirst({
+    where: sql`lower(${authUsers.username}) = ${username}`,
+  });
+  if (existingUsername) throw new Error("Username sudah dipakai. Pilih username lain.");
+
   const existing = await db.query.authUsers.findFirst({ where: eq(authUsers.email, email) });
   if (existing) throw new Error("Email sudah terdaftar. Silakan masuk.");
 
   const passwordHash = await hashPassword(password);
+  const ownerAddress = formatIndonesiaAddress({
+    street: data.address.street,
+    villageName: data.address.villageName,
+    districtName: data.address.districtName,
+    regencyName: data.address.regencyName,
+    provinceName: data.address.provinceName,
+  });
 
   return createTenantWithOwner({
     tenantId: crypto.randomUUID(),
     userId: crypto.randomUUID(),
     branchId: crypto.randomUUID(),
+    username,
     email,
-    name: input.name,
-    businessName: input.businessName,
-    phone: input.phone,
+    ownerName: data.name,
+    phone: data.phone,
+    ownerAddress,
     passwordHash,
   });
 }
@@ -198,15 +219,16 @@ async function signInWithGoogleProfile(
 
   const passwordHash = await hashPassword(crypto.randomUUID());
   const displayName = google.name?.trim() || google.email.split("@")[0];
-  const businessName = `Toko ${displayName}`;
+  const googleUsername =
+    google.email.split("@")[0]?.toLowerCase() || google.sub.slice(0, 12);
 
   const session = await createTenantWithOwner({
     tenantId: crypto.randomUUID(),
     userId: crypto.randomUUID(),
     branchId: crypto.randomUUID(),
+    username: googleUsername,
     email: google.email,
-    name: displayName,
-    businessName,
+    ownerName: displayName,
     phone: null,
     passwordHash,
     googleSub: google.sub,

@@ -86,6 +86,9 @@ export interface Profile {
   email: string;
   role: DbUserRole;
   pin: string | null;
+  phone: string | null;
+  address: string | null;
+  date_of_birth: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -243,6 +246,15 @@ export interface CartItem {
   available_stock: number;  // for real-time validation
   /** Barang di-fulfill via Sales Order (indent) — tidak kurangi stok saat checkout POS */
   is_so_line?: boolean;
+  /** Harga cabang sebelum diskon tier */
+  base_selling_price?: number;
+  category_id?: string | null;
+  volume_tier_code?: string | null;
+  volume_discount_percent?: number;
+  customer_discount_percent?: number;
+  floor_price?: number;
+  pricing_clamped?: boolean;
+  price_override?: { unit_price: number; reason: string } | null;
 }
 
 
@@ -259,6 +271,8 @@ export interface Customer {
   credit_limit: number;
   outstanding_debt: number;
   created_at: string;
+  /** Tier harga pelanggan (P0–P4) */
+  pricing_tier_id?: string | null;
 }
 
 export type CustomerInsert = Omit<Customer, 'id' | 'created_at'> & { id?: string };
@@ -318,6 +332,8 @@ export interface SalesItem {
   discount: number;
   subtotal: number;
   stock_source: DbStockSource;
+  /** Baris indent/SO — tidak kurangi stok toko saat checkout POS */
+  is_so_line?: boolean;
 }
 
 export type SalesItemInsert = Omit<SalesItem, 'id' | 'transaction_id'> & { id?: string; transaction_id?: string };

@@ -237,7 +237,11 @@ export interface TenantUserRecord {
   id: string;
   tenantId: string;
   name: string;
+  username: string;
   email: string;
+  phone: string | null;
+  address: string | null;
+  dateOfBirth: string | null;
   role: UserRole;
   pin: string;
   branchIds: string[];
@@ -249,7 +253,11 @@ export interface TenantUserRecord {
 
 export interface CreateTenantUserInput {
   name: string;
-  email: string;
+  username: string;
+  email?: string;
+  phone?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
   role: UserRole;
   pin: string;
   branchIds: string[];
@@ -257,7 +265,11 @@ export interface CreateTenantUserInput {
 
 export interface UpdateTenantUserInput {
   name?: string;
+  username?: string;
   email?: string;
+  phone?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
   role?: UserRole;
   pin?: string;
   branchIds?: string[];
@@ -572,6 +584,7 @@ export interface AuthUser {
   id: string;
   email: string;
   tenantId: string;
+  isPlatformAdmin?: boolean;
   profile: AppProfile;
   activeBranchId: string | null;
   allowedBranchIds: string[];
@@ -584,11 +597,22 @@ export interface AuthUser {
 
 export interface RegisterInput {
   name: string;
-  businessName: string;
-  email: string;
+  username: string;
+  email?: string;
   password: string;
   confirmPassword: string;
-  phone?: string;
+  phone: string;
+  address: {
+    provinceCode: string;
+    provinceName: string;
+    regencyCode: string;
+    regencyName: string;
+    districtCode: string;
+    districtName: string;
+    villageCode: string;
+    villageName: string;
+    street: string;
+  };
 }
 
 export interface GoogleSignInResult extends AuthUser {

@@ -180,9 +180,9 @@ export function SalesOrderDetailDialog({
                     />
                   </div>
 
-                  {item.fulfillments.length > 0 && (
+                  {(item.fulfillments ?? []).length > 0 && (
                     <div className="space-y-1">
-                      {item.fulfillments.map((f) => (
+                      {(item.fulfillments ?? []).map((f) => (
                         <div
                           key={f.id}
                           className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -280,13 +280,13 @@ export function SalesOrderDetailDialog({
           </TabsContent>
 
           <TabsContent value="indent" className="mt-4">
-            {order.indent_pos.length === 0 ? (
+            {(order.indent_pos ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 Belum ada PO Indent — otomatis dibuat saat fulfillment indent diproses.
               </p>
             ) : (
               <div className="space-y-3">
-                {order.indent_pos.map((po) => {
+                {(order.indent_pos ?? []).map((po) => {
                   const totalQty = po.lines.reduce((s, l) => s + l.qty, 0);
                   return (
                     <div key={po.id} className="rounded-lg border p-3 text-sm space-y-2">

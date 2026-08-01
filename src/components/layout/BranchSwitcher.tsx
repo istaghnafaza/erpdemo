@@ -4,7 +4,9 @@ import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
 import { navigateToBranchSetup } from "@/lib/branch-setup-utils";
+import { checkCanAddBranchClient } from "@/lib/plan-guard";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -39,6 +41,19 @@ export function BranchSwitcher() {
   const label = isConsolidated ? "Semua Cabang" : (activeBranch?.name ?? "Pilih cabang");
 
   const goToBranchSetup = () => {
+    if (currentTenant?.onboarding_complete) {
+      const activeCount = branches.filter((b) => b.is_active).length;
+      const guard = checkCanAddBranchClient(currentTenant, activeCount);
+      if (!guard.ok) {
+        toast.error(guard.message, {
+          action: { label: "Lihat Paket", onClick: () => navigate({ to: "/pricing" }) },
+        });
+        return;
+      }
+      useOnboardingStore.getState().startAddBranchSetup();
+      navigate({ to: "/onboarding" });
+      return;
+    }
     navigateToBranchSetup({
       navigate,
       tenant: currentTenant,
@@ -71,7 +86,7 @@ export function BranchSwitcher() {
         <div className="text-left hidden sm:block">
           <div className="text-xs text-muted-foreground leading-none">Cabang</div>
           <div className="text-sm font-medium leading-tight text-amber-700 dark:text-amber-300 truncate max-w-[140px]">
-            {isOwner ? "Wizard setup" : "Belum ada toko"}
+            {isOwner ? (currentTenant?.onboarding_complete ? "Tambah cabang" : "Setup toko") : "Belum ada toko"}
           </div>
         </div>
       </Button>

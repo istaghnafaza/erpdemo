@@ -32,22 +32,36 @@ export async function syncAuthFromServer(options?: { force?: boolean }): Promise
 
   await useAuthStore.getState().refreshUser({ force: options?.force });
   markAuthSynced();
-    if (tenant?.onboarding_complete) {
-      const { wizardResumeMode } = useOnboardingStore.getState();
-      if (!wizardResumeMode) {
-        useOnboardingStore.getState().completeOnboarding();
-      }
+
+  const tenant = useAuthStore.getState().currentTenant;
+  if (tenant?.onboarding_complete) {
+    const { wizardResumeMode } = useOnboardingStore.getState();
+    if (!wizardResumeMode) {
+      useOnboardingStore.getState().completeOnboarding();
     }
+  }
 }
 
 type AuthRedirect =
   | ReturnType<typeof redirect>
   | null;
 
+/** Halaman login/register — selalu verifikasi sesi ke server (hindari redirect dari cache lokal). */
+export async function preparePublicAuthRoute(): Promise<AuthRedirect> {
+  await syncAuthFromServer({ force: true });
+  return redirectIfAuthenticated();
+}
+
 /** Redirect untuk user yang sudah login — null jika belum auth atau tenant belum ter-load. */
 export function redirectIfAuthenticated(): AuthRedirect {
   const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
-  if (!isAuthenticated || !currentUser || !currentTenant) return null;
+  if (!isAuthenticated || !currentUser) return null;
+
+  if (currentUser.isPlatformAdmin) {
+    return redirect({ to: "/platform/dashboard" });
+  }
+
+  if (!currentTenant) return null;
 
   return redirect(getPostAuthDestination(currentTenant, currentUser.profile.role));
 }

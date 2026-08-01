@@ -113,6 +113,9 @@ export async function createBranch(
   tenantId: string,
   payload: Omit<BranchInsert, "tenant_id">,
 ): Promise<Branch> {
+  const { assertCanAddBranch } = await import("@/server/services/plan-limits");
+  await assertCanAddBranch(tenantId);
+
   const db = getDb();
   const all = await queryBranchesFromDb(tenantId);
   const preferred = payload.code?.trim() || deriveBranchCode(payload.name);

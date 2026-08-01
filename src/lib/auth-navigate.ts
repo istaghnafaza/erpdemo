@@ -7,29 +7,50 @@ import { isNeonBackend } from "@/lib/api/backend";
 import { useAuthStore } from "@/stores/auth.store";
 import type { Tenant } from "@/types/database";
 
+export function getPlatformDashboardDestination(): { to: "/platform/dashboard" } {
+  return { to: "/platform/dashboard" };
+}
+
 export function getPostAuthDestination(
   tenant: Tenant,
   role: string,
 ):
-  | { to: "/onboarding" }
   | { to: "/$tenantSlug/dashboard"; params: { tenantSlug: string } }
   | { to: "/$tenantSlug/pos"; params: { tenantSlug: string } } {
-  if (!tenant.onboarding_complete) return { to: "/onboarding" };
   if (role === "cashier") {
     return { to: "/$tenantSlug/pos", params: { tenantSlug: tenant.slug } };
   }
   return { to: "/$tenantSlug/dashboard", params: { tenantSlug: tenant.slug } };
 }
 
+export function resolvePostAuthDestinationForUser(user: {
+  isPlatformAdmin?: boolean;
+  profile: { role: string };
+}):
+  | { to: "/platform/dashboard" }
+  | ReturnType<typeof getPostAuthDestination>
+  | { to: "/login" } {
+  if (user.isPlatformAdmin) {
+    return getPlatformDashboardDestination();
+  }
+  const { currentTenant } = useAuthStore.getState();
+  if (!currentTenant) return { to: "/login" };
+  return getPostAuthDestination(currentTenant, user.profile.role);
+}
+
 /** Pastikan tenant ter-load, lalu tentukan halaman setelah login/register. */
 export async function resolvePostAuthDestination(role: string): Promise<
   | { to: "/login" }
-  | { to: "/onboarding" }
+  | { to: "/platform/dashboard" }
   | { to: "/$tenantSlug/dashboard"; params: { tenantSlug: string } }
   | { to: "/$tenantSlug/pos"; params: { tenantSlug: string } }
 > {
   const { currentUser, currentTenant } = useAuthStore.getState();
   if (!currentUser) return { to: "/login" };
+
+  if (currentUser.isPlatformAdmin) {
+    return getPlatformDashboardDestination();
+  }
 
   let tenant = currentTenant;
   if (!tenant && isNeonBackend()) {

@@ -11,7 +11,7 @@ interface BranchSetupRequiredProps {
 
 export function BranchSetupRequired({
   isOwner,
-  onboardingComplete: _onboardingComplete,
+  onboardingComplete,
   onSetup,
   className,
   compact,
@@ -20,9 +20,13 @@ export function BranchSetupRequired({
     return (
       <EmptyState
         icon={Store}
-        title="Belum ada toko aktif"
-        description="Buka wizard setup onboarding untuk menambahkan cabang/toko, produk awal, dan mulai operasional POS serta modul lainnya."
-        actionLabel="Buka Wizard Setup Toko"
+        title={onboardingComplete ? "Belum ada toko aktif" : "Setup toko belum selesai"}
+        description={
+          onboardingComplete
+            ? "Tambahkan cabang/toko untuk mulai operasional POS dan modul lainnya."
+            : "Lengkapi wizard setup toko — info bisnis, cabang, user, dan produk awal — agar modul operasional dapat dipakai."
+        }
+        actionLabel={onboardingComplete ? "Tambah Cabang" : "Setup Toko"}
         onAction={onSetup}
         className={compact ? `py-10 ${className ?? ""}` : className}
       />
@@ -32,8 +36,8 @@ export function BranchSetupRequired({
   return (
     <EmptyState
       icon={Store}
-      title="Belum ada toko yang ditugaskan"
-      description="Hubungi owner bisnis untuk menjalankan wizard setup toko atau mengaktifkan kembali cabang Anda."
+      title={onboardingComplete ? "Belum ada toko aktif" : "Setup toko belum selesai"}
+      description="Hubungi owner bisnis untuk mengaktifkan cabang atau menyelesaikan setup toko."
       className={compact ? `py-10 ${className ?? ""}` : className}
     />
   );

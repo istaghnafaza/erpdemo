@@ -44,7 +44,9 @@ import {
 import { requireAuth, requireFeature } from "@/routes/$tenantSlug";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
+import { PlanUsageCard } from "@/components/subscription/PlanUsageCard";
 import { navigateToBranchSetup } from "@/lib/branch-setup-utils";
+import { checkCanAddBranchClient } from "@/lib/plan-guard";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/$tenantSlug/toko-saya")({
@@ -92,6 +94,7 @@ function TokoSayaPage() {
   const navigate = useNavigate();
   const currentTenant = useAuthStore((s) => s.currentTenant);
   const startWizardSetup = useOnboardingStore((s) => s.startWizardSetup);
+  const startAddBranchSetup = useOnboardingStore((s) => s.startAddBranchSetup);
   const {
     tenantId,
     tenant,
@@ -102,6 +105,7 @@ function TokoSayaPage() {
     showClosed,
     setShowClosed,
     activeCount,
+    activeUserCount,
     closedCount,
     reload,
   } = useTokoSayaPage();
@@ -194,6 +198,18 @@ function TokoSayaPage() {
   };
 
   const goToBranchSetup = () => {
+    if (tenant?.onboarding_complete) {
+      const guard = checkCanAddBranchClient(tenant, activeCount);
+      if (!guard.ok) {
+        toast.error(guard.message, {
+          action: { label: "Lihat Paket", onClick: () => navigate({ to: "/pricing" }) },
+        });
+        return;
+      }
+      startAddBranchSetup();
+      navigate({ to: "/onboarding" });
+      return;
+    }
     navigateToBranchSetup({
       navigate,
       tenant: currentTenant,
@@ -207,6 +223,14 @@ function TokoSayaPage() {
       subtitle="Kelola info bisnis dan cabang/toko — edit detail cabang atau tutup operasional."
     >
       <TenantBusinessForm tenant={tenant} onUpdated={setTenant} />
+
+      <div className="mb-6">
+        <PlanUsageCard
+          tenant={tenant}
+          activeBranches={activeCount}
+          activeUsers={activeUserCount}
+        />
+      </div>
 
       {!loading && activeCount === 0 && (
         <div className="mb-6">

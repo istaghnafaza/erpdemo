@@ -35,6 +35,7 @@ export interface PosCartColumnProps {
   onRemoveItem: (itemIndex: number) => void;
   onSetDiscount: (percent: number) => void;
   onSetCustomer: (customer: Customer | null) => void;
+  onAddCustomer: () => void;
   onSetDeliverySite: (siteId: string) => void;
   onManualDeliveryAddressChange: (address: string) => void;
   onSaveNewDeliverySite: (payload: {
@@ -80,6 +81,7 @@ export function PosCartColumn({
   onRemoveItem,
   onSetDiscount,
   onSetCustomer,
+  onAddCustomer,
   onSetDeliverySite,
   onManualDeliveryAddressChange,
   onSaveNewDeliverySite,
@@ -115,6 +117,7 @@ export function PosCartColumn({
           onRemoveItem={onRemoveItem}
           onSetDiscount={onSetDiscount}
           onSetCustomer={onSetCustomer}
+          onAddCustomer={onAddCustomer}
           onSetDeliverySite={onSetDeliverySite}
           onManualDeliveryAddressChange={onManualDeliveryAddressChange}
           onSaveNewDeliverySite={onSaveNewDeliverySite}

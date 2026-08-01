@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MasterDataSubNav } from "@/components/settings/MasterDataSubNav";
+import { SettingsSubNav } from "@/components/settings/SettingsSubNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -83,6 +84,7 @@ function ProductAttributesPage() {
         </div>
       }
     >
+      <SettingsSubNav />
       <MasterDataSubNav />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">

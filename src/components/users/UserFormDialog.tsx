@@ -29,7 +29,11 @@ import type { Branch } from "@/types/database";
 
 export interface UserFormValues {
   name: string;
+  username: string;
   email: string;
+  phone: string;
+  address: string;
+  dateOfBirth: string;
   role: UserRole;
   pin: string;
   branchIds: string[];
@@ -48,7 +52,11 @@ interface UserFormDialogProps {
 
 const EMPTY: UserFormValues = {
   name: "",
+  username: "",
   email: "",
+  phone: "",
+  address: "",
+  dateOfBirth: "",
   role: "cashier",
   pin: "",
   branchIds: [],
@@ -70,7 +78,11 @@ export function UserFormDialog({
     if (mode === "edit" && user) {
       setForm({
         name: user.name,
+        username: user.username,
         email: user.email,
+        phone: user.phone ?? "",
+        address: user.address ?? "",
+        dateOfBirth: user.dateOfBirth ?? "",
         role: user.role,
         pin: user.pin,
         branchIds: user.branchIds,
@@ -122,36 +134,18 @@ export function UserFormDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="user-email">Email login</Label>
-            <Input
-              id="user-email"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="andi@toko.id"
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select
-                value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: v as UserRole })}
+              <Label htmlFor="user-username">Username login</Label>
+              <Input
+                id="user-username"
+                value={form.username}
+                onChange={(e) =>
+                  setForm({ ...form, username: e.target.value.toLowerCase().replace(/\s/g, "") })
+                }
+                placeholder="andi.pratama"
                 disabled={user?.role === "owner"}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {roleOptions.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {roleLabel(r)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="user-pin">PIN (6 digit)</Label>
@@ -166,6 +160,68 @@ export function UserFormDialog({
                 placeholder="123456"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="user-phone">No. telepon</Label>
+              <Input
+                id="user-phone"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="08123456789"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="user-dob">Tanggal lahir</Label>
+              <Input
+                id="user-dob"
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="user-address">Alamat</Label>
+            <Input
+              id="user-address"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Alamat domisili pegawai"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="user-email">Email (opsional)</Label>
+            <Input
+              id="user-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="andi@toko.id"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Role</Label>
+            <Select
+              value={form.role}
+              onValueChange={(v) => setForm({ ...form, role: v as UserRole })}
+              disabled={user?.role === "owner"}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {roleOptions.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {roleLabel(r)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -187,7 +243,7 @@ export function UserFormDialog({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Pegawai login dengan <strong>email + PIN</strong> di halaman masuk (mode demo).
+            Pegawai login dengan <strong>username + PIN</strong> di halaman masuk.
             Hak akses menu mengikuti role yang dipilih.
           </p>
         </div>
@@ -208,7 +264,11 @@ export function UserFormDialog({
 export function toCreateInput(values: UserFormValues): CreateTenantUserInput {
   return {
     name: values.name,
-    email: values.email,
+    username: values.username,
+    email: values.email || undefined,
+    phone: values.phone.trim() || null,
+    address: values.address.trim() || null,
+    dateOfBirth: values.dateOfBirth || null,
     role: values.role,
     pin: values.pin,
     branchIds: values.branchIds,
@@ -218,7 +278,11 @@ export function toCreateInput(values: UserFormValues): CreateTenantUserInput {
 export function toUpdateInput(values: UserFormValues): UpdateTenantUserInput {
   return {
     name: values.name,
+    username: values.username,
     email: values.email,
+    phone: values.phone.trim() || null,
+    address: values.address.trim() || null,
+    dateOfBirth: values.dateOfBirth || null,
     role: values.role,
     pin: values.pin,
     branchIds: values.branchIds,

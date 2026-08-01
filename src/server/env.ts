@@ -62,6 +62,10 @@ const SERVER_ENV_KEYS = [
   "NODE_ENV",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
+  "PLATFORM_ADMIN_USERNAME",
+  "PLATFORM_ADMIN_PASSWORD",
+  "PLATFORM_ADMIN_EMAIL",
+  "PLATFORM_ADMIN_NAME",
 ] as const;
 
 /** Which expected keys exist in process.env (helps debug Railway misconfiguration). */

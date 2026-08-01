@@ -14,6 +14,7 @@ export function useTokoSayaPage() {
 
   const [tenant, setTenant] = useState<Tenant | null>(useAuthStore.getState().currentTenant);
   const [branches, setBranches] = useState<BranchWithManager[]>([]);
+  const [users, setUsers] = useState<TenantUserRecord[]>([]);
   const [managerCandidates, setManagerCandidates] = useState<TenantUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showClosed, setShowClosed] = useState(false);
@@ -27,9 +28,11 @@ export function useTokoSayaPage() {
       listTenantUsers(tenantId),
     ]);
     setBranches(branchResult.data ?? []);
+    const allUsers = usersResult.data ?? [];
+    setUsers(allUsers);
     if (tenantResult.data) setTenant(tenantResult.data);
     setManagerCandidates(
-      (usersResult.data ?? []).filter(
+      allUsers.filter(
         (u) => u.isActive && (u.role === "owner" || u.role === "manager"),
       ),
     );
@@ -50,6 +53,10 @@ export function useTokoSayaPage() {
 
   const activeCount = branches.filter((b) => b.is_active).length;
   const closedCount = branches.length - activeCount;
+  const activeUserCount = useMemo(
+    () => users.filter((u) => u.isActive).length,
+    [users],
+  );
 
   return {
     tenantId,
@@ -62,6 +69,7 @@ export function useTokoSayaPage() {
     showClosed,
     setShowClosed,
     activeCount,
+    activeUserCount,
     closedCount,
     reload,
   };

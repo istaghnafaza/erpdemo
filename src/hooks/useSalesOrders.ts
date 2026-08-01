@@ -28,6 +28,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getMockPosCatalog } from "@/lib/mock-pos-catalog";
 import { getMockTenantCustomers } from "@/stores/customers.store";
 import { MOCK_SUPPLIERS, type MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
+import { mapNeonSalesOrderToDetails } from "@/lib/map-neon-sales-order";
 import { useInventoryStore } from "@/stores/inventory.store";
 import type { Customer, DbSoStatus } from "@/types/database";
 
@@ -81,7 +82,7 @@ export function useSalesOrders() {
         status: statusFilter === "all" ? undefined : statusFilter,
       });
       if (result.error) throw new Error(result.error);
-      return (result.data ?? []) as MockSalesOrderWithDetails[];
+      return (result.data ?? []).map(mapNeonSalesOrderToDetails) as MockSalesOrderWithDetails[];
     },
     enabled: !isMockTenant && Boolean(tenantId && branchId),
     staleTime: 30_000,

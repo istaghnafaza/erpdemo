@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSalesTransactionsPage } from "@/hooks/useSalesTransactionsPage";
 import { rupiah } from "@/lib/format";
+import { canViewSalesMargin } from "@/lib/rbac";
+import { useAuthStore } from "@/stores/auth.store";
+import { useBranchStore } from "@/stores/branch.store";
 import { requireAuth, requireFeature } from "@/routes/$tenantSlug";
 
 export const Route = createFileRoute("/$tenantSlug/sales/transactions")({
@@ -45,6 +48,15 @@ function SalesTransactionsPage() {
     setSelectedTx,
   } = useSalesTransactionsPage();
 
+  const currentTenant = useAuthStore((s) => s.currentTenant);
+  const activeBranch = useBranchStore((s) => s.activeBranch);
+  const branches = useBranchStore((s) => s.branches);
+  const showMargin = canViewSalesMargin(user?.role);
+
+  const selectedBranch = selectedTx
+    ? branches.find((b) => b.id === selectedTx.branchId) ?? activeBranch
+    : activeBranch;
+
   if (!user) return null;
 
   return (
@@ -62,7 +74,7 @@ function SalesTransactionsPage() {
         <ReportScopeBadge scopeLabel={scopeLabel} isConsolidated={isConsolidated} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+      <div className={`grid gap-4 sm:grid-cols-2 ${showMargin ? "lg:grid-cols-5" : "lg:grid-cols-4"} mb-6`}>
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-green-600/10 grid place-items-center">
@@ -85,18 +97,20 @@ function SalesTransactionsPage() {
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-cyan-600/10 grid place-items-center">
-              <TrendingUp className="h-5 w-5 text-cyan-600" />
+        {showMargin && (
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-cyan-600/10 grid place-items-center">
+                <TrendingUp className="h-5 w-5 text-cyan-600" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Keuntungan (selesai)</div>
+                <div className="text-xl font-bold">{rupiah(summary.totalMargin, { compact: true })}</div>
+                <div className="text-[11px] text-muted-foreground">Margin {summary.marginPct}%</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Keuntungan (selesai)</div>
-              <div className="text-xl font-bold">{rupiah(summary.totalMargin, { compact: true })}</div>
-              <div className="text-[11px] text-muted-foreground">Margin {summary.marginPct}%</div>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-violet-600/10 grid place-items-center">
@@ -164,11 +178,15 @@ function SalesTransactionsPage() {
       <SalesTransactionDataTable
         data={rows}
         isConsolidated={isConsolidated}
+        showMargin={showMargin}
         onRowClick={setSelectedTx}
       />
 
       <SalesTransactionDetailDialog
         transaction={selectedTx}
+        storeName={currentTenant?.name ?? selectedBranch?.name ?? ""}
+        branchAddress={selectedBranch?.address ?? null}
+        branchPhone={selectedBranch?.phone ?? currentTenant?.phone ?? null}
         onClose={() => setSelectedTx(null)}
       />
     </AppShell>

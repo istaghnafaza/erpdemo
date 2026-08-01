@@ -114,8 +114,10 @@ export function validateProductsStep(input: {
   products: OnboardingProductDraft[];
   bookRows: BookProductRow[];
   excelRows: ExcelImportRow[];
+  skipped?: boolean;
 }): string | undefined {
-  const { path, products, bookRows, excelRows } = input;
+  const { path, products, bookRows, excelRows, skipped } = input;
+  if (skipped) return undefined;
 
   if (path === "new") {
     const selected = products.filter((p) => p.selected);

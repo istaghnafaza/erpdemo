@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { CheckCircle2, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
 import { cn } from "@/lib/utils";
 
@@ -14,12 +15,13 @@ const CHECKLIST = [
 
 export function OnboardingProgressWidget() {
   const navigate = useNavigate();
-  const isComplete = useOnboardingStore((s) => s.isComplete);
+  const onboardingComplete = useAuthStore((s) => s.currentTenant?.onboarding_complete ?? false);
   const dismissed = useOnboardingStore((s) => s.dismissed);
   const path = useOnboardingStore((s) => s.path);
   const storeName = useOnboardingStore((s) => s.storeName);
   const users = useOnboardingStore((s) => s.users);
   const skippedUsers = useOnboardingStore((s) => s.skippedUsers);
+  const skippedProducts = useOnboardingStore((s) => s.skippedProducts);
   const products = useOnboardingStore((s) => s.products);
   const bookRows = useOnboardingStore((s) => s.bookRows);
   const excelRows = useOnboardingStore((s) => s.excelRows);
@@ -27,7 +29,7 @@ export function OnboardingProgressWidget() {
   const resumeOnboarding = useOnboardingStore((s) => s.resumeOnboarding);
   const getProgressPercent = useOnboardingStore((s) => s.getProgressPercent);
 
-  if (isComplete || dismissed) return null;
+  if (onboardingComplete || dismissed) return null;
 
   const progress = getProgressPercent();
   const done = {
@@ -35,6 +37,7 @@ export function OnboardingProgressWidget() {
     store: !!storeName.trim(),
     users: skippedUsers || users.length > 0,
     products:
+      skippedProducts ||
       (path === "new" && products.some((p) => p.selected)) ||
       path === "no-records" ||
       (path === "book" && bookRows.some((r) => r.name.trim())) ||

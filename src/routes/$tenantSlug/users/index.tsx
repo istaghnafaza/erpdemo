@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Shield, UserCog, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useUsersPage } from "@/hooks/useUsersPage";
+import { checkCanAddUserClient } from "@/lib/plan-guard";
+import { useAuthStore } from "@/stores/auth.store";
 import { createTenantUser, setTenantUserActive, updateTenantUser } from "@/lib/api/users";
 import { requireAuth, requireFeature } from "@/routes/$tenantSlug";
 import type { TenantUserRecord } from "@/types/app";
@@ -37,6 +39,8 @@ export const Route = createFileRoute("/$tenantSlug/users/")({
 });
 
 function UsersPage() {
+  const navigate = useNavigate();
+  const currentTenant = useAuthStore((s) => s.currentTenant);
   const {
     tenantId,
     currentUserId,
@@ -53,6 +57,13 @@ function UsersPage() {
   const activeCount = users.filter((u) => u.isActive).length;
 
   const openCreate = () => {
+    const guard = checkCanAddUserClient(currentTenant, activeCount);
+    if (!guard.ok) {
+      toast.error(guard.message, {
+        action: { label: "Lihat Paket", onClick: () => navigate({ to: "/pricing" }) },
+      });
+      return;
+    }
     setEditTarget(null);
     setDialogOpen(true);
   };
@@ -189,7 +200,10 @@ function UsersPage() {
                             <span className="text-[10px] text-muted-foreground ml-2">(Anda)</span>
                           )}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">{user.email}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          @{user.username}
+                          {user.email ? ` · ${user.email}` : ""}
+                        </div>
                       </div>
                     </div>
                   </TableCell>

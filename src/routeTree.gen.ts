@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
+import { Route as PlatformDashboardRouteImport } from './routes/platform/dashboard'
 import { Route as TenantSlugTokoSayaRouteImport } from './routes/$tenantSlug/toko-saya'
 import { Route as TenantSlugShopRouteImport } from './routes/$tenantSlug/shop'
 import { Route as TenantSlugSalesOrdersRouteImport } from './routes/$tenantSlug/sales-orders'
@@ -34,6 +37,7 @@ import { Route as TenantSlugDeliveriesIndexRouteImport } from './routes/$tenantS
 import { Route as TenantSlugCustomersIndexRouteImport } from './routes/$tenantSlug/customers/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
+import { Route as TenantSlugSettingsPricingRouteImport } from './routes/$tenantSlug/settings/pricing'
 import { Route as TenantSlugSalesTransactionsRouteImport } from './routes/$tenantSlug/sales/transactions'
 import { Route as TenantSlugReportsStockOpnameRouteImport } from './routes/$tenantSlug/reports/stock-opname'
 import { Route as TenantSlugReportsSalesRouteImport } from './routes/$tenantSlug/reports/sales'
@@ -51,6 +55,16 @@ import { Route as TenantSlugSettingsMasterDataProductAttributesRouteImport } fro
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -77,6 +91,11 @@ const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   id: '/onboarding/',
   path: '/onboarding/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformDashboardRoute = PlatformDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => PlatformRoute,
 } as any)
 const TenantSlugTokoSayaRoute = TenantSlugTokoSayaRouteImport.update({
   id: '/toko-saya',
@@ -178,6 +197,12 @@ const TenantSlugShopOrdersRoute = TenantSlugShopOrdersRouteImport.update({
   path: '/orders',
   getParentRoute: () => TenantSlugShopRoute,
 } as any)
+const TenantSlugSettingsPricingRoute =
+  TenantSlugSettingsPricingRouteImport.update({
+    id: '/settings/pricing',
+    path: '/settings/pricing',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
 const TenantSlugSalesTransactionsRoute =
   TenantSlugSalesTransactionsRouteImport.update({
     id: '/sales/transactions',
@@ -261,6 +286,8 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/platform': typeof PlatformRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
@@ -269,6 +296,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
@@ -281,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
@@ -301,6 +330,8 @@ export interface FileRoutesByTo {
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/platform': typeof PlatformRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
@@ -308,6 +339,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/receivables': typeof TenantSlugReceivablesRoute
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
@@ -320,6 +352,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers': typeof TenantSlugCustomersIndexRoute
@@ -341,6 +374,8 @@ export interface FileRoutesById {
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/platform': typeof PlatformRouteWithChildren
+  '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
@@ -349,6 +384,7 @@ export interface FileRoutesById {
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
@@ -361,6 +397,7 @@ export interface FileRoutesById {
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
+  '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
@@ -383,6 +420,8 @@ export interface FileRouteTypes {
     | '/$tenantSlug'
     | '/health'
     | '/login'
+    | '/platform'
+    | '/pricing'
     | '/register'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
@@ -391,6 +430,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/shop'
     | '/$tenantSlug/toko-saya'
+    | '/platform/dashboard'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/inventory/products'
@@ -403,6 +443,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
     | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
@@ -423,6 +464,8 @@ export interface FileRouteTypes {
     | '/$tenantSlug'
     | '/health'
     | '/login'
+    | '/platform'
+    | '/pricing'
     | '/register'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
@@ -430,6 +473,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/receivables'
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/toko-saya'
+    | '/platform/dashboard'
     | '/onboarding'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/inventory/products'
@@ -442,6 +486,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
     | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/auth/google/callback'
     | '/$tenantSlug/customers'
@@ -462,6 +507,8 @@ export interface FileRouteTypes {
     | '/$tenantSlug'
     | '/health'
     | '/login'
+    | '/platform'
+    | '/pricing'
     | '/register'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
@@ -470,6 +517,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/shop'
     | '/$tenantSlug/toko-saya'
+    | '/platform/dashboard'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/inventory/products'
@@ -482,6 +530,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
     | '/$tenantSlug/sales/transactions'
+    | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
@@ -503,6 +552,8 @@ export interface RootRouteChildren {
   TenantSlugRoute: typeof TenantSlugRouteWithChildren
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRoute
+  PlatformRoute: typeof PlatformRouteWithChildren
+  PricingRoute: typeof PricingRoute
   RegisterRoute: typeof RegisterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
@@ -515,6 +566,20 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -551,6 +616,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/onboarding/'
       preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/platform/dashboard': {
+      id: '/platform/dashboard'
+      path: '/dashboard'
+      fullPath: '/platform/dashboard'
+      preLoaderRoute: typeof PlatformDashboardRouteImport
+      parentRoute: typeof PlatformRoute
     }
     '/$tenantSlug/toko-saya': {
       id: '/$tenantSlug/toko-saya'
@@ -685,6 +757,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantSlugShopOrdersRouteImport
       parentRoute: typeof TenantSlugShopRoute
     }
+    '/$tenantSlug/settings/pricing': {
+      id: '/$tenantSlug/settings/pricing'
+      path: '/settings/pricing'
+      fullPath: '/$tenantSlug/settings/pricing'
+      preLoaderRoute: typeof TenantSlugSettingsPricingRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
     '/$tenantSlug/sales/transactions': {
       id: '/$tenantSlug/sales/transactions'
       path: '/sales/transactions'
@@ -812,6 +891,7 @@ interface TenantSlugRouteChildren {
   TenantSlugReportsSalesRoute: typeof TenantSlugReportsSalesRoute
   TenantSlugReportsStockOpnameRoute: typeof TenantSlugReportsStockOpnameRoute
   TenantSlugSalesTransactionsRoute: typeof TenantSlugSalesTransactionsRoute
+  TenantSlugSettingsPricingRoute: typeof TenantSlugSettingsPricingRoute
   TenantSlugCustomersIndexRoute: typeof TenantSlugCustomersIndexRoute
   TenantSlugDeliveriesIndexRoute: typeof TenantSlugDeliveriesIndexRoute
   TenantSlugFinanceIndexRoute: typeof TenantSlugFinanceIndexRoute
@@ -845,6 +925,7 @@ const TenantSlugRouteChildren: TenantSlugRouteChildren = {
   TenantSlugReportsSalesRoute: TenantSlugReportsSalesRoute,
   TenantSlugReportsStockOpnameRoute: TenantSlugReportsStockOpnameRoute,
   TenantSlugSalesTransactionsRoute: TenantSlugSalesTransactionsRoute,
+  TenantSlugSettingsPricingRoute: TenantSlugSettingsPricingRoute,
   TenantSlugCustomersIndexRoute: TenantSlugCustomersIndexRoute,
   TenantSlugDeliveriesIndexRoute: TenantSlugDeliveriesIndexRoute,
   TenantSlugFinanceIndexRoute: TenantSlugFinanceIndexRoute,
@@ -864,11 +945,25 @@ const TenantSlugRouteWithChildren = TenantSlugRoute._addFileChildren(
   TenantSlugRouteChildren,
 )
 
+interface PlatformRouteChildren {
+  PlatformDashboardRoute: typeof PlatformDashboardRoute
+}
+
+const PlatformRouteChildren: PlatformRouteChildren = {
+  PlatformDashboardRoute: PlatformDashboardRoute,
+}
+
+const PlatformRouteWithChildren = PlatformRoute._addFileChildren(
+  PlatformRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TenantSlugRoute: TenantSlugRouteWithChildren,
   HealthRoute: HealthRoute,
   LoginRoute: LoginRoute,
+  PlatformRoute: PlatformRouteWithChildren,
+  PricingRoute: PricingRoute,
   RegisterRoute: RegisterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,

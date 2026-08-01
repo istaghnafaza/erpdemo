@@ -24,6 +24,12 @@
     "neon:rollup:daily": "node scripts/rollup-daily-sales.mjs",
     "neon:seed:lumayan": "node scripts/seed-lumayan.mjs",
     "neon:uat": "node scripts/uat-neon.mjs",
+    "neon:uat:onboarding": "node scripts/uat-onboarding-flow.mjs",
+    "neon:seed:platform-admin": "node scripts/seed-platform-admin.mjs",
+    "neon:uat:platform": "node scripts/uat-platform-features.mjs",
+    "neon:uat:plan": "node scripts/uat-plan-limits.mjs",
+    "neon:uat:sync": "node scripts/uat-data-sync.mjs",
+    "neon:uat:pricing": "npx tsx scripts/uat-pricing-runner.ts",
     "railway:env": "node scripts/print-railway-env.mjs"
   },
   "dependencies": {

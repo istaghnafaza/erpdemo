@@ -17,17 +17,20 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePosStore, cartGrandTotal, cartSubtotal, type ActiveCart } from "@/stores/pos.store";
 import { useCustomerDeliverySitesStore } from "@/stores/customer-delivery-sites.store";
 import { listActiveSitesForCustomer } from "@/lib/customer-delivery-utils";
-import { getCustomerSegment } from "@/stores/customers.store";
+import { getCustomerSegment, getMockTenantCustomers, useCustomersStore } from "@/stores/customers.store";
 import { MANUAL_DELIVERY_SITE_VALUE } from "@/components/pos/SaveDeliverySiteDialog";
+import type { CustomerFormValues } from "@/components/customers/CustomerFormDialog";
 import type { DeliverySiteType } from "@/types/customer-delivery-sites";
 import { useOfflineStore } from "@/stores/offline.store";
 import { isMockTenantId } from "@/lib/mock-session";
-import { getCustomers } from "@/lib/api/customers";
+import { createCustomer, getCustomers } from "@/lib/api/customers";
+import { invalidatePosCustomers } from "@/lib/invalidate-pos-queries";
 import { getHeldCartsInBranch } from "@/lib/api/transactions";
 import { queryKeys } from "@/lib/query-keys";
 import { useInventoryStore } from "@/stores/inventory.store";
@@ -38,9 +41,11 @@ import {
 } from "@/lib/mock-pos-catalog";
 import { buildMockBranchCatalog } from "@/lib/mock-branch-catalog";
 import { usePosHeldCartsStore } from "@/stores/pos-held-carts.store";
-import { getMockTenantCustomers, useCustomersStore } from "@/stores/customers.store";
 import { getProducts, getCustomers as getCachedCustomers } from "@/lib/offline/idb";
 import { fetchPosCatalogWithWarm } from "@/lib/offline/pos-catalog-warm";
+import { getPricingBundle } from "@/lib/api/pricing";
+import { applyPricingToCartItem } from "@/lib/apply-cart-pricing";
+import type { PricingBundle } from "@/types/pricing";
 import type { BranchProductWithProduct, Customer, CartItem } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
 
@@ -53,6 +58,7 @@ export interface PosCatalogItem {
   name: string;
   unit: string;
   category: string;
+  categoryId: string | null;
   sellingPrice: number;
   purchasePrice: number;
   stock: number;
@@ -125,6 +131,7 @@ export function usePos() {
   const setOrderFulfillmentTypeFn = usePosStore((s) => s.setOrderFulfillmentType);
   const setPartialShipLineFn = usePosStore((s) => s.setPartialShipLine);
   const toggleItemSoLineFn = usePosStore((s) => s.toggleItemSoLine);
+  const repriceCartFn = usePosStore((s) => s.repriceCart);
   const setDeliverySiteFn = usePosStore((s) => s.setDeliverySite);
   const setManualDeliveryAddressFn = usePosStore((s) => s.setManualDeliveryAddress);
   const processPaymentFn = usePosStore((s) => s.processPayment);
@@ -144,6 +151,8 @@ export function usePos() {
       branchId: activeBranch.id,
       branchName: activeBranch.name,
       branchAddress: activeBranch.address,
+      branchPhone: activeBranch.phone,
+      storeName: currentTenant?.name ?? activeBranch.name,
       cashierId: user.id,
       cashierName: user.name,
       branchCode: activeBranch.code,
@@ -156,9 +165,6 @@ export function usePos() {
     seedDeliverySites();
   }, [seedDeliverySites]);
 
-  // -------------------------------------------------------------------------
-  // Catalog (products + branch stock/price)
-  // -------------------------------------------------------------------------
   const catalogQuery = useQuery({
     queryKey: [...queryKeys.posCatalog(tenantId, branchId), isOnline],
     queryFn: async (): Promise<BranchProductWithProduct[]> => {
@@ -172,6 +178,36 @@ export function usePos() {
     enabled: Boolean(tenantId && branchId),
     staleTime: 60_000,
   });
+
+  const pricingQuery = useQuery({
+    queryKey: queryKeys.pricingBundle(tenantId),
+    queryFn: async (): Promise<PricingBundle> => {
+      const result = await getPricingBundle(tenantId);
+      if (result.error) throw new Error(result.error);
+      return result.data!;
+    },
+    enabled: Boolean(tenantId),
+    staleTime: 60_000,
+  });
+
+  const pricingBundle = pricingQuery.data ?? null;
+
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [customerSaving, setCustomerSaving] = useState(false);
+  const addCustomerLocal = useCustomersStore((s) => s.addCustomer);
+  const rememberSegment = useCustomersStore((s) => s.rememberSegment);
+
+  const customerTierOptions = useMemo(
+    () =>
+      (pricingBundle?.customer_tiers ?? [])
+        .filter((t) => t.is_active)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((t) => ({
+          id: t.id,
+          label: `${t.tier_code} — ${t.name} (${t.discount_percent}%)`,
+        })),
+    [pricingBundle],
+  );
 
   const rawCatalog = catalogQuery.data ?? [];
   const catalogLoading = catalogQuery.isPending;
@@ -192,6 +228,7 @@ export function usePos() {
         name: line.name,
         unit: line.unit,
         category: line.category,
+        categoryId: null,
         sellingPrice: line.sellingPrice,
         purchasePrice: line.purchasePrice,
         stock: line.stock,
@@ -214,6 +251,7 @@ export function usePos() {
         category: bp.product.category_id
           ? ((bp.product as unknown as { category?: { name: string } }).category?.name ?? "Lainnya")
           : (MOCK_SKU_CATEGORY[bp.product.sku] ?? "Lainnya"),
+        categoryId: bp.product.category_id ?? null,
         sellingPrice: bp.selling_price,
         purchasePrice: bp.product.purchase_price,
         stock,
@@ -351,7 +389,7 @@ export function usePos() {
     (item: PosCatalogItem, qty = 1) => {
       const availableStock =
         item.stock > 0 ? item.stock : legacyModeActive ? 9999 : 0;
-      const cartItem: CartItem = {
+      let cartItem: CartItem = {
         product_id: item.productId,
         branch_product_id: item.branchProductId,
         sku: item.sku,
@@ -365,15 +403,42 @@ export function usePos() {
         stock_source: item.stockSource,
         available_stock: availableStock,
         is_so_line: false,
+        base_selling_price: item.sellingPrice,
+        category_id: item.categoryId,
       };
+      if (pricingBundle) {
+        cartItem = applyPricingToCartItem(cartItem, activeCart.customer, pricingBundle);
+      }
       addItemToCartFn(activeCartIndex, cartItem);
     },
-    [activeCartIndex, addItemToCartFn, legacyModeActive],
+    [
+      activeCartIndex,
+      activeCart.customer,
+      addItemToCartFn,
+      legacyModeActive,
+      pricingBundle,
+    ],
   );
 
+  useEffect(() => {
+    if (!pricingBundle) return;
+    repriceCartFn(activeCartIndex, pricingBundle);
+  }, [
+    activeCart.customer?.id,
+    activeCart.customer?.pricing_tier_id,
+    pricingBundle,
+    activeCartIndex,
+    repriceCartFn,
+  ]);
+
   const updateActiveItemQty = useCallback(
-    (itemIndex: number, qty: number) => updateItemQtyFn(activeCartIndex, itemIndex, qty),
-    [activeCartIndex, updateItemQtyFn],
+    (itemIndex: number, qty: number) => {
+      updateItemQtyFn(activeCartIndex, itemIndex, qty);
+      if (pricingBundle) {
+        repriceCartFn(activeCartIndex, pricingBundle);
+      }
+    },
+    [activeCartIndex, updateItemQtyFn, pricingBundle, repriceCartFn],
   );
 
   const removeActiveItem = useCallback(
@@ -409,8 +474,11 @@ export function usePos() {
   );
 
   const toggleActiveItemSoLine = useCallback(
-    (itemIndex: number) => toggleItemSoLineFn(activeCartIndex, itemIndex),
-    [activeCartIndex, toggleItemSoLineFn],
+    (itemIndex: number) => {
+      toggleItemSoLineFn(activeCartIndex, itemIndex);
+      if (pricingBundle) repriceCartFn(activeCartIndex, pricingBundle);
+    },
+    [activeCartIndex, toggleItemSoLineFn, pricingBundle, repriceCartFn],
   );
 
   const setActiveDeliverySite = useCallback(
@@ -488,6 +556,62 @@ export function usePos() {
     [activeCartIndex, processPaymentFn],
   );
 
+  const openAddCustomer = useCallback(() => {
+    setCustomerFormOpen(true);
+  }, []);
+
+  const handleCustomerFormSubmit = useCallback(
+    async (values: CustomerFormValues) => {
+      if (!tenantId) return;
+
+      if (isMockTenant) {
+        const result = addCustomerLocal(tenantId, values);
+        if (result.ok && result.customer) {
+          rememberSegment(result.customer.id, values.segment);
+          setActiveCustomer(result.customer);
+          setCustomerFormOpen(false);
+          toast.success("Pelanggan ditambahkan");
+        } else if (result.error) {
+          toast.error(result.error);
+        }
+        return;
+      }
+
+      setCustomerSaving(true);
+      try {
+        const result = await createCustomer(tenantId, {
+          name: values.name,
+          phone: values.phone ?? null,
+          address: values.address ?? null,
+          type: values.type,
+          credit_limit: values.type === "credit" ? (values.credit_limit ?? 0) : 0,
+          outstanding_debt: 0,
+          pricing_tier_id: values.pricing_tier_id,
+        });
+        if (result.error || !result.data) {
+          toast.error(result.error ?? "Gagal menambah pelanggan");
+          return;
+        }
+        rememberSegment(result.data.id, values.segment ?? "umum");
+        await invalidatePosCustomers(tenantId);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.posCustomers(tenantId) });
+        setActiveCustomer(result.data);
+        setCustomerFormOpen(false);
+        toast.success("Pelanggan ditambahkan — sudah tersedia di keranjang");
+      } finally {
+        setCustomerSaving(false);
+      }
+    },
+    [
+      tenantId,
+      isMockTenant,
+      addCustomerLocal,
+      rememberSegment,
+      setActiveCustomer,
+      queryClient,
+    ],
+  );
+
   return {
     // Context
     user,
@@ -507,9 +631,16 @@ export function usePos() {
     catalog,
     catalogLoading,
     categories,
+    pricingBundle,
 
     // Customers
     customers: customersWithLiveDebt,
+    customerFormOpen,
+    setCustomerFormOpen,
+    customerSaving,
+    customerTierOptions,
+    openAddCustomer,
+    handleCustomerFormSubmit,
 
     // Carts
     carts,

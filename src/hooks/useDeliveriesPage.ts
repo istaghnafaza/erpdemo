@@ -1,11 +1,15 @@
 // =============================================================================
-// useDeliveriesPage — scoped delivery list + summary (demo/local).
+// useDeliveriesPage — scoped delivery list + summary (Neon + mock local).
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useDeliveriesStore } from "@/stores/deliveries.store";
+import { listDeliveries, updateDelivery as updateDeliveryApi } from "@/lib/api/deliveries";
+import { isNeonBackend } from "@/lib/api/backend";
+import { isMockTenantId } from "@/lib/mock-session";
 import { canEdit } from "@/lib/rbac";
 import { getFinanceScopeLabel } from "@/lib/finance-scope";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
@@ -18,14 +22,18 @@ function startOfDay(iso: string): number {
 }
 
 export function useDeliveriesPage() {
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.currentUser?.profile);
   const tenantId = useAuthStore((s) => s.currentUser?.tenantId) ?? "";
   const branches = useBranchStore((s) => s.branches);
   const activeBranch = useBranchStore((s) => s.activeBranch);
   const isConsolidated = useBranchStore((s) => s.isConsolidated);
-  const deliveries = useDeliveriesStore((s) => s.deliveries);
+  const mockDeliveries = useDeliveriesStore((s) => s.deliveries);
   const seedIfEmpty = useDeliveriesStore((s) => s.seedIfEmpty);
-  const updateDelivery = useDeliveriesStore((s) => s.updateDelivery);
+  const updateMockDelivery = useDeliveriesStore((s) => s.updateDelivery);
+
+  const isMockTenant = isMockTenantId(tenantId);
+  const useNeonData = isNeonBackend() && !isMockTenant;
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -33,8 +41,8 @@ export function useDeliveriesPage() {
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryRecord | null>(null);
 
   useEffect(() => {
-    seedIfEmpty();
-  }, [seedIfEmpty]);
+    if (!useNeonData) seedIfEmpty();
+  }, [useNeonData, seedIfEmpty]);
 
   const isOwner = user?.role === "owner";
   const consolidated = isConsolidated && isOwner;
@@ -53,13 +61,25 @@ export function useDeliveriesPage() {
 
   const scopeLabel = getFinanceScopeLabel(consolidated, activeBranch);
 
+  const deliveriesQuery = useQuery({
+    queryKey: ["deliveries", tenantId, branchIds.join(",")],
+    enabled: useNeonData && Boolean(tenantId) && branchIds.length > 0,
+    queryFn: async () => {
+      const result = await listDeliveries(tenantId, branchIds);
+      if (result.error) throw new Error(result.error);
+      return result.data ?? [];
+    },
+  });
+
+  const sourceDeliveries = useNeonData ? (deliveriesQuery.data ?? []) : mockDeliveries;
+
   const scopedRows = useMemo(() => {
     if (!tenantId) return [];
     const allowed = new Set(branchIds);
-    return deliveries
+    return sourceDeliveries
       .filter((d) => d.tenantId === tenantId && allowed.has(d.branchId))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [deliveries, tenantId, branchIds]);
+  }, [sourceDeliveries, tenantId, branchIds]);
 
   const rows = useMemo(() => {
     let result = scopedRows;
@@ -98,8 +118,18 @@ export function useDeliveriesPage() {
   };
 
   const saveDelivery = useCallback(
-    (id: string, patch: UpdateDeliveryDraft) => {
-      const result = updateDelivery(id, patch);
+    async (id: string, patch: UpdateDeliveryDraft) => {
+      if (useNeonData) {
+        const result = await updateDeliveryApi(tenantId, id, patch);
+        if (result.error) return { ok: false as const, error: result.error };
+        await queryClient.invalidateQueries({ queryKey: ["deliveries", tenantId] });
+        if (result.data) {
+          setSelectedDelivery((prev) => (prev?.id === id ? result.data! : prev));
+        }
+        return { ok: true as const };
+      }
+
+      const result = updateMockDelivery(id, patch);
       if (result.ok) {
         setSelectedDelivery((prev) => {
           if (!prev || prev.id !== id) return prev;
@@ -109,7 +139,7 @@ export function useDeliveriesPage() {
       }
       return result;
     },
-    [updateDelivery],
+    [useNeonData, tenantId, queryClient, updateMockDelivery],
   );
 
   return {
@@ -128,6 +158,7 @@ export function useDeliveriesPage() {
     selectedDelivery,
     setSelectedDelivery,
     canEditDelivery,
+    loading: useNeonData && deliveriesQuery.isLoading,
     saveDelivery,
   };
 }

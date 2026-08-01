@@ -27,6 +27,7 @@ export const queryKeys = {
     ] as const,
   moduleNavCounts: (tenantId: string, branchId: string) =>
     ["module-nav-counts", tenantId, branchId] as const,
+  pricingBundle: (tenantId: string) => ["pricing-bundle", tenantId] as const,
   financeOverview: (tenantId: string, branchIds: readonly string[]) =>
     ["finance-overview", tenantId, [...branchIds].sort().join(",")] as const,
   cashBookOverview: (

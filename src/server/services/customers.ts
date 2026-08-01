@@ -65,6 +65,7 @@ export async function createCustomer(
       type: payload.type,
       creditLimit: payload.credit_limit,
       outstandingDebt: payload.outstanding_debt ?? 0,
+      pricingTierId: payload.pricing_tier_id ?? null,
     })
     .returning();
   await invalidateCustomers(tenantId);
@@ -84,6 +85,7 @@ export async function updateCustomer(
   if (updates.type !== undefined) patch.type = updates.type;
   if (updates.credit_limit !== undefined) patch.creditLimit = updates.credit_limit;
   if (updates.outstanding_debt !== undefined) patch.outstandingDebt = updates.outstanding_debt;
+  if (updates.pricing_tier_id !== undefined) patch.pricingTierId = updates.pricing_tier_id;
 
   const [row] = await db
     .update(customers)

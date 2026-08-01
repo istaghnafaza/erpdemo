@@ -2,7 +2,7 @@
 // Tenant service — Neon/Drizzle
 // =============================================================================
 
-import { eq, asc } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toTenant } from "@/server/db/mappers";
 import { tenants } from "@/server/db/schema";
@@ -23,6 +23,23 @@ export async function getTenantBySlug(slug: string): Promise<Tenant | null> {
   });
   if (!row || !row.isActive) return null;
   return toTenant(row);
+}
+
+/** Cek ketersediaan slug — exclude tenant saat ini (wizard setup). */
+export async function isTenantSlugAvailable(
+  slug: string,
+  excludeTenantId?: string,
+): Promise<boolean> {
+  const trimmed = slug.trim().toLowerCase();
+  if (!trimmed) return false;
+
+  const db = getDb();
+  const row = await db.query.tenants.findFirst({
+    where: eq(tenants.slug, trimmed),
+  });
+  if (!row) return true;
+  if (excludeTenantId && row.id === excludeTenantId) return true;
+  return false;
 }
 
 export async function listTenants(): Promise<Tenant[]> {
@@ -54,6 +71,16 @@ export async function createTenant(payload: TenantInsert): Promise<Tenant> {
 
 export async function updateTenant(tenantId: string, updates: TenantUpdate): Promise<Tenant | null> {
   const db = getDb();
+
+  if (updates.slug !== undefined) {
+    const slug = updates.slug.trim();
+    if (!slug) throw new Error("URL toko wajib diisi");
+    const taken = await db.query.tenants.findFirst({
+      where: and(eq(tenants.slug, slug), ne(tenants.id, tenantId)),
+    });
+    if (taken) throw new Error("URL toko sudah dipakai — pilih URL lain");
+  }
+
   const patch: Partial<typeof tenants.$inferInsert> = {};
   if (updates.name !== undefined) patch.name = updates.name;
   if (updates.slug !== undefined) patch.slug = updates.slug;

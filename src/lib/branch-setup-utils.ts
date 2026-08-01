@@ -2,8 +2,8 @@
 // Branch setup helpers — empty-tenant / no-active-branch UX
 // =============================================================================
 
-import { allowMockDataSeeding } from "@/lib/mock-data-guard";
 import { clearClientDemoDataForRealTenant } from "@/lib/clear-client-demo-data";
+import { isPendingTenantName } from "@/lib/tenant-placeholder";
 import type { Tenant } from "@/types/database";
 
 /** Routes that still render page content when no active branches exist. */
@@ -32,7 +32,7 @@ export function navigateToBranchSetup(options: {
   startWizardSetup(
     tenant
       ? {
-          storeName: tenant.name,
+          storeName: isPendingTenantName(tenant.name) ? undefined : tenant.name,
           storeSlug: tenant.slug,
           storePhone: tenant.phone ?? undefined,
         }

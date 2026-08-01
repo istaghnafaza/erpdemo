@@ -4,18 +4,25 @@ import { toast } from "sonner";
 import { AuthDivider, AuthShell } from "@/components/auth/AuthShell";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { GoogleOAuthRedirectHint } from "@/components/auth/GoogleOAuthRedirectHint";
+import {
+  EMPTY_OWNER_ADDRESS,
+  IndonesiaAddressFields,
+  type OwnerAddressValue,
+} from "@/components/address/IndonesiaAddressFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { isNeonBackend } from "@/lib/api/backend";
+import { AUTH_UI } from "@/lib/auth-features";
+import { resolvePostAuthDestination } from "@/lib/auth-navigate";
+import { validateRegisterForm } from "@/lib/validation/register-form";
 import { useAuthStore } from "@/stores/auth.store";
-import { redirectIfAuthenticated, syncAuthFromServer } from "@/lib/auth-bootstrap";
+import { useOnboardingStore } from "@/stores/onboarding.store";
+import { preparePublicAuthRoute } from "@/lib/auth-bootstrap";
 
 export const Route = createFileRoute("/register")({
   beforeLoad: async () => {
-    await syncAuthFromServer();
-    const authedRedirect = redirectIfAuthenticated();
+    const authedRedirect = await preparePublicAuthRoute();
     if (authedRedirect) throw authedRedirect;
   },
   head: () => ({
@@ -33,70 +40,109 @@ function RegisterPage() {
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
-  const [businessName, setBusinessName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState<OwnerAddressValue>(EMPTY_OWNER_ADDRESS);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const goAfterAuth = async (isNewUser?: boolean) => {
-    const { currentUser, currentTenant } = useAuthStore.getState();
+  const goAfterAuth = async () => {
+    const { currentUser } = useAuthStore.getState();
     if (!currentUser) return;
 
-    if (isNewUser || !currentTenant?.onboarding_complete) {
-      toast.success(`Selamat datang, ${currentUser.profile.name}! Lanjut setup toko.`);
-      navigate({ to: "/onboarding" });
-      return;
-    }
-
-    toast.success(`Selamat datang, ${currentUser.profile.name}`);
+    useOnboardingStore.getState().resetOnboarding();
+    toast.success(`Selamat datang, ${currentUser.profile.name}!`);
     const dest = await resolvePostAuthDestination(currentUser.profile.role);
     navigate(dest);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldErrors({});
+
     if (!isNeonBackend()) {
       toast.error("Registrasi memerlukan VITE_DATA_BACKEND=neon");
       return;
     }
 
-    const ok = await register({
+    const parsed = validateRegisterForm({
       name,
-      businessName,
+      username,
       email,
-      phone: phone.trim() || undefined,
+      phone,
+      address,
       password,
       confirmPassword,
     });
+
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const path = issue.path;
+        const key =
+          path.length === 0
+            ? "form"
+            : path[0] === "address" && path[1]
+              ? String(path[1])
+              : String(path[0] ?? "form");
+        if (!errs[key]) errs[key] = issue.message;
+      }
+      setFieldErrors(errs);
+      toast.error(parsed.error.issues[0]?.message ?? "Periksa formulir daftar");
+      return;
+    }
+
+    const ok = await register(parsed.data);
 
     if (!ok) {
       toast.error(useAuthStore.getState().error ?? "Registrasi gagal");
       return;
     }
 
-    await goAfterAuth(true);
+    await goAfterAuth();
+  };
+
+  const setPin = (value: string, field: "password" | "confirmPassword") => {
+    const digits = value.replace(/\D/g, "").slice(0, 6);
+    if (field === "password") setPassword(digits);
+    else setConfirmPassword(digits);
+    if (fieldErrors[field]) {
+      setFieldErrors((p) => {
+        const next = { ...p };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
   return (
     <AuthShell
       title="Buat akun baru"
-      subtitle="Daftar sebagai owner toko — trial 14 hari gratis"
+      subtitle="Daftar akun owner — setup toko bisa dilakukan dari menu modul"
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Sudah punya akun?{" "}
           <Link to="/login" className="text-primary font-medium hover:underline">
             Masuk
           </Link>
+          {" · "}
+          <Link to="/pricing" className="text-primary font-medium hover:underline">
+            Lihat harga
+          </Link>
         </p>
       }
     >
-      <GoogleSignInButton mode="register" />
-      <GoogleOAuthRedirectHint />
+      {AUTH_UI.showGoogleAuth ? (
+        <>
+          <GoogleSignInButton mode="register" />
+          <GoogleOAuthRedirectHint />
+          <AuthDivider label="Atau daftar dengan username" />
+        </>
+      ) : null}
 
-      <AuthDivider label="Atau daftar dengan email" />
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="name">Nama lengkap</Label>
           <Input
@@ -107,19 +153,31 @@ function RegisterPage() {
             autoComplete="name"
             required
           />
+          {fieldErrors.name ? (
+            <p className="text-xs text-destructive">{fieldErrors.name}</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="businessName">Nama bisnis / toko</Label>
+          <Label htmlFor="username">Username</Label>
           <Input
-            id="businessName"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            placeholder="Contoh: Toko Bangunan Jaya"
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
+            placeholder="contoh: budi.toko"
+            autoComplete="username"
+            autoCapitalize="none"
+            maxLength={32}
             required
           />
+          <p className="text-xs text-muted-foreground">
+            Dipakai untuk masuk ke sistem. Huruf, angka, titik, strip.
+          </p>
+          {fieldErrors.username ? (
+            <p className="text-xs text-destructive">{fieldErrors.username}</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email (opsional)</Label>
           <Input
             id="email"
             type="email"
@@ -127,11 +185,15 @@ function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="nama@email.com"
             autoComplete="email"
-            required
           />
+          {fieldErrors.email ? (
+            <p className="text-xs text-destructive">{fieldErrors.email}</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="phone">Telepon (opsional)</Label>
+          <Label htmlFor="phone">
+            Telepon <span className="text-destructive">*</span>
+          </Label>
           <Input
             id="phone"
             type="tel"
@@ -139,33 +201,60 @@ function RegisterPage() {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="08xxxxxxxxxx"
             autoComplete="tel"
+            required
           />
+          {fieldErrors.phone ? (
+            <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+          ) : null}
         </div>
+
+        <IndonesiaAddressFields
+          value={address}
+          onChange={setAddress}
+          errors={{
+            provinceCode: fieldErrors.provinceCode,
+            regencyCode: fieldErrors.regencyCode,
+            districtCode: fieldErrors.districtCode,
+            villageCode: fieldErrors.villageCode,
+            street: fieldErrors.street,
+          }}
+        />
+
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">PIN (6 digit)</Label>
           <Input
             id="password"
             type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimal 8 karakter"
+            onChange={(e) => setPin(e.target.value, "password")}
+            placeholder="6 digit angka"
             autoComplete="new-password"
-            minLength={8}
+            maxLength={6}
             required
           />
+          {fieldErrors.password ? (
+            <p className="text-xs text-destructive">{fieldErrors.password}</p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="confirmPassword">Konfirmasi password</Label>
+          <Label htmlFor="confirmPassword">Konfirmasi PIN</Label>
           <Input
             id="confirmPassword"
             type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Ulangi password"
+            onChange={(e) => setPin(e.target.value, "confirmPassword")}
+            placeholder="Ulangi PIN 6 digit"
             autoComplete="new-password"
-            minLength={8}
+            maxLength={6}
             required
           />
+          {fieldErrors.confirmPassword ? (
+            <p className="text-xs text-destructive">{fieldErrors.confirmPassword}</p>
+          ) : null}
         </div>
         <Button
           type="submit"
