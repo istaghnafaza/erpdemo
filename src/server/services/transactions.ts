@@ -814,6 +814,18 @@ export async function createSaleTransaction(
       transaction.paid_by,
     );
 
+    if (extras?.returnOffset) {
+      const { finalizeReturnOffsetInTx } = await import("@/server/services/sales-returns");
+      await finalizeReturnOffsetInTx(
+        tx,
+        tenantId,
+        extras.returnOffset.returnId,
+        transaction.paid_by ?? "",
+        txRow.id,
+        extras.returnOffset.offsetAmount,
+      );
+    }
+
     return sale;
   });
 

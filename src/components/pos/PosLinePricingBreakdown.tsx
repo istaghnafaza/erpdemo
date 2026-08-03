@@ -47,6 +47,16 @@ export function PosLinePricingBreakdown({
           {row.label} {row.percent > 0 ? `${row.percent}%` : ""} (−{rupiah(row.amount)})
         </div>
       ))}
+      {display.clampedToFloor && display.discountRows.length > 0 && (
+        <div
+          className={cn(
+            textSize,
+            isReceipt ? "text-muted-foreground pl-2 italic" : "text-amber-700/90 pl-1 italic",
+          )}
+        >
+          Harga dasar (floor margin) — efektif {display.effectiveDiscountPercent}%
+        </div>
+      )}
       {showLineTotal && (
         <div className={cn(textSize, "font-medium text-foreground pt-0.5")}>
           {rupiah(display.netLineTotal)}

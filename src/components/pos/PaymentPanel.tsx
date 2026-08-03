@@ -24,6 +24,10 @@ import type { PartialShipLine } from "@/lib/pos-partial-shipment";
 
 import { PartialShipmentPanel } from "@/components/pos/PartialShipmentPanel";
 import { CheckoutReviewDialog } from "@/components/pos/CheckoutReviewDialog";
+import { ReturnOffsetPicker } from "@/components/pos/ReturnOffsetPicker";
+import { ReturnOffsetSummary } from "@/components/pos/ReturnOffsetLines";
+import { cartReturnOffsetAmount } from "@/stores/pos.store";
+import type { PosReturnOffset } from "@/lib/pos-return-offset";
 
 import type { ActiveCart } from "@/stores/pos.store";
 
@@ -65,7 +69,9 @@ export interface PaymentPanelProps {
     method: PaymentMethod,
     amountPaid: number,
   ) => void | Promise<{ success: boolean; error?: string }>;
-
+  tenantId?: string;
+  branchId?: string;
+  onReturnOffsetChange?: (offset: PosReturnOffset | null) => void;
 }
 
 
@@ -140,6 +146,12 @@ export function PaymentPanel({
 
   onPay,
 
+  tenantId,
+
+  branchId,
+
+  onReturnOffsetChange,
+
 }: PaymentPanelProps) {
 
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -155,6 +167,8 @@ export function PaymentPanel({
   const hasSoLines = hasCartSoLines(cart.items);
 
   const soLineCount = cart.items.filter((i) => i.is_so_line).length;
+
+  const returnOffsetAmount = cartReturnOffsetAmount(cart);
 
 
 
@@ -268,6 +282,15 @@ export function PaymentPanel({
 
     <Card className="p-4 space-y-4 lg:sticky lg:top-20">
 
+      {tenantId && branchId && onReturnOffsetChange && (
+        <ReturnOffsetPicker
+          tenantId={tenantId}
+          branchId={branchId}
+          selected={cart.returnOffset}
+          onSelect={onReturnOffsetChange}
+        />
+      )}
+
       <div className="bg-gradient-primary text-primary-foreground rounded-xl p-4">
 
         <div className="text-xs opacity-80">Total Tagihan</div>
@@ -304,6 +327,12 @@ export function PaymentPanel({
 
           </div>
 
+        )}
+
+        {returnOffsetAmount > 0 && cart.returnOffset && (
+          <div className="pt-1">
+            <ReturnOffsetSummary offset={cart.returnOffset} />
+          </div>
         )}
 
       </div>

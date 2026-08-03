@@ -23,6 +23,7 @@ export function mapSalesHistoryToRecord(row: SalesHistoryRow): SalesTransactionR
     cashierId: row.input_by ?? row.paid_by ?? "",
     cashierName: row.cashier_name,
     customerName: row.customer_name,
+    customerId: row.customer_id,
     itemCount: row.items.length,
     subtotal: row.subtotal,
     discountAmount: row.discount_amount,
@@ -31,6 +32,8 @@ export function mapSalesHistoryToRecord(row: SalesHistoryRow): SalesTransactionR
     amountPaid: row.amount_paid,
     changeAmount: row.change_amount,
     status: row.status,
+    returnStatus: row.return_status,
+    returnOffsetAmount: row.return_offset_amount,
     isOffline: row.is_offline_transaction,
     orderFulfillmentType: "cod",
     deliveryAddress: null,
@@ -48,6 +51,7 @@ export function mapSalesHistoryToRecord(row: SalesHistoryRow): SalesTransactionR
       discount: item.discount,
       subtotal: item.subtotal,
       isSoLine: item.is_so_line === true,
+      qtyReturned: item.qty_returned ?? 0,
     })),
   };
 }

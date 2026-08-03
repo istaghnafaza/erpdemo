@@ -21,6 +21,7 @@ import {
   Users,
   Globe,
   History,
+  RotateCcw,
   PackageCheck,
   ContactRound,
   Settings,
@@ -97,6 +98,13 @@ const NAV_DEFINITIONS: Omit<NavItem, "to">[] = [
     icon: History,
     feature: "sales_history",
     accent: "teal",
+  },
+  {
+    suffix: "/sales/returns",
+    label: "Retur Barang",
+    icon: RotateCcw,
+    feature: "sales_returns",
+    accent: "orange",
   },
   {
     suffix: "/deliveries",

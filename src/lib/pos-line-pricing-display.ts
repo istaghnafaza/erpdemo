@@ -15,36 +15,32 @@ export interface LinePricingDisplay {
   grossLineTotal: number;
   netLineTotal: number;
   discountRows: LinePricingDiscountRow[];
+  /** Diskon efektif riil (setelah cap stack & floor harga). */
+  effectiveDiscountPercent: number;
+  /** Harga netto dibatasi floor margin minimum. */
+  clampedToFloor: boolean;
 }
 
 export function getLineBaseUnitPrice(item: CartItem): number {
   return item.base_selling_price ?? item.selling_price + (item.discount ?? 0);
 }
 
-/** Rincian harga dasar + baris diskon tier per item keranjang. */
+/**
+ * Rincian diskon per baris — jumlah Rp mengikuti subtotal aktual (pricing engine),
+ * bukan persen × gross secara independen (yang menyesatkan saat stack cap / floor).
+ */
 export function getLinePricingDisplay(item: CartItem): LinePricingDisplay {
   const baseUnit = getLineBaseUnitPrice(item);
   const gross = baseUnit * item.qty;
   const net = item.subtotal;
-  const rows: LinePricingDiscountRow[] = [];
+  const tierDiscountTotal = Math.max(0, gross - net);
+  const effectiveDiscountPercent =
+    gross > 0 ? Math.round((tierDiscountTotal / gross) * 1000) / 10 : 0;
 
+  const rows: LinePricingDiscountRow[] = [];
   const volPct = item.volume_discount_percent ?? 0;
   const custPct = item.customer_discount_percent ?? 0;
-
-  if (volPct > 0) {
-    rows.push({
-      label: "Diskon volume",
-      percent: volPct,
-      amount: Math.round(gross * volPct / 100),
-    });
-  }
-  if (custPct > 0) {
-    rows.push({
-      label: "Diskon pelanggan",
-      percent: custPct,
-      amount: Math.round(gross * custPct / 100),
-    });
-  }
+  const rawStack = volPct + custPct;
 
   if (item.price_override) {
     const overrideDisc = Math.max(0, baseUnit - item.selling_price);
@@ -55,20 +51,26 @@ export function getLinePricingDisplay(item: CartItem): LinePricingDisplay {
         amount: Math.round(overrideDisc * item.qty),
       });
     }
-  }
-
-  const tierDiscountTotal = Math.max(0, gross - net);
-  const rowsSum = rows.reduce((s, r) => s + r.amount, 0);
-
-  if (tierDiscountTotal > 0 && rows.length === 0) {
-    rows.push({
-      label: "Diskon",
-      percent: gross > 0 ? Math.round((tierDiscountTotal / gross) * 1000) / 10 : 0,
-      amount: tierDiscountTotal,
-    });
-  } else if (tierDiscountTotal > 0 && Math.abs(rowsSum - tierDiscountTotal) > 1) {
-    const diff = tierDiscountTotal - rowsSum;
-    rows[rows.length - 1]!.amount += diff;
+  } else if (tierDiscountTotal > 0) {
+    if (rawStack > 0 && volPct > 0 && custPct > 0) {
+      const volShare = Math.round(tierDiscountTotal * (volPct / rawStack));
+      rows.push({ label: "Diskon volume", percent: volPct, amount: volShare });
+      rows.push({
+        label: "Diskon pelanggan",
+        percent: custPct,
+        amount: tierDiscountTotal - volShare,
+      });
+    } else if (volPct > 0) {
+      rows.push({ label: "Diskon volume", percent: volPct, amount: tierDiscountTotal });
+    } else if (custPct > 0) {
+      rows.push({ label: "Diskon pelanggan", percent: custPct, amount: tierDiscountTotal });
+    } else {
+      rows.push({
+        label: "Diskon",
+        percent: effectiveDiscountPercent,
+        amount: tierDiscountTotal,
+      });
+    }
   }
 
   return {
@@ -76,6 +78,8 @@ export function getLinePricingDisplay(item: CartItem): LinePricingDisplay {
     grossLineTotal: gross,
     netLineTotal: net,
     discountRows: rows.filter((r) => r.amount > 0),
+    effectiveDiscountPercent,
+    clampedToFloor: item.pricing_clamped === true,
   };
 }
 

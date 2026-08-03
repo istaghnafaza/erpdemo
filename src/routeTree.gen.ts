@@ -39,6 +39,7 @@ import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/cal
 import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
 import { Route as TenantSlugSettingsPricingRouteImport } from './routes/$tenantSlug/settings/pricing'
 import { Route as TenantSlugSalesTransactionsRouteImport } from './routes/$tenantSlug/sales/transactions'
+import { Route as TenantSlugSalesReturnsRouteImport } from './routes/$tenantSlug/sales/returns'
 import { Route as TenantSlugReportsStockOpnameRouteImport } from './routes/$tenantSlug/reports/stock-opname'
 import { Route as TenantSlugReportsSalesRouteImport } from './routes/$tenantSlug/reports/sales'
 import { Route as TenantSlugReportsProfitLossRouteImport } from './routes/$tenantSlug/reports/profit-loss'
@@ -209,6 +210,11 @@ const TenantSlugSalesTransactionsRoute =
     path: '/sales/transactions',
     getParentRoute: () => TenantSlugRoute,
   } as any)
+const TenantSlugSalesReturnsRoute = TenantSlugSalesReturnsRouteImport.update({
+  id: '/sales/returns',
+  path: '/sales/returns',
+  getParentRoute: () => TenantSlugRoute,
+} as any)
 const TenantSlugReportsStockOpnameRoute =
   TenantSlugReportsStockOpnameRouteImport.update({
     id: '/reports/stock-opname',
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/returns': typeof TenantSlugSalesReturnsRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/returns': typeof TenantSlugSalesReturnsRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
@@ -396,6 +404,7 @@ export interface FileRoutesById {
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
   '/$tenantSlug/reports/stock-opname': typeof TenantSlugReportsStockOpnameRoute
+  '/$tenantSlug/sales/returns': typeof TenantSlugSalesReturnsRoute
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
@@ -442,6 +451,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/returns'
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/returns'
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
@@ -529,6 +540,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
     | '/$tenantSlug/reports/stock-opname'
+    | '/$tenantSlug/sales/returns'
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
@@ -771,6 +783,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantSlugSalesTransactionsRouteImport
       parentRoute: typeof TenantSlugRoute
     }
+    '/$tenantSlug/sales/returns': {
+      id: '/$tenantSlug/sales/returns'
+      path: '/sales/returns'
+      fullPath: '/$tenantSlug/sales/returns'
+      preLoaderRoute: typeof TenantSlugSalesReturnsRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
     '/$tenantSlug/reports/stock-opname': {
       id: '/$tenantSlug/reports/stock-opname'
       path: '/reports/stock-opname'
@@ -890,6 +909,7 @@ interface TenantSlugRouteChildren {
   TenantSlugReportsProfitLossRoute: typeof TenantSlugReportsProfitLossRoute
   TenantSlugReportsSalesRoute: typeof TenantSlugReportsSalesRoute
   TenantSlugReportsStockOpnameRoute: typeof TenantSlugReportsStockOpnameRoute
+  TenantSlugSalesReturnsRoute: typeof TenantSlugSalesReturnsRoute
   TenantSlugSalesTransactionsRoute: typeof TenantSlugSalesTransactionsRoute
   TenantSlugSettingsPricingRoute: typeof TenantSlugSettingsPricingRoute
   TenantSlugCustomersIndexRoute: typeof TenantSlugCustomersIndexRoute
@@ -924,6 +944,7 @@ const TenantSlugRouteChildren: TenantSlugRouteChildren = {
   TenantSlugReportsProfitLossRoute: TenantSlugReportsProfitLossRoute,
   TenantSlugReportsSalesRoute: TenantSlugReportsSalesRoute,
   TenantSlugReportsStockOpnameRoute: TenantSlugReportsStockOpnameRoute,
+  TenantSlugSalesReturnsRoute: TenantSlugSalesReturnsRoute,
   TenantSlugSalesTransactionsRoute: TenantSlugSalesTransactionsRoute,
   TenantSlugSettingsPricingRoute: TenantSlugSettingsPricingRoute,
   TenantSlugCustomersIndexRoute: TenantSlugCustomersIndexRoute,

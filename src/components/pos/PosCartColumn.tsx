@@ -3,6 +3,7 @@ import { CartPanel } from "@/components/pos/CartPanel";
 import { PaymentPanel } from "@/components/pos/PaymentPanel";
 import { Card } from "@/components/ui/card";
 import type { PartialShipLine } from "@/lib/pos-partial-shipment";
+import type { PosReturnOffset } from "@/lib/pos-return-offset";
 import type { ActiveCart } from "@/stores/pos.store";
 import type { Customer } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
@@ -57,6 +58,9 @@ export interface PosCartColumnProps {
     method: PaymentMethod,
     amountPaid: number,
   ) => void | Promise<{ success: boolean; error?: string }>;
+  tenantId: string;
+  branchId: string;
+  onReturnOffsetChange: (offset: PosReturnOffset | null) => void;
 }
 
 export function PosCartColumn({
@@ -93,6 +97,9 @@ export function PosCartColumn({
   onOrderFulfillmentTypeChange,
   onPartialShipLineChange,
   onPay,
+  tenantId,
+  branchId,
+  onReturnOffsetChange,
 }: PosCartColumnProps) {
   return (
     <div className="flex flex-col gap-4 min-h-0">
@@ -141,6 +148,9 @@ export function PosCartColumn({
         partialShip={partialShip}
         onPartialShipLineChange={onPartialShipLineChange}
         onPay={onPay}
+        tenantId={tenantId}
+        branchId={branchId}
+        onReturnOffsetChange={onReturnOffsetChange}
       />
     </div>
   );

@@ -73,5 +73,12 @@ export function buildPosCheckoutExtras(input: BuildPosCheckoutExtrasInput): PosC
     };
   }
 
+  if (cart.returnOffset?.returnId && cart.returnOffset.amount > 0) {
+    extras.returnOffset = {
+      returnId: cart.returnOffset.returnId,
+      offsetAmount: cart.returnOffset.amount,
+    };
+  }
+
   return extras;
 }

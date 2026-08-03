@@ -9,14 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
-import { preparePublicAuthRoute } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
+import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
 import { AUTH_UI } from "@/lib/auth-features";
 import { validateLoginForm } from "@/lib/validation/login-form";
 
 export const Route = createFileRoute("/login")({
-  beforeLoad: async () => {
-    const authedRedirect = await preparePublicAuthRoute();
+  beforeLoad: () => {
+    const authedRedirect = preparePublicAuthRouteSync();
     if (authedRedirect) throw authedRedirect;
   },
   head: () => ({
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
+  usePublicAuthRedirect();
   const login = useAuthStore((s) => s.login);
   const loginWithMockCredentials = useAuthStore((s) => s.loginWithMockCredentials);
   const isLoading = useAuthStore((s) => s.isLoading);

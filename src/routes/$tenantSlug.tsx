@@ -195,10 +195,7 @@ function TenantLayout() {
   const unsubscribe = useNotificationStore((s) => s.unsubscribe);
   const activeBranchId = useBranchStore((s) => s.activeBranch?.id ?? null);
 
-  const [hydrated, setHydrated] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return useAuthStore.persist?.hasHydrated?.() ?? false;
-  });
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const persist = useAuthStore.persist;
@@ -236,7 +233,13 @@ function TenantLayout() {
     return <Outlet />;
   }
 
-  if (!hydrated) return null;
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">
+        Memuat...
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;

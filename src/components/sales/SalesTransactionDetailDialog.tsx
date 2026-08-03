@@ -18,18 +18,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { SalesReceiptPrintDialog } from "@/components/sales/SalesReceiptPrintDialog";
+import { SalesReturnDialog } from "@/components/sales/SalesReturnDialog";
 import { buildReceiptFromSalesTransaction } from "@/lib/build-receipt-data";
 import { paymentMethodLabel, TX_STATUS_LABELS, orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
+import { canVoidSale } from "@/lib/rbac";
+import { voidTransaction } from "@/lib/api/transactions";
 import { rupiah, tanggal } from "@/lib/format";
-import { Printer } from "lucide-react";
+import { Printer, RotateCcw, Ban } from "lucide-react";
+import { toast } from "sonner";
 import type { SalesTransactionRecord } from "@/types/sales-transactions";
+import type { UserRole } from "@/types/app";
 
 interface SalesTransactionDetailDialogProps {
   transaction: SalesTransactionRecord | null;
   storeName: string;
   branchAddress: string | null;
   branchPhone: string | null;
+  tenantId: string;
+  userId: string;
+  userRole: UserRole | string | undefined;
   onClose: () => void;
+  onUpdated?: () => void;
 }
 
 export function SalesTransactionDetailDialog({
@@ -37,9 +46,15 @@ export function SalesTransactionDetailDialog({
   storeName,
   branchAddress,
   branchPhone,
+  tenantId,
+  userId,
+  userRole,
   onClose,
+  onUpdated,
 }: SalesTransactionDetailDialogProps) {
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [voiding, setVoiding] = useState(false);
 
   const receiptData = useMemo(
     () =>
@@ -54,6 +69,25 @@ export function SalesTransactionDetailDialog({
   );
 
   if (!transaction) return null;
+
+  const canReturn =
+    transaction.status === "completed" &&
+    (transaction.returnStatus ?? "none") !== "full";
+  const canVoid = canVoidSale(userRole) && transaction.status === "completed";
+
+  const handleVoid = async () => {
+    if (!window.confirm(`Void transaksi ${transaction.transactionNumber}?`)) return;
+    setVoiding(true);
+    const res = await voidTransaction(tenantId, transaction.id, userId);
+    setVoiding(false);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Transaksi di-void");
+    onUpdated?.();
+    onClose();
+  };
 
   return (
     <>
@@ -168,10 +202,22 @@ export function SalesTransactionDetailDialog({
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-between">
-            <Button variant="outline" onClick={() => setReceiptOpen(true)}>
-              <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk
-            </Button>
+          <DialogFooter className="gap-2 sm:justify-between flex-wrap">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setReceiptOpen(true)}>
+                <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk
+              </Button>
+              {canReturn && (
+                <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                  <RotateCcw className="h-4 w-4 mr-1.5" /> Retur Barang
+                </Button>
+              )}
+              {canVoid && (
+                <Button variant="destructive" onClick={() => void handleVoid()} disabled={voiding}>
+                  <Ban className="h-4 w-4 mr-1.5" /> Void
+                </Button>
+              )}
+            </div>
             <Button variant="secondary" onClick={onClose}>
               Tutup
             </Button>
@@ -184,6 +230,18 @@ export function SalesTransactionDetailDialog({
         onOpenChange={setReceiptOpen}
         receipt={receiptData}
       />
+
+      {canReturn && (
+        <SalesReturnDialog
+          open={returnOpen}
+          onOpenChange={setReturnOpen}
+          transaction={transaction}
+          tenantId={tenantId}
+          branchId={transaction.branchId}
+          userId={userId}
+          onCreated={onUpdated}
+        />
+      )}
     </>
   );
 }

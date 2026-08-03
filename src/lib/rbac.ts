@@ -22,6 +22,7 @@ export type RbacFeature =
   | "expense_record"
   | "users"
   | "sales_history"
+  | "sales_returns"
   | "deliveries"
   | "customers"
   | "online_orders"
@@ -47,6 +48,7 @@ const ACCESS_MATRIX: Record<RbacFeature, UserRole[]> = {
   expense_record: ["owner", "manager", "accountant"],
   users: ["owner"],
   sales_history: ["owner", "manager", "accountant", "cashier"],
+  sales_returns: ["owner", "manager", "cashier", "warehouse"],
   deliveries: ["owner", "manager", "cashier", "warehouse"],
   customers: ["owner", "manager", "accountant"],
   online_orders: ["owner", "manager", "cashier"],
@@ -110,4 +112,14 @@ export function canEditProducts(role: UserRole | string | undefined): boolean {
 /** Keuntungan & margin di histori penjualan — hanya owner & manager. */
 export function canViewSalesMargin(role: UserRole | string | undefined): boolean {
   return role === "owner" || role === "manager";
+}
+
+/** Approve refund tunai/transfer untuk retur lewat batas H+1. */
+export function canApproveLateReturn(role: UserRole | string | undefined): boolean {
+  return role === "owner" || role === "manager";
+}
+
+/** Void transaksi penjualan — kasir ke atas. */
+export function canVoidSale(role: UserRole | string | undefined): boolean {
+  return canAccess(role, "sales_history");
 }

@@ -34,9 +34,15 @@ export interface PosCheckoutSalesOrderExtra {
   items: PosCheckoutSalesOrderItemExtra[];
 }
 
+export interface PosCheckoutReturnOffsetExtra {
+  returnId: string;
+  offsetAmount: number;
+}
+
 export interface PosCheckoutExtras {
   delivery?: PosCheckoutDeliveryExtra;
   salesOrder?: PosCheckoutSalesOrderExtra;
+  returnOffset?: PosCheckoutReturnOffsetExtra;
 }
 
 export interface BuildPosCheckoutExtrasInput {
@@ -47,6 +53,7 @@ export interface BuildPosCheckoutExtrasInput {
     customer?: { id: string; name: string; phone?: string | null } | null;
     orderFulfillmentType: OrderFulfillmentType;
     deliveryAddress?: string | null;
+    returnOffset?: { returnId: string; amount: number } | null;
     items: Array<{
       product_id: string;
       name: string;

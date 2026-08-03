@@ -4,6 +4,10 @@
 
 import type { CashTransaction } from "@/types/database";
 import type { SalesTransactionRecord } from "@/types/sales-transactions";
+import {
+  computeItemMargin,
+  computeTransactionRevenue,
+} from "@/lib/sales-margin";
 
 export interface ProfitLossSummary {
   sales: number;
@@ -49,13 +53,12 @@ function computeSalesAndMarginFromPos(
   let salesMargin = 0;
 
   for (const sale of salesRecords) {
-    if (sale.status !== "completed") continue;
+    if (sale.status !== "completed" && sale.status !== "returned") continue;
     if (!inPeriod(sale.createdAt, options?.from, options?.to)) continue;
 
-    sales += sale.grandTotal;
+    sales += computeTransactionRevenue(sale);
     for (const item of sale.items) {
-      if (item.isSoLine) continue;
-      salesMargin += item.subtotal - item.purchasePrice * item.qty;
+      salesMargin += computeItemMargin(item);
     }
   }
 

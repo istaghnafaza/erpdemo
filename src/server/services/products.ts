@@ -125,6 +125,8 @@ export async function createProduct(
       categoryId: payload.category_id,
       unit: payload.unit,
       purchasePrice: payload.purchase_price,
+      isReturnable: payload.is_returnable ?? true,
+      returnBlockLabel: payload.return_block_label ?? null,
       isActive: payload.is_active ?? true,
     })
     .returning();
@@ -145,6 +147,8 @@ export async function updateProduct(
   if (updates.category_id !== undefined) patch.categoryId = updates.category_id;
   if (updates.unit !== undefined) patch.unit = updates.unit;
   if (updates.purchase_price !== undefined) patch.purchasePrice = updates.purchase_price;
+  if (updates.is_returnable !== undefined) patch.isReturnable = updates.is_returnable;
+  if (updates.return_block_label !== undefined) patch.returnBlockLabel = updates.return_block_label;
   if (updates.is_active !== undefined) patch.isActive = updates.is_active;
 
   const [row] = await db

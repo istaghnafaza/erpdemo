@@ -40,6 +40,9 @@ function toReceiptData(receipt: Receipt): ReceiptData {
     branchPhone: receipt.branchPhone,
     storeName: receipt.storeName,
     createdAt: receipt.createdAt,
+    returnOffsetAmount: receipt.returnOffset?.amount,
+    returnNumber: receipt.returnOffset?.returnNumber ?? null,
+    returnOffsetItems: receipt.returnOffset?.items,
   };
 }
 

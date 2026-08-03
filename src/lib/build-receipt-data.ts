@@ -13,6 +13,9 @@ import type {
   SalesTransactionItemRecord,
   SalesTransactionRecord,
 } from "@/types/sales-transactions";
+import type { PosReturnOffset, PosReturnOffsetLine } from "@/lib/pos-return-offset";
+
+export type { PosReturnOffsetLine };
 
 export interface ReceiptLineItem {
   product_id: string;
@@ -48,6 +51,9 @@ export interface ReceiptData {
   branchPhone: string | null;
   storeName: string;
   createdAt: string;
+  returnOffsetAmount?: number;
+  returnNumber?: string | null;
+  returnOffsetItems?: PosReturnOffsetLine[];
 }
 
 export function cartItemToReceiptLine(item: CartItem): ReceiptLineItem {
@@ -139,5 +145,6 @@ export function buildReceiptFromSalesTransaction(
     branchPhone: opts.branchPhone ?? null,
     storeName: opts.storeName ?? tx.branchName,
     createdAt: tx.createdAt,
+    returnOffsetAmount: tx.returnOffsetAmount,
   };
 }

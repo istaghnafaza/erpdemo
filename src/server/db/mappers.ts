@@ -162,6 +162,8 @@ export function toProduct(row: ProductRow): Product {
     category_id: row.categoryId,
     unit: row.unit,
     purchase_price: row.purchasePrice,
+    is_returnable: row.isReturnable,
+    return_block_label: row.returnBlockLabel,
     is_active: row.isActive,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -304,6 +306,9 @@ export function toSalesTransaction(row: SalesTransactionRow): SalesTransaction {
     offline_created_at: row.offlineCreatedAt?.toISOString() ?? null,
     sync_status: row.syncStatus as SalesTransaction["sync_status"],
     status: row.status,
+    return_status: row.returnStatus as SalesTransaction["return_status"],
+    return_offset_amount: row.returnOffsetAmount,
+    linked_return_id: row.linkedReturnId,
     notes: row.notes,
     created_at: row.createdAt.toISOString(),
   };
@@ -325,6 +330,7 @@ export function toSalesItem(row: SalesItemRow): SalesItem {
     subtotal: row.subtotal,
     stock_source: row.stockSource,
     is_so_line: row.isSoLine,
+    qty_returned: row.qtyReturned,
   };
 }
 

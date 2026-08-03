@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   getGoogleOAuthRedirectUri,
   getPublicAppOrigin,
@@ -8,7 +9,13 @@ import {
 
 /** Petunjuk setup Google Console + batasan IP LAN */
 export function GoogleOAuthRedirectHint() {
-  if (!isGoogleAuthEnabled() || typeof window === "undefined") return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !isGoogleAuthEnabled()) return null;
 
   const redirectUri = getGoogleOAuthRedirectUri();
   const origin = getPublicAppOrigin();

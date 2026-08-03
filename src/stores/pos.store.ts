@@ -63,6 +63,7 @@ import {
   hasCartSoLines,
   isCartSoLine,
 } from "@/lib/pos-so-checkout";
+import type { PosReturnOffset } from "@/lib/pos-return-offset";
 import { useSalesOrdersStore } from "@/stores/sales-orders.store";
 import { usePosHeldCartsStore } from "@/stores/pos-held-carts.store";
 
@@ -88,6 +89,8 @@ export interface ActiveCart {
   heldLabel: string | null; // e.g. "Keranjang 2 — Siti Rahma" (for held/takeover carts)
   /** ID di pos-held-carts.store saat dipublish untuk kasir lain */
   heldRegistryId: string | null;
+  /** Retur menunggu offset — dipotong dari transaksi baru */
+  returnOffset: PosReturnOffset | null;
 }
 
 const EMPTY_CART = (): ActiveCart => ({
@@ -105,6 +108,7 @@ const EMPTY_CART = (): ActiveCart => ({
   isHeld: false,
   heldLabel: null,
   heldRegistryId: null,
+  returnOffset: null,
 });
 
 const MAX_CARTS = 5;
@@ -145,6 +149,7 @@ export interface PosState {
     branchPhone: string | null;
     storeName: string;
     createdAt: string;
+    returnOffset?: PosReturnOffset | null;
   } | null;
 
   // Context (set from outside — from auth + branch stores)
@@ -216,6 +221,7 @@ export interface PosState {
   ): void;
   toggleItemSoLine(cartIndex: number, itemIndex: number): void;
   repriceCart(cartIndex: number, bundle: PricingBundle): void;
+  setReturnOffset(cartIndex: number, offset: PosReturnOffset | null): void;
 
   // -----------------------------------------------------------------------
   // Payment
@@ -243,6 +249,14 @@ function cartSubtotal(items: CartItem[]): number {
 function cartGrandTotal(items: CartItem[], discountPercent: number): number {
   const sub = cartSubtotal(items);
   return Math.round(sub * (1 - discountPercent / 100));
+}
+
+function cartReturnOffsetAmount(cart: ActiveCart): number {
+  return cart.returnOffset?.amount ?? 0;
+}
+
+function cartNetTotal(cart: ActiveCart): number {
+  return Math.max(0, cartGrandTotal(cart.items, cart.discount) - cartReturnOffsetAmount(cart));
 }
 
 function applyPartialShipSync(cart: ActiveCart) {
@@ -806,6 +820,12 @@ export const usePosStore = create<PosState>()(
       });
     },
 
+    setReturnOffset: (cartIndex, offset) => {
+      set((s) => {
+        s.carts[cartIndex].returnOffset = offset;
+      });
+    },
+
     // -------------------------------------------------------------------------
     // processPayment — the core POS checkout flow
     // -------------------------------------------------------------------------
@@ -847,7 +867,13 @@ export const usePosStore = create<PosState>()(
         }
       }
 
-      const grandTotal = cartGrandTotal(cart.items, cart.discount);
+      const grossTotal = cartGrandTotal(cart.items, cart.discount);
+      const returnOffsetAmount = cartReturnOffsetAmount(cart);
+      const grandTotal = cartNetTotal(cart);
+
+      if (returnOffsetAmount > grossTotal) {
+        return { success: false, error: "Potongan retur melebihi total belanja" };
+      }
 
       // Credit sale: check customer credit limit (sisa piutang setelah DP)
       if (paymentMethod === "credit") {
@@ -1113,6 +1139,7 @@ export const usePosStore = create<PosState>()(
             branchPhone: get().branchPhone,
             storeName: get().storeName,
             createdAt: new Date().toISOString(),
+            returnOffset: cart.returnOffset,
           };
         });
       };
@@ -1335,10 +1362,10 @@ export const selectIsProcessing = (s: PosState) => s.isProcessing;
 export const selectLastReceipt = (s: PosState) => s.lastReceipt;
 export const selectSessionError = (s: PosState) => s.sessionError;
 
-/** Derived: grand total of the active cart */
+/** Derived: grand total of the active cart (after return offset) */
 export const selectActiveCartTotal = (s: PosState): number => {
   const cart = s.carts[s.activeCartIndex];
-  return cartGrandTotal(cart.items, cart.discount);
+  return cartNetTotal(cart);
 };
 
 /** Derived: subtotal of the active cart (before discount) */
@@ -1347,6 +1374,6 @@ export const selectActiveCartSubtotal = (s: PosState): number =>
 
 /** Derived: number of occupied cart slots */
 export const selectOccupiedCartCount = (s: PosState): number =>
-  s.carts.filter((c) => c.items.length > 0 || c.isHeld).length;
+  s.carts.filter((c) => c.items.length > 0 || c.isHeld || c.returnOffset).length;
 
-export { cartSubtotal, cartGrandTotal };
+export { cartSubtotal, cartGrandTotal, cartNetTotal, cartReturnOffsetAmount };

@@ -46,10 +46,24 @@ type AuthRedirect =
   | ReturnType<typeof redirect>
   | null;
 
-/** Halaman login/register — selalu verifikasi sesi ke server (hindari redirect dari cache lokal). */
+/** Halaman login/register — verifikasi sesi ke server (client-only via usePublicAuthRedirect). */
 export async function preparePublicAuthRoute(): Promise<AuthRedirect> {
   await syncAuthFromServer({ force: true });
   return redirectIfAuthenticated();
+}
+
+/** Sync guard untuk beforeLoad — SSR-safe, tidak await network. */
+export function preparePublicAuthRouteSync(): AuthRedirect {
+  return redirectIfAuthenticated();
+}
+
+/** Path redirect jika sudah login — untuk navigate() di client. */
+export function resolveAuthenticatedRedirectPath(): string | null {
+  const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
+  if (!isAuthenticated || !currentUser) return null;
+  if (currentUser.isPlatformAdmin) return "/platform/dashboard";
+  if (!currentTenant) return null;
+  return getPostAuthDestination(currentTenant, currentUser.profile.role);
 }
 
 /** Redirect untuk user yang sudah login — null jika belum auth atau tenant belum ter-load. */

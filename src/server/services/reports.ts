@@ -2,8 +2,12 @@
 // Reports service — dashboard & laporan aggregations (Phase 5)
 // =============================================================================
 
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { getReadDb } from "@/server/db";
+import {
+  computeItemMargin,
+  effectiveItemSubtotal,
+} from "@/lib/sales-margin";
 import {
   branchProducts,
   branches,
@@ -28,8 +32,12 @@ import type {
   TopProduct,
 } from "@/types/app";
 
-function localDateKey(d: Date): string {
-  return d.toISOString().split("T")[0]!;
+function localDateKey(isoOrDate: Date | string): string {
+  const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function aggregateRowToDaily(row: typeof dailyBranchSales.$inferSelect): DailySalesSummary {
@@ -280,8 +288,9 @@ export async function getStockAlertsReport(
   return alerts;
 }
 
+/** Alias — periode dashboard memakai tanggal lokal (WIB), selaras histori penjualan. */
 function txDateKey(iso: Date | string): string {
-  return (typeof iso === "string" ? new Date(iso) : iso).toISOString().split("T")[0]!;
+  return localDateKey(iso);
 }
 
 function inDateRange(dateKey: string, from: string, to: string): boolean {
@@ -289,8 +298,14 @@ function inDateRange(dateKey: string, from: string, to: string): boolean {
 }
 
 function isOpexCategory(category: string): boolean {
-  return category !== "HPP" && category !== "Pembelian";
+  return (
+    category !== "HPP" &&
+    category !== "Pembelian" &&
+    category !== "Retur Penjualan"
+  );
 }
+
+const DASHBOARD_SALE_STATUSES = ["completed", "returned"] as const;
 
 export async function getDashboardStatsReport(
   tenantId: string,
@@ -318,17 +333,21 @@ export async function getDashboardStatsReport(
     where: and(
       eq(salesTransactions.tenantId, tenantId),
       eq(salesTransactions.branchId, branchId),
-      eq(salesTransactions.status, "completed"),
+      inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
       gte(salesTransactions.createdAt, new Date(`${last30Str}T00:00:00.000Z`)),
     ),
   });
 
   const salesItemRows = await db
     .select({
+      transactionId: salesItems.transactionId,
       qty: salesItems.qty,
+      qtyReturned: salesItems.qtyReturned,
       purchasePrice: salesItems.purchasePrice,
       subtotal: salesItems.subtotal,
+      isSoLine: salesItems.isSoLine,
       createdAt: salesTransactions.createdAt,
+      grandTotal: salesTransactions.grandTotal,
     })
     .from(salesItems)
     .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
@@ -336,10 +355,48 @@ export async function getDashboardStatsReport(
       and(
         eq(salesItems.tenantId, tenantId),
         eq(salesTransactions.branchId, branchId),
-        eq(salesTransactions.status, "completed"),
+        inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
         gte(salesTransactions.createdAt, new Date(`${last30Str}T00:00:00.000Z`)),
       ),
     );
+
+  const itemsByTx = new Map<
+    string,
+    { grandTotal: number; createdAt: Date; items: typeof salesItemRows }
+  >();
+  for (const item of salesItemRows) {
+    const bucket = itemsByTx.get(item.transactionId) ?? {
+      grandTotal: item.grandTotal,
+      createdAt: item.createdAt,
+      items: [],
+    };
+    bucket.items.push(item);
+    itemsByTx.set(item.transactionId, bucket);
+  }
+
+  const effectiveRevenueForTx = (txId: string): number => {
+    const bucket = itemsByTx.get(txId);
+    if (!bucket || bucket.items.length === 0) {
+      const tx = txAll.find((t) => t.id === txId);
+      return tx?.grandTotal ?? 0;
+    }
+    const totalSub = bucket.items.reduce((s, i) => s + i.subtotal, 0);
+    if (totalSub <= 0) return bucket.grandTotal;
+    const effSub = bucket.items.reduce(
+      (s, i) =>
+        s +
+        effectiveItemSubtotal({
+          qty: i.qty,
+          qtyReturned: i.qtyReturned,
+          subtotal: i.subtotal,
+        }),
+      0,
+    );
+    return Math.round((bucket.grandTotal * effSub) / totalSub);
+  };
+
+  const sumRevenue = (arr: typeof txAll) =>
+    arr.reduce((s, t) => s + effectiveRevenueForTx(t.id), 0);
 
   const cashTxRows = await db.query.cashTransactions.findMany({
     where: and(
@@ -350,7 +407,6 @@ export async function getDashboardStatsReport(
     ),
   });
 
-  const sum = (arr: typeof txAll) => arr.reduce((s, t) => s + t.grandTotal, 0);
   const todayTx = txAll.filter((t) => txDateKey(t.createdAt) === todayStr);
   const yesterdayTx = txAll.filter((t) => txDateKey(t.createdAt) === yesterdayStr);
   const weekTx = txAll.filter((t) => txDateKey(t.createdAt) >= weekStartStr);
@@ -361,7 +417,13 @@ export async function getDashboardStatsReport(
     for (const item of salesItemRows) {
       const d = txDateKey(item.createdAt);
       if (!inDateRange(d, from, to)) continue;
-      gross += item.subtotal - item.purchasePrice * item.qty;
+      gross += computeItemMargin({
+        qty: item.qty,
+        qtyReturned: item.qtyReturned,
+        subtotal: item.subtotal,
+        purchasePrice: item.purchasePrice,
+        isSoLine: item.isSoLine,
+      });
     }
     return gross;
   };
@@ -398,19 +460,19 @@ export async function getDashboardStatsReport(
   ]);
 
   return {
-    todayRevenue: sum(todayTx),
+    todayRevenue: sumRevenue(todayTx),
     todayTransactions: todayTx.length,
     todayGrossProfit,
     todayNetProfit: todayGrossProfit - todayOpex,
     todayOpex,
-    yesterdayRevenue: sum(yesterdayTx),
+    yesterdayRevenue: sumRevenue(yesterdayTx),
     yesterdayTransactions: yesterdayTx.length,
     yesterdayGrossProfit,
     yesterdayNetProfit: yesterdayGrossProfit - yesterdayOpex,
-    weekRevenue: sum(weekTx),
+    weekRevenue: sumRevenue(weekTx),
     weekGrossProfit,
     weekNetProfit: weekGrossProfit - weekOpex,
-    monthRevenue: sum(monthTx),
+    monthRevenue: sumRevenue(monthTx),
     monthGrossProfit,
     monthNetProfit: monthGrossProfit - monthOpex,
     monthOpex,
@@ -460,8 +522,10 @@ export async function getProfitLossSummaryReport(
   const rows = await db
     .select({
       qty: salesItems.qty,
+      qtyReturned: salesItems.qtyReturned,
       purchasePrice: salesItems.purchasePrice,
       subtotal: salesItems.subtotal,
+      isSoLine: salesItems.isSoLine,
     })
     .from(salesItems)
     .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
@@ -469,7 +533,7 @@ export async function getProfitLossSummaryReport(
       and(
         eq(salesItems.tenantId, tenantId),
         eq(salesTransactions.branchId, branchId),
-        eq(salesTransactions.status, "completed"),
+        inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
         gte(salesTransactions.createdAt, new Date(dateRange.from)),
         lte(salesTransactions.createdAt, new Date(dateRange.to)),
       ),
@@ -479,8 +543,11 @@ export async function getProfitLossSummaryReport(
   let cogs = 0;
 
   for (const item of rows) {
-    revenue += item.subtotal;
-    cogs += item.purchasePrice * item.qty;
+    if (item.isSoLine) continue;
+    const eq = Math.max(0, item.qty - item.qtyReturned);
+    if (eq <= 0 || item.qty <= 0) continue;
+    revenue += Math.round((item.subtotal * eq) / item.qty);
+    cogs += item.purchasePrice * eq;
   }
 
   const grossProfit = revenue - cogs;

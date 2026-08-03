@@ -115,6 +115,15 @@ export function useSalesTransactionsPage() {
 
   const [selectedTx, setSelectedTx] = useState<SalesTransactionRecord | null>(null);
 
+  const reload = () => {
+    if (!useNeonApi || !tenantId || branchIds.length === 0) return;
+    setLoading(true);
+    void listSalesTransactions(tenantId, branchIds).then((result) => {
+      setNeonRows(result.data ?? []);
+      setLoading(false);
+    });
+  };
+
   const clearDateFilter = () => {
     setDateFrom("");
     setDateTo("");
@@ -135,5 +144,6 @@ export function useSalesTransactionsPage() {
     clearDateFilter,
     selectedTx,
     setSelectedTx,
+    reload,
   };
 }

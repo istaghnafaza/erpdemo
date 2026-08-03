@@ -1,6 +1,10 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { DashboardKpiSettingsDialog } from "@/components/dashboard/DashboardKpiSettingsDialog";
+import {
+  DashboardKpiDetailDialog,
+  type DashboardKpiDetailData,
+} from "@/components/dashboard/DashboardKpiDetailDialog";
 import { useAuthStore } from "@/stores/auth.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import {
@@ -85,6 +89,13 @@ function DashboardPage() {
   const openNotifPanel = useNotificationStore((s) => s.openPanel);
   const markNotifRead = useNotificationStore((s) => s.markRead);
   const isKpiVisible = useDashboardPreferencesStore((s) => s.isKpiVisible);
+  const [detailKpiId, setDetailKpiId] = useState<DashboardKpiId | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const openKpiDetail = (id: DashboardKpiId) => {
+    setDetailKpiId(id);
+    setDetailOpen(true);
+  };
 
   const {
     user,
@@ -133,6 +144,39 @@ function DashboardPage() {
 
   if (!user) return null;
 
+  const kpiDetailData: DashboardKpiDetailData = {
+    period,
+    periodLabel: periodSales.label,
+    sales: {
+      total: periodSales.total,
+      transactions: periodSales.transactions,
+      marginPct: periodProfit.grossMarginPct,
+      compareLabel: periodSales.compareLabel,
+      deltaPct: periodSales.deltaPct,
+    },
+    profit: {
+      grossProfit: periodProfit.grossProfit,
+      netProfit: periodProfit.netProfit,
+      opex: periodProfit.opex,
+      marginPct: periodProfit.grossMarginPct,
+      compareLabel: periodProfit.compareLabel,
+      deltaGrossPct: periodProfit.deltaGrossPct,
+      deltaNetPct: periodProfit.deltaNetPct,
+    },
+    stock: {
+      criticalCount: criticalStockCount,
+      lowCount: lowStockCount,
+    },
+    receivables: {
+      overdueTotal,
+      customerCount: overdueCustomerCount,
+    },
+    cash: {
+      totalBalance: totalCashBalance,
+      accountCount: cashAccountCount,
+    },
+  };
+
   const kpiCards: { id: DashboardKpiId; node: ReactNode }[] = [
     {
       id: "sales",
@@ -146,6 +190,7 @@ function DashboardPage() {
           compareLabel={periodSales.compareLabel}
           icon={Wallet}
           gradient="primary"
+          onClick={() => openKpiDetail("sales")}
         />
       ),
     },
@@ -161,6 +206,7 @@ function DashboardPage() {
           compareLabel={periodProfit.compareLabel}
           icon={TrendingUp}
           gradient="info"
+          onClick={() => openKpiDetail("gross_profit")}
         />
       ),
     },
@@ -176,6 +222,7 @@ function DashboardPage() {
           compareLabel={periodProfit.compareLabel}
           icon={PiggyBank}
           gradient="success"
+          onClick={() => openKpiDetail("net_profit")}
         />
       ),
     },
@@ -191,6 +238,7 @@ function DashboardPage() {
           gradient="danger"
           alert={criticalStockCount > 0}
           cta={{ label: "Lihat", to: "/$tenantSlug/inventory", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("critical_stock")}
         />
       ),
     },
@@ -206,6 +254,7 @@ function DashboardPage() {
           gradient="warning"
           alert={overdueTotal > 0}
           cta={{ label: "Lihat", to: "/$tenantSlug/receivables", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("overdue_ar")}
         />
       ),
     },
@@ -219,6 +268,7 @@ function DashboardPage() {
           sub={`${cashAccountCount} akun kas & bank`}
           icon={Wallet}
           gradient="info"
+          onClick={() => openKpiDetail("cash_balance")}
         />
       ),
     },
@@ -689,6 +739,14 @@ function DashboardPage() {
           )}
         </Card>
       )}
+
+      <DashboardKpiDetailDialog
+        kpiId={detailKpiId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        data={kpiDetailData}
+        tenantSlug={tenantSlug}
+      />
     </AppShell>
   );
 }
@@ -703,6 +761,7 @@ function KpiCard({
   gradient,
   alert,
   cta,
+  onClick,
 }: {
   label: string;
   value: ReactNode;
@@ -713,6 +772,7 @@ function KpiCard({
   gradient: "primary" | "success" | "warning" | "danger" | "info";
   alert?: boolean;
   cta?: { label: string; to: string; params?: Record<string, string> };
+  onClick?: () => void;
 }) {
   const grad = {
     primary: "bg-gradient-primary",
@@ -724,9 +784,24 @@ function KpiCard({
 
   return (
     <Card
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "p-5 relative overflow-hidden shadow-card",
         alert && "ring-1 ring-destructive/30",
+        onClick &&
+          "cursor-pointer transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
       <div className="flex items-start justify-between">
@@ -759,6 +834,7 @@ function KpiCard({
         <Link
           to={cta.to}
           params={cta.params}
+          onClick={(e) => e.stopPropagation()}
           className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
           {cta.label} <ArrowUpRight className="h-3 w-3" />

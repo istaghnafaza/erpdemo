@@ -56,6 +56,7 @@ export interface DashboardPeriodSales {
 export interface DashboardPeriodProfit {
   grossProfit: number;
   netProfit: number;
+  opex: number;
   grossMarginPct: number;
   deltaGrossPct: number | undefined;
   deltaNetPct: number | undefined;
@@ -357,6 +358,7 @@ export function useDashboard() {
         today: {
           grossProfit: neonStats.todayGrossProfit,
           netProfit: neonStats.todayNetProfit,
+          opex: neonStats.todayOpex,
           label: "Hari Ini",
           compareLabel: "kemarin",
           deltaGrossPct: pctDelta(neonStats.todayGrossProfit, neonStats.yesterdayGrossProfit),
@@ -365,6 +367,7 @@ export function useDashboard() {
         week: {
           grossProfit: neonStats.weekGrossProfit,
           netProfit: neonStats.weekNetProfit,
+          opex: neonStats.weekGrossProfit - neonStats.weekNetProfit,
           label: "Minggu Ini",
           compareLabel: "minggu lalu",
           deltaGrossPct: undefined,
@@ -373,6 +376,7 @@ export function useDashboard() {
         month: {
           grossProfit: neonStats.monthGrossProfit,
           netProfit: neonStats.monthNetProfit,
+          opex: neonStats.monthOpex,
           label: "Bulan Ini",
           compareLabel: "bulan lalu",
           deltaGrossPct: undefined,
@@ -389,6 +393,7 @@ export function useDashboard() {
       return {
         grossProfit: current.grossProfit,
         netProfit: current.netProfit,
+        opex: current.opex,
         grossMarginPct: revenue > 0 ? Math.round((current.grossProfit / revenue) * 100) : 0,
         deltaGrossPct: current.deltaGrossPct,
         deltaNetPct: current.deltaNetPct,
@@ -418,6 +423,7 @@ export function useDashboard() {
     return {
       grossProfit: plCurrent.grossProfit,
       netProfit: plCurrent.netProfit,
+      opex: plCurrent.opex,
       grossMarginPct: plCurrent.grossMarginPct,
       deltaGrossPct:
         plPrevious && plPrevious.grossProfit > 0

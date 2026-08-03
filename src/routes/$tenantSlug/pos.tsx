@@ -96,6 +96,9 @@ function POSPage() {
     lastReceipt,
     pay,
     clearReceipt,
+    setActiveReturnOffset,
+    tenantId,
+    branchId,
   } = usePos();
 
   const cartItemCount = useMemo(
@@ -156,6 +159,9 @@ function POSPage() {
     onPartialShipLineChange: setActivePartialShipLine,
     onToggleItemSoLine: toggleActiveItemSoLine,
     onPay: handlePay,
+    tenantId,
+    branchId: branch?.id ?? branchId,
+    onReturnOffsetChange: setActiveReturnOffset,
   };
 
   if (!user) return null;

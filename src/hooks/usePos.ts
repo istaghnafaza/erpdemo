@@ -136,6 +136,7 @@ export function usePos() {
   const setManualDeliveryAddressFn = usePosStore((s) => s.setManualDeliveryAddress);
   const processPaymentFn = usePosStore((s) => s.processPayment);
   const clearReceiptFn = usePosStore((s) => s.clearReceipt);
+  const setReturnOffsetFn = usePosStore((s) => s.setReturnOffset);
   const seedDeliverySites = useCustomerDeliverySitesStore((s) => s.seedIfEmpty);
   const deliverySitesAll = useCustomerDeliverySitesStore((s) => s.sites);
   const getLastUsedSiteId = useCustomerDeliverySitesStore((s) => s.getLastUsedSiteId);
@@ -481,6 +482,12 @@ export function usePos() {
     [activeCartIndex, toggleItemSoLineFn, pricingBundle, repriceCartFn],
   );
 
+  const setActiveReturnOffset = useCallback(
+    (offset: { returnId: string; returnNumber: string; amount: number } | null) =>
+      setReturnOffsetFn(activeCartIndex, offset),
+    [activeCartIndex, setReturnOffsetFn],
+  );
+
   const setActiveDeliverySite = useCallback(
     (siteId: string) => {
       if (siteId === MANUAL_DELIVERY_SITE_VALUE) {
@@ -681,6 +688,9 @@ export function usePos() {
     activePartialShip: activeCart.partialShip,
     setActivePartialShipLine,
     toggleActiveItemSoLine,
+    setActiveReturnOffset,
+    tenantId,
+    branchId,
 
     // Payment
     isProcessing,

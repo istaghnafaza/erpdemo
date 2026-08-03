@@ -30,6 +30,8 @@
     "neon:uat:plan": "node scripts/uat-plan-limits.mjs",
     "neon:uat:sync": "node scripts/uat-data-sync.mjs",
     "neon:uat:pricing": "npx tsx scripts/uat-pricing-runner.ts",
+    "neon:uat:returns": "npx tsx scripts/uat-sales-returns-runner.ts",
+    "neon:uat:dashboard": "npx tsx scripts/uat-dashboard-margin-runner.ts",
     "railway:env": "node scripts/print-railway-env.mjs"
   },
   "dependencies": {

@@ -161,6 +161,8 @@ export const products = pgTable(
     }),
     unit: text("unit").notNull().default("pcs"),
     purchasePrice: bigint("purchase_price", { mode: "number" }).notNull().default(0),
+    isReturnable: boolean("is_returnable").notNull().default(true),
+    returnBlockLabel: text("return_block_label"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -244,6 +246,27 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "credit",
 ]);
 export const txStatusEnum = pgEnum("tx_status", ["completed", "voided", "returned"]);
+
+export const salesReturnStatusEnum = pgEnum("sales_return_status", [
+  "pending_qc",
+  "qc_completed",
+  "pending_approval",
+  "pending_offset",
+  "completed",
+  "rejected",
+  "cancelled",
+]);
+
+export const salesReturnSettlementEnum = pgEnum("sales_return_settlement", [
+  "standalone_refund",
+  "offset_in_new_sale",
+]);
+
+export const salesReturnRefundMethodEnum = pgEnum("sales_return_refund_method", [
+  "cash",
+  "transfer",
+  "credit_adjust",
+]);
 
 export const cashierSessions = pgTable("cashier_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -329,6 +352,9 @@ export const salesTransactions = pgTable(
     offlineCreatedAt: timestamp("offline_created_at", { withTimezone: true }),
     syncStatus: text("sync_status").notNull().default("synced"),
     status: txStatusEnum("status").notNull().default("completed"),
+    returnStatus: text("return_status").notNull().default("none"),
+    returnOffsetAmount: bigint("return_offset_amount", { mode: "number" }).notNull().default(0),
+    linkedReturnId: uuid("linked_return_id"),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -358,6 +384,82 @@ export const salesItems = pgTable("sales_items", {
   stockSource: stockSourceEnum("stock_source").notNull().default("verified"),
   /** Baris indent/SO — tidak mengurangi stok cabang saat checkout POS */
   isSoLine: boolean("is_so_line").notNull().default(false),
+  qtyReturned: integer("qty_returned").notNull().default(0),
+});
+
+export const returnSettings = pgTable("return_settings", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  refundWindowDays: integer("refund_window_days").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const salesReturns = pgTable(
+  "sales_returns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .references(() => branches.id, { onDelete: "cascade" }),
+    returnNumber: text("return_number").notNull(),
+    originalTransactionId: uuid("original_transaction_id")
+      .notNull()
+      .references(() => salesTransactions.id, { onDelete: "restrict" }),
+    originalTransactionNumber: text("original_transaction_number").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    customerName: text("customer_name"),
+    status: salesReturnStatusEnum("status").notNull().default("pending_qc"),
+    settlement: salesReturnSettlementEnum("settlement"),
+    isLateReturn: boolean("is_late_return").notNull().default(false),
+    refundMethod: salesReturnRefundMethodEnum("refund_method"),
+    requestedRefundAmount: bigint("requested_refund_amount", { mode: "number" }).notNull().default(0),
+    approvedRefundAmount: bigint("approved_refund_amount", { mode: "number" }).notNull().default(0),
+    offsetTransactionId: uuid("offset_transaction_id").references(() => salesTransactions.id, {
+      onDelete: "set null",
+    }),
+    reasonNotes: text("reason_notes"),
+    requestedBy: uuid("requested_by").references(() => profiles.id, { onDelete: "set null" }),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    qcBy: uuid("qc_by").references(() => profiles.id, { onDelete: "set null" }),
+    qcAt: timestamp("qc_at", { withTimezone: true }),
+    qcNotes: text("qc_notes"),
+    approvedBy: uuid("approved_by").references(() => profiles.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.tenantId, t.returnNumber)],
+);
+
+export const salesReturnItems = pgTable("sales_return_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  returnId: uuid("return_id")
+    .notNull()
+    .references(() => salesReturns.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  originalSalesItemId: uuid("original_sales_item_id")
+    .notNull()
+    .references(() => salesItems.id, { onDelete: "restrict" }),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  sku: text("sku").notNull(),
+  unit: text("unit").notNull(),
+  qtySold: integer("qty_sold").notNull(),
+  qtyRequested: integer("qty_requested").notNull(),
+  qtyQcPassed: integer("qty_qc_passed").notNull().default(0),
+  unitRefundPrice: bigint("unit_refund_price", { mode: "number" }).notNull().default(0),
+  refundSubtotal: bigint("refund_subtotal", { mode: "number" }).notNull().default(0),
+  qcPassed: boolean("qc_passed"),
+  qcRejectReason: text("qc_reject_reason"),
+  stockSource: stockSourceEnum("stock_source").notNull().default("verified"),
+  isNonReturnable: boolean("is_non_returnable").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------

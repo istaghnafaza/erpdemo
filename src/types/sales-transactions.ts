@@ -21,6 +21,7 @@ export interface SalesTransactionItemRecord {
   subtotal: number;
   /** Tercatat di struk — barang ini masuk Sales Order untuk fulfillment */
   isSoLine?: boolean;
+  qtyReturned?: number;
 }
 
 export interface SalesTransactionRecord {
@@ -33,6 +34,7 @@ export interface SalesTransactionRecord {
   cashierId: string;
   cashierName: string;
   customerName: string | null;
+  customerId?: string | null;
   itemCount: number;
   subtotal: number;
   discountAmount: number;
@@ -41,6 +43,8 @@ export interface SalesTransactionRecord {
   amountPaid: number;
   changeAmount: number;
   status: DbTxStatus;
+  returnStatus?: "none" | "partial" | "full";
+  returnOffsetAmount?: number;
   isOffline: boolean;
   orderFulfillmentType: OrderFulfillmentType;
   deliveryAddress: string | null;

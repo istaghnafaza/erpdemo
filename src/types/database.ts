@@ -135,6 +135,8 @@ export interface Product {
   category_id: string | null;
   unit: string;
   purchase_price: number;   // integer — IDR rupiah
+  is_returnable: boolean;
+  return_block_label: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -307,6 +309,9 @@ export interface SalesTransaction {
   offline_created_at: string | null;
   sync_status: DbSyncStatus;
   status: DbTxStatus;
+  return_status: "none" | "partial" | "full";
+  return_offset_amount: number;
+  linked_return_id: string | null;
   notes: string | null;
   client_tx_id?: string | null;
   created_at: string;
@@ -334,6 +339,7 @@ export interface SalesItem {
   stock_source: DbStockSource;
   /** Baris indent/SO — tidak kurangi stok toko saat checkout POS */
   is_so_line?: boolean;
+  qty_returned: number;
 }
 
 export type SalesItemInsert = Omit<SalesItem, 'id' | 'transaction_id'> & { id?: string; transaction_id?: string };

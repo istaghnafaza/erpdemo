@@ -1,4 +1,5 @@
 import { PosLinePricingBreakdown } from "@/components/pos/PosLinePricingBreakdown";
+import { ReturnOffsetLines } from "@/components/pos/ReturnOffsetLines";
 import {
   receiptTierDiscountTotal,
   receiptTotalSavings,
@@ -107,6 +108,23 @@ export function SalesReceiptBody({ receipt, className }: SalesReceiptBodyProps) 
         <div className="flex justify-between text-[10px]">
           <span>Diskon keranjang</span>
           <span>−{rupiah(receipt.discountAmount)}</span>
+        </div>
+      )}
+      {(receipt.returnOffsetAmount ?? 0) > 0 && (
+        <div className="py-1">
+          {receipt.returnOffsetItems && receipt.returnOffsetItems.length > 0 ? (
+            <ReturnOffsetLines
+              returnNumber={receipt.returnNumber ?? "Retur"}
+              amount={receipt.returnOffsetAmount!}
+              items={receipt.returnOffsetItems}
+              variant="receipt"
+            />
+          ) : (
+            <div className="flex justify-between text-[10px] text-emerald-700">
+              <span>Potong retur{receipt.returnNumber ? ` (${receipt.returnNumber})` : ""}</span>
+              <span>−{rupiah(receipt.returnOffsetAmount!)}</span>
+            </div>
+          )}
         </div>
       )}
       <div className="flex justify-between font-bold text-sm">

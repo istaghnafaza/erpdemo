@@ -18,11 +18,12 @@ import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { validateRegisterForm } from "@/lib/validation/register-form";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
-import { preparePublicAuthRoute } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
+import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 
 export const Route = createFileRoute("/register")({
-  beforeLoad: async () => {
-    const authedRedirect = await preparePublicAuthRoute();
+  beforeLoad: () => {
+    const authedRedirect = preparePublicAuthRouteSync();
     if (authedRedirect) throw authedRedirect;
   },
   head: () => ({
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/register")({
 });
 
 function RegisterPage() {
+  usePublicAuthRedirect();
   const register = useAuthStore((s) => s.register);
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();

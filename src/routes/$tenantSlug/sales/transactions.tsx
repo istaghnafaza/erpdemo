@@ -46,6 +46,7 @@ function SalesTransactionsPage() {
     clearDateFilter,
     selectedTx,
     setSelectedTx,
+    reload,
   } = useSalesTransactionsPage();
 
   const currentTenant = useAuthStore((s) => s.currentTenant);
@@ -187,7 +188,11 @@ function SalesTransactionsPage() {
         storeName={currentTenant?.name ?? selectedBranch?.name ?? ""}
         branchAddress={selectedBranch?.address ?? null}
         branchPhone={selectedBranch?.phone ?? currentTenant?.phone ?? null}
+        tenantId={currentTenant?.id ?? ""}
+        userId={user.id}
+        userRole={user.role}
         onClose={() => setSelectedTx(null)}
+        onUpdated={reload}
       />
     </AppShell>
   );
