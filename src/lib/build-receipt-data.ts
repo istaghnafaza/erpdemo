@@ -99,7 +99,8 @@ export function receiptTotalSavings(data: ReceiptData): number {
         available_stock: 0,
       }) satisfies CartItem,
   );
-  return cartGrossSubtotal(cartLike) - data.grandTotal;
+  const gross = cartGrossSubtotal(cartLike);
+  return Math.max(0, gross - data.grandTotal);
 }
 
 export function receiptTierDiscountTotal(data: ReceiptData): number {
@@ -125,12 +126,23 @@ export function buildReceiptFromSalesTransaction(
     storeName?: string;
   } = {},
 ): ReceiptData {
+  const returnOffset = tx.returnOffsetAmount ?? 0;
+  let cartDiscount = tx.discountAmount;
+  // Data lama: discount_amount kadang menyertakan potong retur
+  if (returnOffset > 0 && cartDiscount >= returnOffset) {
+    cartDiscount -= returnOffset;
+  }
+  const grandTotal =
+    returnOffset > 0
+      ? Math.max(0, tx.subtotal - cartDiscount - returnOffset)
+      : tx.grandTotal;
+
   return {
     transactionNumber: tx.transactionNumber,
     items: tx.items.map(salesItemToReceiptLine),
     subtotal: tx.subtotal,
-    discountAmount: tx.discountAmount,
-    grandTotal: tx.grandTotal,
+    discountAmount: cartDiscount,
+    grandTotal,
     paymentMethod: tx.paymentMethod,
     amountPaid: tx.amountPaid,
     change: tx.changeAmount,
@@ -145,6 +157,6 @@ export function buildReceiptFromSalesTransaction(
     branchPhone: opts.branchPhone ?? null,
     storeName: opts.storeName ?? tx.branchName,
     createdAt: tx.createdAt,
-    returnOffsetAmount: tx.returnOffsetAmount,
+    returnOffsetAmount: returnOffset > 0 ? returnOffset : undefined,
   };
 }

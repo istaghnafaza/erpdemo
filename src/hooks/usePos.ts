@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
-import { usePosStore, cartGrandTotal, cartSubtotal, type ActiveCart } from "@/stores/pos.store";
+import { usePosStore, cartGrandTotal, cartNetTotal, cartReturnOffsetAmount, cartSubtotal, type ActiveCart } from "@/stores/pos.store";
 import { useCustomerDeliverySitesStore } from "@/stores/customer-delivery-sites.store";
 import { listActiveSitesForCustomer } from "@/lib/customer-delivery-utils";
 import { getCustomerSegment, getMockTenantCustomers, useCustomersStore } from "@/stores/customers.store";
@@ -359,8 +359,11 @@ export function usePos() {
   // -------------------------------------------------------------------------
   const activeCart: ActiveCart = carts[activeCartIndex];
   const activeCartSubtotal = cartSubtotal(activeCart.items);
-  const activeCartTotal = cartGrandTotal(activeCart.items, activeCart.discount);
-  const activeCartDiscountAmount = activeCartSubtotal - activeCartTotal;
+  const activeCartGrossTotal = cartGrandTotal(activeCart.items, activeCart.discount);
+  const activeCartTotal = cartNetTotal(activeCart);
+  /** Diskon keranjang (%) saja — tidak termasuk potong retur. */
+  const activeCartDiscountAmount = activeCartSubtotal - activeCartGrossTotal;
+  const activeCartReturnOffsetAmount = cartReturnOffsetAmount(activeCart);
 
   const activeDeliverySites = useMemo(
     () =>

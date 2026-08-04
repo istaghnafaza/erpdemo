@@ -895,7 +895,8 @@ export const usePosStore = create<PosState>()(
       });
 
       const subtotal = cartSubtotal(cart.items);
-      const discountAmount = subtotal - grandTotal;
+      /** Diskon keranjang (%) — terpisah dari potong retur. */
+      const discountAmount = subtotal - grossTotal;
       const changeAmount =
         paymentMethod === "cash" ? Math.max(0, amountPaid - grandTotal) : 0;
       const isOnline = useOfflineStore.getState().isOnline;

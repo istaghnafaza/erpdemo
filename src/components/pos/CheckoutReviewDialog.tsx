@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { rupiah } from "@/lib/format";
 import { orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
 import { PosLinePricingBreakdown } from "@/components/pos/PosLinePricingBreakdown";
-import { cartTierDiscountTotal } from "@/lib/pos-line-pricing-display";
+import { ReturnOffsetSummary } from "@/components/pos/ReturnOffsetLines";
 import type { ActiveCart } from "@/stores/pos.store";
 import type { PaymentMethod } from "@/types/app";
 import type { OrderFulfillmentType } from "@/types/sales-transactions";
@@ -57,8 +57,6 @@ export function CheckoutReviewDialog({
   isProcessing,
   onConfirm,
 }: CheckoutReviewDialogProps) {
-  const tierDiscountTotal = cartTierDiscountTotal(cart.items);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -113,16 +111,15 @@ export function CheckoutReviewDialog({
               <span className="text-muted-foreground">Subtotal barang</span>
               <span>{rupiah(subtotal)}</span>
             </div>
-            {tierDiscountTotal > 0 && (
-              <div className="flex justify-between text-destructive/90 text-xs">
-                <span>Diskon tier (sudah termasuk di subtotal)</span>
-                <span>−{rupiah(tierDiscountTotal)}</span>
-              </div>
-            )}
             {discountAmount > 0 && (
               <div className="flex justify-between text-destructive">
                 <span>Diskon keranjang</span>
                 <span>−{rupiah(discountAmount)}</span>
+              </div>
+            )}
+            {cart.returnOffset && cart.returnOffset.amount > 0 && (
+              <div className="pt-1">
+                <ReturnOffsetSummary offset={cart.returnOffset} />
               </div>
             )}
             <div className="flex justify-between font-bold text-base pt-1 border-t">
