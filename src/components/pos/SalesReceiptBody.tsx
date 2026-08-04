@@ -1,7 +1,6 @@
 import { PosLinePricingBreakdown } from "@/components/pos/PosLinePricingBreakdown";
 import { ReturnOffsetLines } from "@/components/pos/ReturnOffsetLines";
 import {
-  receiptTierDiscountTotal,
   receiptTotalSavings,
   type ReceiptData,
   type ReceiptLineItem,
@@ -48,7 +47,6 @@ export interface SalesReceiptBodyProps {
 }
 
 export function SalesReceiptBody({ receipt, className }: SalesReceiptBodyProps) {
-  const tierDiscount = receiptTierDiscountTotal(receipt);
   const totalSavings = receiptTotalSavings(receipt);
 
   return (
@@ -98,12 +96,6 @@ export function SalesReceiptBody({ receipt, className }: SalesReceiptBodyProps) 
         <span>Subtotal</span>
         <span>{rupiah(receipt.subtotal)}</span>
       </div>
-      {tierDiscount > 0 && (
-        <div className="flex justify-between text-[10px] text-muted-foreground">
-          <span>Diskon tier barang</span>
-          <span>−{rupiah(tierDiscount)}</span>
-        </div>
-      )}
       {receipt.discountAmount > 0 && (
         <div className="flex justify-between text-[10px]">
           <span>Diskon keranjang</span>

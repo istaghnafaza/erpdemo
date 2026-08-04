@@ -20,7 +20,7 @@ import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { SalesReceiptPrintDialog } from "@/components/sales/SalesReceiptPrintDialog";
 import { SalesReturnDialog } from "@/components/sales/SalesReturnDialog";
 import { buildReceiptFromSalesTransaction } from "@/lib/build-receipt-data";
-import { paymentMethodLabel, TX_STATUS_LABELS, orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
+import { paymentMethodLabel, RETURN_STATUS_LABELS, TX_STATUS_LABELS, orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
 import { canVoidSale } from "@/lib/rbac";
 import { voidTransaction } from "@/lib/api/transactions";
 import { rupiah, tanggal } from "@/lib/format";
@@ -133,16 +133,26 @@ export function SalesTransactionDetailDialog({
             )}
             <div>
               <div className="text-muted-foreground text-xs">Status</div>
-              <Badge
-                variant="secondary"
-                className={
-                  transaction.status === "voided"
-                    ? "bg-destructive/15 text-destructive"
-                    : "bg-success/15 text-success"
-                }
-              >
-                {TX_STATUS_LABELS[transaction.status]}
-              </Badge>
+              <div className="flex flex-wrap gap-1.5 mt-0.5">
+                <Badge
+                  variant="secondary"
+                  className={
+                    transaction.status === "voided"
+                      ? "bg-destructive/15 text-destructive"
+                      : transaction.status === "returned"
+                        ? "bg-warning/15 text-warning-foreground"
+                        : "bg-success/15 text-success"
+                  }
+                >
+                  {TX_STATUS_LABELS[transaction.status]}
+                </Badge>
+                {(transaction.returnStatus ?? "none") !== "none" &&
+                  transaction.status !== "returned" && (
+                    <Badge variant="outline" className="border-amber-300 text-amber-700">
+                      {RETURN_STATUS_LABELS[transaction.returnStatus ?? "partial"]}
+                    </Badge>
+                  )}
+              </div>
             </div>
           </div>
 

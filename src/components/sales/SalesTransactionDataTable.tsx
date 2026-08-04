@@ -34,6 +34,7 @@ import { CurrencyDisplay } from "@/components/ui/currency-display";
 import {
   ORDER_FULFILLMENT_LABELS,
   PAYMENT_METHOD_LABELS,
+  RETURN_STATUS_LABELS,
   TX_STATUS_LABELS,
   orderFulfillmentLabel,
   paymentMethodLabel,
@@ -196,20 +197,28 @@ export function SalesTransactionDataTable({
         filterFn: "equals",
         cell: ({ row }) => {
           const status = row.original.status;
+          const returnStatus = row.original.returnStatus ?? "none";
           return (
-            <Badge
-              variant="secondary"
-              className={cn(
-                "border-0",
-                status === "voided"
-                  ? "bg-destructive/15 text-destructive"
-                  : status === "returned"
-                    ? "bg-warning/15 text-warning-foreground"
-                    : "bg-success/15 text-success",
+            <div className="flex flex-col gap-1 items-start">
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "border-0",
+                  status === "voided"
+                    ? "bg-destructive/15 text-destructive"
+                    : status === "returned"
+                      ? "bg-warning/15 text-warning-foreground"
+                      : "bg-success/15 text-success",
+                )}
+              >
+                {TX_STATUS_LABELS[status]}
+              </Badge>
+              {returnStatus !== "none" && status !== "returned" && (
+                <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700">
+                  {RETURN_STATUS_LABELS[returnStatus]}
+                </Badge>
               )}
-            >
-              {TX_STATUS_LABELS[status]}
-            </Badge>
+            </div>
           );
         },
       },

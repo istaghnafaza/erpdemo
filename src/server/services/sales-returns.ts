@@ -193,6 +193,70 @@ async function resolveCashAccountInTx(
   return row!.id;
 }
 
+const ACTIVE_RETURN_STATUSES = [
+  "pending_qc",
+  "qc_completed",
+  "pending_approval",
+  "pending_offset",
+] as const;
+
+async function getPendingReturnQtyByItemInTx(
+  tx: Tx,
+  transactionId: string,
+  excludeReturnId?: string,
+): Promise<Map<string, number>> {
+  const activeReturns = await tx.query.salesReturns.findMany({
+    where: and(
+      eq(salesReturns.originalTransactionId, transactionId),
+      inArray(salesReturns.status, [...ACTIVE_RETURN_STATUSES]),
+    ),
+  });
+  const map = new Map<string, number>();
+  for (const ret of activeReturns) {
+    if (excludeReturnId && ret.id === excludeReturnId) continue;
+    const retItems = await tx.query.salesReturnItems.findMany({
+      where: eq(salesReturnItems.returnId, ret.id),
+    });
+    for (const ri of retItems) {
+      map.set(
+        ri.originalSalesItemId,
+        (map.get(ri.originalSalesItemId) ?? 0) + ri.qtyRequested,
+      );
+    }
+  }
+  return map;
+}
+
+async function syncTransactionReturnStatusInTx(tx: Tx, transactionId: string): Promise<void> {
+  const txRow = await tx.query.salesTransactions.findFirst({
+    where: eq(salesTransactions.id, transactionId),
+  });
+  if (!txRow || txRow.status === "voided") return;
+
+  const itemRows = await tx.query.salesItems.findMany({
+    where: eq(salesItems.transactionId, transactionId),
+  });
+  const pendingByItem = await getPendingReturnQtyByItemInTx(tx, transactionId);
+
+  const finalizedStatus = updateOriginalReturnStatus(
+    itemRows.map((i) => ({ qty: i.qty, qty_returned: i.qtyReturned })),
+  );
+
+  const hasPending = pendingByItem.size > 0;
+  let returnStatus: "none" | "partial" | "full" = finalizedStatus;
+  if (finalizedStatus !== "full" && hasPending) {
+    returnStatus = "partial";
+  }
+
+  await tx
+    .update(salesTransactions)
+    .set({
+      returnStatus,
+      status: returnStatus === "full" ? "returned" : txRow.status,
+    })
+    .where(eq(salesTransactions.id, transactionId));
+}
+
 function updateOriginalReturnStatus(
   items: { qty: number; qty_returned: number }[],
 ): "none" | "partial" | "full" {
@@ -315,6 +379,7 @@ export async function createReturnRequest(
       where: eq(salesItems.transactionId, input.originalTransactionId),
     });
     const itemMap = new Map(itemRows.map((i) => [i.id, i]));
+    const pendingByItem = await getPendingReturnQtyByItemInTx(tx, input.originalTransactionId);
 
     const isLate = !isWithinRefundWindow(txRow.createdAt, new Date(), windowDays);
     let requestedTotal = 0;
@@ -324,8 +389,19 @@ export async function createReturnRequest(
       const orig = itemMap.get(line.salesItemId);
       if (!orig) throw new Error(`Baris transaksi tidak ditemukan: ${line.salesItemId}`);
       if (orig.isSoLine) throw new Error(`Barang SO tidak bisa diretur: ${orig.sku}`);
-      const available = orig.qty - orig.qtyReturned;
+      const pendingQty = pendingByItem.get(orig.id) ?? 0;
+      const available = orig.qty - orig.qtyReturned - pendingQty;
       if (line.qty <= 0 || line.qty > available) {
+        if (pendingQty > 0 && available <= 0) {
+          throw new Error(
+            `${orig.sku}: semua qty sudah diajukan retur atau sudah diretur`,
+          );
+        }
+        if (pendingQty > 0) {
+          throw new Error(
+            `Qty retur tidak valid untuk ${orig.sku} (max ${available}, ${pendingQty} qty menunggu proses retur)`,
+          );
+        }
         throw new Error(`Qty retur tidak valid untuk ${orig.sku} (max ${available})`);
       }
 
@@ -387,6 +463,9 @@ export async function createReturnRequest(
     const itemRowsOut = await tx.query.salesReturnItems.findMany({
       where: eq(salesReturnItems.returnId, retRow.id),
     });
+
+    await syncTransactionReturnStatusInTx(tx, txRow.id);
+
     return mapReturnRow(retRow, itemRowsOut);
   });
 }
@@ -460,6 +539,7 @@ export async function completeReturnQc(
       const outItems = await tx.query.salesReturnItems.findMany({
         where: eq(salesReturnItems.returnId, returnId),
       });
+      await syncTransactionReturnStatusInTx(tx, retRow.originalTransactionId);
       return mapReturnRow(rejected!, outItems);
     }
 
@@ -672,26 +752,7 @@ async function finalizeReturnInTx(
     }
   }
 
-  const origItems = await tx.query.salesItems.findMany({
-    where: eq(salesItems.transactionId, retRow.originalTransactionId),
-  });
-  const refreshedItems = await Promise.all(
-    origItems.map(async (i) => {
-      const row = await tx.query.salesItems.findFirst({ where: eq(salesItems.id, i.id) });
-      return row ?? i;
-    }),
-  );
-  const returnStatus = updateOriginalReturnStatus(
-    refreshedItems.map((i) => ({ qty: i.qty, qty_returned: i.qtyReturned })),
-  );
-
-  await tx
-    .update(salesTransactions)
-    .set({
-      returnStatus,
-      status: returnStatus === "full" ? "returned" : origTx.status,
-    })
-    .where(eq(salesTransactions.id, origTx.id));
+  await syncTransactionReturnStatusInTx(tx, origTx.id);
 
   const [updated] = await tx
     .update(salesReturns)
@@ -785,7 +846,7 @@ export async function getTransactionForReturn(
   transactionId: string,
 ): Promise<{
   transaction: ReturnType<typeof toSalesTransaction>;
-  items: ReturnType<typeof toSalesItem>[];
+  items: (ReturnType<typeof toSalesItem> & { qty_pending_return: number })[];
   withinWindow: boolean;
   deadlineLabel: string;
 } | null> {
@@ -801,9 +862,32 @@ export async function getTransactionForReturn(
   const itemRows = await db.query.salesItems.findMany({
     where: eq(salesItems.transactionId, transactionId),
   });
+
+  const activeReturns = await db.query.salesReturns.findMany({
+    where: and(
+      eq(salesReturns.originalTransactionId, transactionId),
+      inArray(salesReturns.status, [...ACTIVE_RETURN_STATUSES]),
+    ),
+  });
+  const pendingByItem = new Map<string, number>();
+  for (const ret of activeReturns) {
+    const retItems = await db.query.salesReturnItems.findMany({
+      where: eq(salesReturnItems.returnId, ret.id),
+    });
+    for (const ri of retItems) {
+      pendingByItem.set(
+        ri.originalSalesItemId,
+        (pendingByItem.get(ri.originalSalesItemId) ?? 0) + ri.qtyRequested,
+      );
+    }
+  }
+
   return {
     transaction: toSalesTransaction(txRow),
-    items: itemRows.map(toSalesItem),
+    items: itemRows.map((row) => ({
+      ...toSalesItem(row),
+      qty_pending_return: pendingByItem.get(row.id) ?? 0,
+    })),
     withinWindow: isWithinRefundWindow(txRow.createdAt, new Date(), windowDays),
     deadlineLabel: formatRefundDeadline(txRow.createdAt, windowDays),
   };

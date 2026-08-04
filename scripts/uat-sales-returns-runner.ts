@@ -418,6 +418,34 @@ async function runUat() {
   if (!reqA.isLateReturn) pass("flow-A", "flag within window", "isLateReturn=false");
   else fail("flow-A", "flag within window", "expected false");
 
+  const txAfterReqA = await db.query.salesTransactions.findFirst({
+    where: eq(salesTransactions.id, saleA.id),
+  });
+  if (txAfterReqA?.returnStatus === "partial") pass("flow-A", "status proses retur saat diajukan");
+  else fail("flow-A", "status proses retur saat diajukan", txAfterReqA?.returnStatus ?? "null");
+
+  await expectError("guard", "retur ganda qty sama", () =>
+    createReturnRequest(fx.tenantId, fx.branchId, fx.userId, {
+      originalTransactionId: saleA.id,
+      lines: [{ salesItemId: itemsA[0]!.id, qty: 2 }],
+    }),
+    "max 1",
+  );
+
+  const { sale: saleDup, items: itemsDup } = await createTestSale(fx, { qty: 1 });
+  const reqDup = await createReturnRequest(fx.tenantId, fx.branchId, fx.userId, {
+    originalTransactionId: saleDup.id,
+    lines: [{ salesItemId: itemsDup[0]!.id, qty: 1 }],
+  });
+  cleanupReturnIds.push(reqDup.id);
+  await expectError("guard", "retur ganda transaksi penuh", () =>
+    createReturnRequest(fx.tenantId, fx.branchId, fx.userId, {
+      originalTransactionId: saleDup.id,
+      lines: [{ salesItemId: itemsDup[0]!.id, qty: 1 }],
+    }),
+    "semua qty sudah diajukan",
+  );
+
   const qcA = await completeReturnQc(
     fx.tenantId,
     reqA.id,

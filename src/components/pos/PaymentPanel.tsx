@@ -282,6 +282,29 @@ export function PaymentPanel({
 
     <Card className="p-4 space-y-4 lg:sticky lg:top-20">
 
+      <div className="space-y-1 text-sm rounded-lg border p-3 bg-muted/20">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span>{rupiah(subtotal)}</span>
+        </div>
+
+        {discountAmount > 0 && (
+          <div className="flex justify-between text-destructive">
+            <span>Diskon keranjang</span>
+            <span>−{rupiah(discountAmount)}</span>
+          </div>
+        )}
+
+        {returnOffsetAmount > 0 && cart.returnOffset && (
+          <ReturnOffsetSummary offset={cart.returnOffset} />
+        )}
+
+        <div className="flex justify-between font-bold text-base pt-2 border-t">
+          <span>Total Tagihan</span>
+          <span>{rupiah(total)}</span>
+        </div>
+      </div>
+
       {tenantId && branchId && onReturnOffsetChange && (
         <ReturnOffsetPicker
           tenantId={tenantId}
@@ -291,55 +314,7 @@ export function PaymentPanel({
         />
       )}
 
-      <div className="bg-gradient-primary text-primary-foreground rounded-xl p-4">
-
-        <div className="text-xs opacity-80">Total Tagihan</div>
-
-        <div className="text-2xl font-bold mt-1">{rupiah(total)}</div>
-
-        <div className="text-xs opacity-80 mt-1">
-
-          {cart.items.length} item · {cart.items.reduce((s, i) => s + i.qty, 0)} qty
-
-        </div>
-
-      </div>
-
-
-
-      <div className="space-y-1 text-sm">
-
-        <div className="flex justify-between">
-
-          <span className="text-muted-foreground">Subtotal</span>
-
-          <span>{rupiah(subtotal)}</span>
-
-        </div>
-
-        {discountAmount > 0 && (
-
-          <div className="flex justify-between text-destructive">
-
-            <span>Diskon</span>
-
-            <span>−{rupiah(discountAmount)}</span>
-
-          </div>
-
-        )}
-
-        {returnOffsetAmount > 0 && cart.returnOffset && (
-          <div className="pt-1">
-            <ReturnOffsetSummary offset={cart.returnOffset} />
-          </div>
-        )}
-
-      </div>
-
-
-
-      {!isOnline && (
+      <div>
 
         <div className="rounded-lg bg-warning/15 text-warning-foreground text-xs p-2.5">
 

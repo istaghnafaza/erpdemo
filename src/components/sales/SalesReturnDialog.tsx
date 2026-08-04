@@ -27,6 +27,8 @@ import { getTransactionForReturn } from "@/lib/api/returns";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
+type ReturnDialogItem = SalesItem & { qty_pending_return?: number };
+
 interface SalesReturnDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,7 +50,7 @@ export function SalesReturnDialog({
 }: SalesReturnDialogProps) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [items, setItems] = useState<SalesItem[]>([]);
+  const [items, setItems] = useState<ReturnDialogItem[]>([]);
   const [withinWindow, setWithinWindow] = useState(true);
   const [deadlineLabel, setDeadlineLabel] = useState("");
   const [reasonNotes, setReasonNotes] = useState("");
@@ -79,7 +81,8 @@ export function SalesReturnDialog({
       items.filter((item) => {
         if (item.is_so_line) return false;
         const returned = item.qty_returned ?? 0;
-        return item.qty - returned > 0;
+        const pending = item.qty_pending_return ?? 0;
+        return item.qty - returned - pending > 0;
       }),
     [items],
   );
@@ -153,12 +156,18 @@ export function SalesReturnDialog({
               </TableHeader>
               <TableBody>
                 {returnableItems.map((item) => {
-                  const max = item.qty - (item.qty_returned ?? 0);
+                  const pending = item.qty_pending_return ?? 0;
+                  const max = item.qty - (item.qty_returned ?? 0) - pending;
                   return (
                     <TableRow key={item.id}>
                       <TableCell>
                         <div className="font-medium text-sm">{item.product_name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{item.sku}</div>
+                        {pending > 0 && (
+                          <div className="text-[10px] text-amber-600 mt-0.5">
+                            {pending} {item.unit} menunggu proses retur
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {max} {item.unit}

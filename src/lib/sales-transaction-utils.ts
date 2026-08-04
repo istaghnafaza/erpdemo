@@ -38,6 +38,12 @@ export const TX_STATUS_LABELS = {
   returned: "Retur",
 } as const;
 
+export const RETURN_STATUS_LABELS = {
+  none: "",
+  partial: "Proses Retur",
+  full: "Retur Penuh",
+} as const;
+
 export const ORDER_FULFILLMENT_LABELS: Record<OrderFulfillmentType, string> = {
   cod: "COD",
   shipped: "Di Kirim",
