@@ -75,6 +75,47 @@ export const neonUpdateSupplier = createServerFn({ method: "POST" })
     return supplier;
   });
 
+export const neonListSuppliersWithProducts = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string }) => data)
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { listSuppliersWithProducts } = await import("@/server/services/purchasing");
+    return listSuppliersWithProducts(data.tenantId);
+  });
+
+export const neonGetSuppliersForProduct = createServerFn({ method: "POST" })
+  .validator(
+    (data: { tenantId: string; productId: string; activeOnly?: boolean }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { getSuppliersForProduct } = await import("@/server/services/purchasing");
+    return getSuppliersForProduct(data.tenantId, data.productId, {
+      activeOnly: data.activeOnly,
+    });
+  });
+
+export const neonSetSupplierProductLinks = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      supplierId: string;
+      productIds: string[];
+      preferredProductId?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { setSupplierProductLinks } = await import("@/server/services/purchasing");
+    await setSupplierProductLinks(
+      data.tenantId,
+      data.supplierId,
+      data.productIds,
+      data.preferredProductId,
+    );
+    return { ok: true as const };
+  });
+
 export const neonGetPurchaseOrders = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -174,6 +215,22 @@ export const neonGetSalesOrder = createServerFn({ method: "POST" })
     return so;
   });
 
+export const neonFindSalesOrderByPosTransaction = createServerFn({ method: "POST" })
+  .validator(
+    (data: { tenantId: string; branchId: string; transactionNumber: string }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { findSalesOrderByPosTransactionNumber } = await import(
+      "@/server/services/sales-orders"
+    );
+    return findSalesOrderByPosTransactionNumber(
+      data.tenantId,
+      data.branchId,
+      data.transactionNumber,
+    );
+  });
+
 export const neonCreateSalesOrder = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -262,7 +319,7 @@ export const neonProcessItemFulfillment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireTenant(data.tenantId);
     const { processItemFulfillment } = await import("@/server/services/sales-orders");
-    await processItemFulfillment(
+    return processItemFulfillment(
       data.tenantId,
       data.soId,
       data.soItemId,
@@ -271,7 +328,6 @@ export const neonProcessItemFulfillment = createServerFn({ method: "POST" })
       data.userId,
       data.supplierId,
     );
-    return { ok: true };
   });
 
 export const neonConvertSalesOrderToInvoice = createServerFn({ method: "POST" })

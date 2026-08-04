@@ -26,9 +26,8 @@ export function effectiveItemSubtotal(item: Pick<MarginItem, "qty" | "qtyReturne
   return Math.round((item.subtotal * eq) / item.qty);
 }
 
-/** Margin satu baris (abaikan SO). */
+/** Margin satu baris (termasuk barang SO / indent dari checkout POS). */
 export function computeItemMargin(item: MarginItem): number {
-  if (item.isSoLine) return 0;
   const eq = effectiveItemQty(item);
   if (eq <= 0 || item.qty <= 0) return 0;
   const unitMargin = (item.subtotal - item.purchasePrice * item.qty) / item.qty;
@@ -104,7 +103,6 @@ export function topProfitableFromSalesRecords(
     if (options?.to && d > options.to) continue;
 
     for (const item of sale.items) {
-      if (item.isSoLine) continue;
       const profit = computeItemMargin(item);
       const prev = bySku.get(item.sku);
       if (!prev) {

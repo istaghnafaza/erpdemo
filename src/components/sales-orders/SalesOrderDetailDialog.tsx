@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { FileText, Package, Pencil, Truck } from "lucide-react";
 import {
@@ -18,13 +18,26 @@ import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { DateDisplay } from "@/components/ui/date-display";
 import { Badge } from "@/components/ui/badge";
 import { soStatusKind, soStatusLabel, canEditSalesOrder } from "@/stores/sales-orders.store";
+import { rupiah } from "@/lib/format";
+import {
+  prefillFulfillmentDraft,
+  soItemRemaining,
+  soOrderNeedsFulfillment,
+  soOrderRemainingQty,
+  suggestStockFulfillQty,
+} from "@/lib/so-fulfillment-utils";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth.store";
+import { indentPoStatusLabel } from "@/stores/purchasing.store";
+import type { FulfillItemResult } from "@/lib/api/sales-orders";
 import type { MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
 
 interface SalesOrderDetailDialogProps {
   order: MockSalesOrderWithDetails | null;
   onClose: () => void;
-  suppliers: { id: string; name: string }[];
+  suppliers: { id: string; name: string; phone?: string | null }[];
+  getSuppliersForProduct: (productId: string | null) => { id: string; name: string; phone?: string | null }[];
+  getDefaultSupplierId: (productId: string | null) => string | undefined;
   getProductStock: (productId: string) => number;
   loading: boolean;
   onConfirm: () => void;
@@ -34,7 +47,12 @@ interface SalesOrderDetailDialogProps {
     stockQty: number,
     indentQty: number,
     supplierId?: string,
-  ) => void;
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    indentPo?: FulfillItemResult["indentPo"];
+    waOpened?: boolean;
+  }>;
   onConvertInvoice: () => void;
   onEdit: () => void;
 }
@@ -43,6 +61,8 @@ export function SalesOrderDetailDialog({
   order,
   onClose,
   suppliers,
+  getSuppliersForProduct,
+  getDefaultSupplierId,
   getProductStock,
   loading,
   onConfirm,
@@ -52,9 +72,22 @@ export function SalesOrderDetailDialog({
   onEdit,
 }: SalesOrderDetailDialogProps) {
   const tenantSlug = useAuthStore((s) => s.currentTenant?.slug) ?? "";
+  const [activeTab, setActiveTab] = useState("fulfillment");
   const [stockQtys, setStockQtys] = useState<Record<string, number>>({});
   const [indentQtys, setIndentQtys] = useState<Record<string, number>>({});
   const [supplierIds, setSupplierIds] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (order) setActiveTab("fulfillment");
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (!order) return;
+    const draft = prefillFulfillmentDraft(order, getProductStock, getDefaultSupplierId);
+    setStockQtys(draft.stockQtys);
+    setIndentQtys(draft.indentQtys);
+    setSupplierIds(draft.supplierIds);
+  }, [order?.id, getProductStock, getDefaultSupplierId]);
 
   if (!order) return null;
 
@@ -64,14 +97,56 @@ export function SalesOrderDetailDialog({
     order.status === "completed";
 
   const showEdit = canEditSalesOrder(order);
+  const hasReceivableBalance = order.remaining_payment > 0;
+  const canConvertInvoice =
+    order.status === "completed" &&
+    !order.ar_invoice_number &&
+    hasReceivableBalance &&
+    Boolean(order.customer_id);
 
-  const handleFulfillItem = (itemId: string, productId: string | null) => {
+  const handleFulfillItem = async (itemId: string, productId: string | null) => {
     const stock = stockQtys[itemId] ?? 0;
     const indent = indentQtys[itemId] ?? 0;
-    onFulfill(itemId, stock, indent, supplierIds[itemId] ?? suppliers[0]?.id);
+    if (stock + indent <= 0) {
+      toast.error("Isi qty dari stok atau indent minimal 1");
+      return;
+    }
+    const itemSuppliers = getSuppliersForProduct(productId);
+    const result = await onFulfill(
+      itemId,
+      stock,
+      indent,
+      supplierIds[itemId] ?? itemSuppliers[0]?.id,
+    );
+    if (!result.success) {
+      toast.error(result.error ?? "Gagal fulfillment");
+      return;
+    }
     setStockQtys((p) => ({ ...p, [itemId]: 0 }));
     setIndentQtys((p) => ({ ...p, [itemId]: 0 }));
+    if (result.indentPo) {
+      toast.success(
+        result.waOpened
+          ? `PO ${result.indentPo.poNumber} dibuat — WhatsApp order terbuka`
+          : `PO ${result.indentPo.poNumber} dibuat — tambahkan nomor WA supplier untuk kirim order`,
+      );
+      setActiveTab("indent");
+    } else {
+      toast.success("Fulfillment stok diproses");
+    }
     void productId;
+  };
+
+  const applyStockMax = (item: (typeof order.items)[number]) => {
+    const avail = item.product_id ? getProductStock(item.product_id) : 0;
+    setStockQtys((p) => ({ ...p, [item.id]: suggestStockFulfillQty(item, avail) }));
+    setIndentQtys((p) => ({ ...p, [item.id]: 0 }));
+  };
+
+  const applyIndentAll = (item: (typeof order.items)[number]) => {
+    const remaining = soItemRemaining(item);
+    setStockQtys((p) => ({ ...p, [item.id]: 0 }));
+    setIndentQtys((p) => ({ ...p, [item.id]: remaining }));
   };
 
   return (
@@ -85,7 +160,7 @@ export function SalesOrderDetailDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="info">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full">
             <TabsTrigger value="info" className="flex-1">
               Info
@@ -115,9 +190,25 @@ export function SalesOrderDetailDialog({
               <Info
                 label="Sumber"
                 value={
-                  order.source === "pos" && order.pos_transaction_number
-                    ? `Checkout POS · ${order.pos_transaction_number}`
-                    : "Manual"
+                  order.source === "pos" && order.pos_transaction_number ? (
+                    <span>
+                      Checkout POS · {order.pos_transaction_number}
+                      {tenantSlug && (
+                        <>
+                          {" · "}
+                          <Link
+                            to="/$tenantSlug/sales/transactions"
+                            params={{ tenantSlug }}
+                            className="text-primary underline text-xs"
+                          >
+                            Histori penjualan
+                          </Link>
+                        </>
+                      )}
+                    </span>
+                  ) : (
+                    "Manual"
+                  )
                 }
               />
               <Info label="Dibuat" value={<DateDisplay value={order.created_at} withTime />} />
@@ -148,10 +239,18 @@ export function SalesOrderDetailDialog({
           </TabsContent>
 
           <TabsContent value="fulfillment" className="mt-4 space-y-4">
+            {soOrderNeedsFulfillment(order) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                <strong>{soOrderRemainingQty(order)} unit</strong> menunggu fulfillment — default
+                indent ke supplier. Stok cabang opsional jika tersedia.
+              </div>
+            )}
             {order.items.map((item) => {
-              const remaining = item.qty - item.delivered_qty;
+              const remaining = soItemRemaining(item);
               const available = item.product_id ? getProductStock(item.product_id) : 0;
+              const itemSuppliers = getSuppliersForProduct(item.product_id);
               const isDone = item.status === "fulfilled";
+              const progressPct = item.qty > 0 ? Math.round((item.delivered_qty / item.qty) * 100) : 0;
 
               return (
                 <div key={item.id} className="rounded-lg border p-4 space-y-3">
@@ -160,6 +259,35 @@ export function SalesOrderDetailDialog({
                       <div className="font-medium">{item.product_name}</div>
                       <div className="text-xs text-muted-foreground">
                         {item.sku} · Order {item.qty} {item.unit} · Terkirim {item.delivered_qty}
+                        {remaining > 0 && (
+                          <span className="text-amber-700"> · Sisa {remaining}</span>
+                        )}
+                      </div>
+                      {item.product_id && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={available > 0 ? "secondary" : "outline"}
+                            className={
+                              available > 0
+                                ? "text-xs font-normal gap-1"
+                                : "text-xs font-normal gap-1 text-muted-foreground"
+                            }
+                          >
+                            <Package className="h-3 w-3" />
+                            Stok cabang: {available} {item.unit}
+                          </Badge>
+                          {available === 0 && remaining > 0 && !isDone && (
+                            <span className="text-[11px] text-muted-foreground">
+                              Tidak ada stok — gunakan indent
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-1.5 h-1.5 w-full max-w-xs rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500 transition-all"
+                          style={{ width: `${progressPct}%` }}
+                        />
                       </div>
                     </div>
                     <StatusBadge
@@ -202,30 +330,32 @@ export function SalesOrderDetailDialog({
                   )}
 
                   {!isDone && canFulfill && remaining > 0 && (
-                    <div className="grid sm:grid-cols-4 gap-2 items-end pt-2 border-t">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Dari Stok (max {Math.min(remaining, available)})</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={Math.min(remaining, available)}
-                          className="h-8"
-                          value={stockQtys[item.id] ?? ""}
-                          placeholder="0"
-                          onChange={(e) =>
-                            setStockQtys((p) => ({
-                              ...p,
-                              [item.id]: Math.min(
-                                remaining,
-                                available,
-                                Math.max(0, Number(e.target.value) || 0),
-                              ),
-                            }))
-                          }
-                        />
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 text-xs"
+                          onClick={() => applyIndentAll(item)}
+                        >
+                          Indent sisa ({remaining})
+                        </Button>
+                        {available > 0 && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => applyStockMax(item)}
+                          >
+                            Isi dari stok ({Math.min(remaining, available)})
+                          </Button>
+                        )}
                       </div>
+                    <div className="grid sm:grid-cols-4 gap-2 items-end">
                       <div className="space-y-1">
-                        <Label className="text-xs">Indent (max {remaining})</Label>
+                        <Label className="text-xs">Indent ke supplier (max {remaining})</Label>
                         <Input
                           type="number"
                           min={0}
@@ -245,33 +375,80 @@ export function SalesOrderDetailDialog({
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Supplier Indent</Label>
-                        <Select
-                          value={supplierIds[item.id] ?? suppliers[0]?.id ?? ""}
-                          onValueChange={(v) =>
-                            setSupplierIds((p) => ({ ...p, [item.id]: v }))
+                        <Label className="text-xs">
+                          Dari stok
+                          {available > 0
+                            ? ` (max ${Math.min(remaining, available)})`
+                            : " (kosong)"}
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={Math.min(remaining, available)}
+                          className="h-8"
+                          value={stockQtys[item.id] ?? ""}
+                          placeholder="0"
+                          disabled={available <= 0}
+                          onChange={(e) =>
+                            setStockQtys((p) => ({
+                              ...p,
+                              [item.id]: Math.min(
+                                remaining,
+                                available,
+                                Math.max(0, Number(e.target.value) || 0),
+                              ),
+                            }))
                           }
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {suppliers.map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Supplier Indent</Label>
+                        {itemSuppliers.length === 0 ? (
+                          <p className="text-[11px] text-amber-700">
+                            Belum ada supplier untuk produk ini —{" "}
+                            {tenantSlug && (
+                              <Link
+                                to="/$tenantSlug/purchasing/suppliers"
+                                params={{ tenantSlug }}
+                                className="underline"
+                              >
+                                atur di modul Supplier
+                              </Link>
+                            )}
+                          </p>
+                        ) : (
+                          <Select
+                            value={
+                              supplierIds[item.id] ??
+                              itemSuppliers[0]?.id ??
+                              ""
+                            }
+                            onValueChange={(v) =>
+                              setSupplierIds((p) => ({ ...p, [item.id]: v }))
+                            }
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {itemSuppliers.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                       <Button
                         size="sm"
                         className="bg-indigo-600 hover:bg-indigo-700"
-                        disabled={loading}
-                        onClick={() => handleFulfillItem(item.id, item.product_id)}
+                        disabled={loading || (indentQtys[item.id] ?? 0) > 0 && itemSuppliers.length === 0}
+                        onClick={() => void handleFulfillItem(item.id, item.product_id)}
                       >
                         Proses
                       </Button>
+                    </div>
                     </div>
                   )}
                 </div>
@@ -299,7 +476,11 @@ export function SalesOrderDetailDialog({
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary">
-                            {po.status === "sent" ? "Terkirim" : "Draft"}
+                            {po.po_status
+                              ? indentPoStatusLabel(po.po_status)
+                              : po.status === "sent"
+                                ? "Menunggu jawaban supplier"
+                                : "Draft"}
                           </Badge>
                           {tenantSlug && (
                             <Link
@@ -307,7 +488,7 @@ export function SalesOrderDetailDialog({
                               params={{ tenantSlug }}
                               className="text-xs text-primary underline"
                             >
-                              Pembelian →
+                              Buka PO →
                             </Link>
                           )}
                         </div>
@@ -351,7 +532,7 @@ export function SalesOrderDetailDialog({
               </Button>
             </>
           )}
-          {order.status === "completed" && !order.ar_invoice_number && (
+          {canConvertInvoice && (
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={onConvertInvoice}
@@ -360,6 +541,23 @@ export function SalesOrderDetailDialog({
               Konversi ke Invoice (AR)
             </Button>
           )}
+          {order.status === "completed" &&
+            !order.ar_invoice_number &&
+            !canConvertInvoice &&
+            !hasReceivableBalance && (
+              <p className="text-xs text-muted-foreground w-full sm:w-auto sm:ml-auto">
+                Pembayaran lunas — tidak perlu invoice piutang.
+              </p>
+            )}
+          {order.status === "completed" &&
+            !order.ar_invoice_number &&
+            hasReceivableBalance &&
+            !order.customer_id && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-full sm:flex-1">
+                Sisa bayar {rupiah(order.remaining_payment)} — pilih pelanggan terdaftar (Edit SO)
+                sebelum buat invoice piutang.
+              </p>
+            )}
           {(order.status === "confirmed" || order.status === "partial_delivered") && (
             <Button variant="outline" onClick={onCancel} disabled={loading}>
               Batalkan SO

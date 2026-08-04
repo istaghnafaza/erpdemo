@@ -88,19 +88,9 @@ export function salesItemToReceiptLine(item: SalesTransactionItemRecord): Receip
 }
 
 export function receiptTotalSavings(data: ReceiptData): number {
-  const cartLike = data.items.map(
-    (item) =>
-      ({
-        ...item,
-        branch_product_id: "",
-        sku: "",
-        purchase_price: 0,
-        stock_source: "verified" as const,
-        available_stock: 0,
-      }) satisfies CartItem,
-  );
-  const gross = cartGrossSubtotal(cartLike);
-  return Math.max(0, gross - data.grandTotal);
+  const tierSavings = receiptTierDiscountTotal(data);
+  const cartSavings = data.discountAmount ?? 0;
+  return Math.max(0, tierSavings + cartSavings);
 }
 
 export function receiptTierDiscountTotal(data: ReceiptData): number {

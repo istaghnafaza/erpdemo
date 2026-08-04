@@ -48,6 +48,7 @@ function PurchaseOrdersPage() {
     closeForm,
     createPo,
     sendPo,
+    confirmSupplierPo,
     cancelPo,
   } = usePurchaseOrders();
 
@@ -90,10 +91,19 @@ function PurchaseOrdersPage() {
             <SelectContent>
               <SelectItem value="all">Semua Status</SelectItem>
               {(
-                ["draft", "sent", "partial_received", "received", "cancelled"] as DbPoStatus[]
+                [
+                  "draft",
+                  "awaiting_supplier",
+                  "sent",
+                  "partial_received",
+                  "received",
+                  "cancelled",
+                ] as DbPoStatus[]
               ).map((s) => (
                 <SelectItem key={s} value={s}>
-                  {poStatusLabel(s)}
+                  {s === "awaiting_supplier"
+                    ? "Menunggu jawaban supplier"
+                    : poStatusLabel(s)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -122,6 +132,15 @@ function PurchaseOrdersPage() {
           void sendPo(detailPo.id).then((r) => {
             if (r.success) toast.success("PO dikirim ke supplier");
             else toast.error(r.error ?? "Gagal");
+          });
+        }}
+        onConfirmSupplier={() => {
+          if (!detailPo) return;
+          void confirmSupplierPo(detailPo.id).then((r) => {
+            if (r.success) {
+              setDetailPo(null);
+              toast.success("Supplier dikonfirmasi — PO siap penerimaan");
+            } else toast.error(r.error ?? "Gagal");
           });
         }}
         onCancel={() => {

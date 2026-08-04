@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +25,13 @@ import { paymentMethodLabel, RETURN_STATUS_LABELS, TX_STATUS_LABELS, orderFulfil
 import { canVoidSale } from "@/lib/rbac";
 import { voidTransaction } from "@/lib/api/transactions";
 import { rupiah, tanggal } from "@/lib/format";
-import { Printer, RotateCcw, Ban } from "lucide-react";
+import { Printer, RotateCcw, Ban, Package } from "lucide-react";
 import { toast } from "sonner";
+import { useAuthStore } from "@/stores/auth.store";
+import { findSalesOrderByPosTransaction } from "@/lib/api/sales-orders";
+import { computeItemMargin, computeTransactionMargin } from "@/lib/sales-margin";
+import { useSalesOrdersStore } from "@/stores/sales-orders.store";
+import { isMockTenantId } from "@/lib/mock-session";
 import type { SalesTransactionRecord } from "@/types/sales-transactions";
 import type { UserRole } from "@/types/app";
 
@@ -35,6 +41,7 @@ interface SalesTransactionDetailDialogProps {
   branchAddress: string | null;
   branchPhone: string | null;
   tenantId: string;
+  branchId: string;
   userId: string;
   userRole: UserRole | string | undefined;
   onClose: () => void;
@@ -47,14 +54,61 @@ export function SalesTransactionDetailDialog({
   branchAddress,
   branchPhone,
   tenantId,
+  branchId,
   userId,
   userRole,
   onClose,
   onUpdated,
 }: SalesTransactionDetailDialogProps) {
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(true);
   const [returnOpen, setReturnOpen] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [linkedSoId, setLinkedSoId] = useState<string | null>(null);
+  const tenantSlug = useAuthStore((s) => s.currentTenant?.slug) ?? "";
+
+  const hasSoLines = useMemo(
+    () => transaction?.items.some((i) => i.isSoLine) ?? false,
+    [transaction?.items],
+  );
+
+  useEffect(() => {
+    if (!transaction || !hasSoLines) {
+      setLinkedSoId(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      if (isMockTenantId(tenantId)) {
+        const mock = useSalesOrdersStore
+          .getState()
+          .mockOrders.find(
+            (o) =>
+              o.branch_id === branchId &&
+              o.pos_transaction_number === transaction.transactionNumber,
+          );
+        if (!cancelled) setLinkedSoId(mock?.id ?? null);
+        return;
+      }
+      const result = await findSalesOrderByPosTransaction(
+        tenantId,
+        branchId,
+        transaction.transactionNumber,
+      );
+      if (!cancelled) setLinkedSoId(result.data?.id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [transaction?.id, transaction?.transactionNumber, tenantId, branchId, hasSoLines]);
+
+  useEffect(() => {
+    if (transaction) {
+      setDetailOpen(true);
+      setReturnOpen(false);
+      setReceiptOpen(false);
+    }
+  }, [transaction?.id]);
 
   const receiptData = useMemo(
     () =>
@@ -70,10 +124,15 @@ export function SalesTransactionDetailDialog({
 
   if (!transaction) return null;
 
+  const txMargin = computeTransactionMargin(transaction);
+
   const canReturn =
     transaction.status === "completed" &&
     (transaction.returnStatus ?? "none") !== "full";
-  const canVoid = canVoidSale(userRole) && transaction.status === "completed";
+  const canVoid =
+    canVoidSale(userRole) &&
+    transaction.status === "completed" &&
+    (transaction.returnStatus ?? "none") === "none";
 
   const handleVoid = async () => {
     if (!window.confirm(`Void transaksi ${transaction.transactionNumber}?`)) return;
@@ -91,7 +150,12 @@ export function SalesTransactionDetailDialog({
 
   return (
     <>
-      <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
+      <Dialog
+        open={Boolean(transaction) && detailOpen}
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-mono text-base">{transaction.transactionNumber}</DialogTitle>
@@ -164,10 +228,19 @@ export function SalesTransactionDetailDialog({
                 <TableHead className="text-center">Qty</TableHead>
                 <TableHead className="text-right">Harga</TableHead>
                 <TableHead className="text-right">Subtotal</TableHead>
+                <TableHead className="text-right">Keuntungan</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transaction.items.map((item) => (
+              {transaction.items.map((item) => {
+                const lineMargin = computeItemMargin({
+                  qty: item.qty,
+                  qtyReturned: item.qtyReturned,
+                  subtotal: item.subtotal,
+                  purchasePrice: item.purchasePrice,
+                  isSoLine: item.isSoLine,
+                });
+                return (
                 <TableRow key={item.id}>
                   <TableCell className="font-mono text-xs">{item.sku}</TableCell>
                   <TableCell>
@@ -187,8 +260,12 @@ export function SalesTransactionDetailDialog({
                   <TableCell className="text-right font-medium">
                     <CurrencyDisplay value={item.subtotal} />
                   </TableCell>
+                  <TableCell className="text-right text-sm">
+                    <CurrencyDisplay value={lineMargin} />
+                  </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
 
@@ -196,6 +273,10 @@ export function SalesTransactionDetailDialog({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span>{rupiah(transaction.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-emerald-700">
+              <span>Keuntungan (stok + SO)</span>
+              <span>{rupiah(txMargin)}</span>
             </div>
             {transaction.discountAmount > 0 && (
               <div className="flex justify-between text-destructive">
@@ -217,8 +298,25 @@ export function SalesTransactionDetailDialog({
               <Button variant="outline" onClick={() => setReceiptOpen(true)}>
                 <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk
               </Button>
+              {hasSoLines && linkedSoId && tenantSlug && (
+                <Button variant="outline" asChild>
+                  <Link
+                    to="/$tenantSlug/sales-orders"
+                    params={{ tenantSlug }}
+                    search={{ openSo: linkedSoId }}
+                  >
+                    <Package className="h-4 w-4 mr-1.5" /> Buka Sales Order
+                  </Link>
+                </Button>
+              )}
               {canReturn && (
-                <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDetailOpen(false);
+                    setReturnOpen(true);
+                  }}
+                >
                   <RotateCcw className="h-4 w-4 mr-1.5" /> Retur Barang
                 </Button>
               )}
@@ -241,15 +339,22 @@ export function SalesTransactionDetailDialog({
         receipt={receiptData}
       />
 
-      {canReturn && (
+      {canReturn && transaction && (
         <SalesReturnDialog
           open={returnOpen}
-          onOpenChange={setReturnOpen}
+          onOpenChange={(open) => {
+            setReturnOpen(open);
+            if (!open) onClose();
+          }}
           transaction={transaction}
           tenantId={tenantId}
           branchId={transaction.branchId}
           userId={userId}
-          onCreated={onUpdated}
+          onCreated={() => {
+            onUpdated?.();
+            setReturnOpen(false);
+            onClose();
+          }}
         />
       )}
     </>

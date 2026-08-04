@@ -18,6 +18,7 @@ import {
   type MockSalesOrderWithDetails,
   type MockSalesOrderItem,
 } from "@/lib/mock-sales-orders";
+import { MOCK_SUPPLIER_LIST } from "@/lib/mock-purchasing";
 import { useInventoryStore } from "@/stores/inventory.store";
 import { usePurchasingStore } from "@/stores/purchasing.store";
 import { hasActiveIndentPoForSoItem, indentPoDuplicateError } from "@/lib/indent-po-guard";
@@ -92,7 +93,7 @@ function isSoEditable(order: MockSalesOrderWithDetails): boolean {
 }
 
 function itemIsLocked(item: MockSalesOrderItem, order: MockSalesOrderWithDetails): boolean {
-  if (item.delivered_qty > 0 || item.fulfillments.length > 0) return true;
+  if (item.delivered_qty > 0 || (item.fulfillments?.length ?? 0) > 0) return true;
   return hasActiveIndentPoForSoItem(
     item.id,
     usePurchasingStore.getState().mockPurchaseOrders,
@@ -133,7 +134,26 @@ interface SalesOrdersState {
     stockQty: number,
     indentQty: number,
     supplierId?: string,
-  ) => { ok: boolean; error?: string };
+  ) => {
+    ok: boolean;
+    error?: string;
+    indentPo?: {
+      poNumber: string;
+      supplierId: string;
+      supplierName: string;
+      supplierPhone: string | null;
+      productName: string;
+      sku: string;
+      qty: number;
+      unit: string;
+      purchasePrice: number;
+      soNumber: string;
+      customerName: string;
+      deliveryAddress: string | null;
+      estimatedDeliveryDate: string | null;
+      notes: string | null;
+    };
+  };
 
   convertToInvoice: (soId: string) => { ok: boolean; error?: string; invoiceNumber?: string };
 
@@ -281,7 +301,7 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
       for (const existing of order.items) {
         if (draftExistingIds.has(existing.id)) continue;
 
-        if (existing.delivered_qty > 0 || existing.fulfillments.length > 0) {
+        if (existing.delivered_qty > 0 || (existing.fulfillments?.length ?? 0) > 0) {
           return {
             ok: false,
             error: `Baris "${existing.product_name}" sudah diproses — tidak bisa dihapus`,
@@ -302,7 +322,7 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
         if (!existing) return { ok: false, error: "Baris SO tidak ditemukan" };
 
         if (existing.product_id !== itemDraft.product_id) {
-          if (existing.delivered_qty > 0 || existing.fulfillments.length > 0) {
+          if (existing.delivered_qty > 0 || (existing.fulfillments?.length ?? 0) > 0) {
             return {
               ok: false,
               error: `Produk "${existing.product_name}" tidak bisa diganti — sudah ada fulfillment`,
@@ -460,6 +480,10 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
         return { ok: false, error: indentPoDuplicateError(order.so_number) };
       }
 
+      let indentMeta:
+        | NonNullable<ReturnType<SalesOrdersState["processFulfillment"]>["indentPo"]>
+        | undefined;
+
       set((s) => {
         const o = s.mockOrders.find((x) => x.id === soId);
         if (!o) return;
@@ -486,13 +510,18 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
 
         if (indentQty > 0) {
           const supplier = MOCK_SUPPLIERS.find((sup) => sup.id === supplierId) ?? MOCK_SUPPLIERS[0];
+          const supplierRecord =
+            MOCK_SUPPLIER_LIST.find((s) => s.id === (supplierId ?? supplier.id)) ?? null;
           const supplierIdVal = supplierId ?? MOCK_SUPPLIER_SEMEN;
           const existingGroup = findIndentPoGroupBySupplier(o, supplierIdVal);
+          const newPoNumber = getNextMockIndentPoNumber();
 
           let groupId: string;
+          let poNumber: string;
 
           if (existingGroup) {
             groupId = existingGroup.id;
+            poNumber = existingGroup.po_number;
             upsertIndentPoLineInSo(
               o,
               {
@@ -501,22 +530,25 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
                 sales_order_id: soId,
                 supplier_id: supplierIdVal,
                 supplier_name: supplier.name,
-                status: existingGroup.status,
+                status: "sent",
+                po_status: "awaiting_supplier",
               },
               soItemId,
               indentQty,
             );
           } else {
             groupId = getNextMockFulfillmentId();
+            poNumber = newPoNumber;
             upsertIndentPoLineInSo(
               o,
               {
                 id: groupId,
-                po_number: getNextMockIndentPoNumber(),
+                po_number: newPoNumber,
                 sales_order_id: soId,
                 supplier_id: supplierIdVal,
                 supplier_name: supplier.name,
-                status: "draft",
+                status: "sent",
+                po_status: "awaiting_supplier",
               },
               soItemId,
               indentQty,
@@ -534,6 +566,23 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
             purchase_price_at_time: 0,
             status: "planned",
           });
+
+          indentMeta = {
+            poNumber,
+            supplierId: supplierIdVal,
+            supplierName: supplier.name,
+            supplierPhone: supplierRecord?.phone ?? supplier.phone ?? null,
+            productName: it.product_name,
+            sku: it.sku,
+            qty: indentQty,
+            unit: it.unit,
+            purchasePrice: 0,
+            soNumber: o.so_number,
+            customerName: o.customer_name,
+            deliveryAddress: o.delivery_address,
+            estimatedDeliveryDate: o.estimated_delivery_date,
+            notes: o.notes,
+          };
         }
 
         it.delivered_qty += totalFulfill;
@@ -541,7 +590,7 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
         o.status = computeSoStatus(o.items);
       });
 
-      return { ok: true };
+      return indentMeta ? { ok: true, indentPo: indentMeta } : { ok: true };
     },
 
     convertToInvoice: (soId) => {
@@ -552,6 +601,15 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
       }
       if (order.ar_invoice_number) {
         return { ok: false, error: `Sudah di-invoice: ${order.ar_invoice_number}` };
+      }
+      if (order.remaining_payment <= 0) {
+        return { ok: false, error: "SO sudah lunas — tidak perlu invoice piutang" };
+      }
+      if (!order.customer_id) {
+        return {
+          ok: false,
+          error: "Pelanggan walk-in — pilih pelanggan terdaftar (Edit SO) untuk invoice piutang",
+        };
       }
 
       const invoiceNumber = getNextMockInvoiceNumber();
@@ -577,7 +635,7 @@ export const useSalesOrdersStore = create<SalesOrdersState>()(
             indentFul.status = "delivered";
           }
 
-          const indentGroup = o.indent_pos.find((p) =>
+          const indentGroup = (o.indent_pos ?? []).find((p) =>
             p.lines.some((l) => l.so_item_id === soItemId),
           );
           if (indentGroup) indentGroup.status = "sent";

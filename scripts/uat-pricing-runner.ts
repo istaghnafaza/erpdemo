@@ -58,7 +58,26 @@ async function testEngine() {
   assert(tierT1.tier_code === "T1", `Expected T1 for qty 10, got ${tierT1.tier_code}`);
   console.log("  ✓ pickVolumeTier — qty 10 → T1");
 
+  const tierCart = pickVolumeTier(bundle.volume_tiers, 1, 50_000, 600_000);
+  assert(tierCart.tier_code === "T1", `Expected T1 for cart 600k, got ${tierCart.tier_code}`);
+  console.log("  ✓ pickVolumeTier — min belanja keranjang 600k → T1");
+
   const line = calculateLinePrice(
+    {
+      base_selling_price: 65_000,
+      purchase_price: 40_000,
+      qty: 10,
+      customer_tier_discount_percent: 5,
+    },
+    bundle,
+  );
+  assert(line.volume_discount_percent === 3, "volume disc should be 3%");
+  assert(line.customer_discount_percent === 5, "customer disc should be 5%");
+  assert(line.effective_discount_percent === 8, "stack should be 8% when margin allows");
+  assert(line.unit_net_price >= line.floor_price, "must not go below floor");
+  console.log(`  ✓ stack 3%+5% → net Rp ${line.unit_net_price} (floor ${line.floor_price})`);
+
+  const thinMargin = calculateLinePrice(
     {
       base_selling_price: 65_000,
       purchase_price: 58_000,
@@ -67,11 +86,9 @@ async function testEngine() {
     },
     bundle,
   );
-  assert(line.volume_discount_percent === 3, "volume disc should be 3%");
-  assert(line.customer_discount_percent === 5, "customer disc should be 5%");
-  assert(line.effective_discount_percent === 8, "stack should be 8%");
-  assert(line.unit_net_price >= line.floor_price, "must not go below floor");
-  console.log(`  ✓ stack 3%+5% → net Rp ${line.unit_net_price} (floor ${line.floor_price})`);
+  assert(thinMargin.margin_limited_discount === true, "thin margin line should be capped");
+  assert(thinMargin.effective_discount_percent < 8, "effective disc below requested stack");
+  console.log(`  ✓ margin-safe cap — efektif ${thinMargin.effective_discount_percent}% (bukan 8%)`);
 
   const soLine = calculateLinePrice(
     {
@@ -98,7 +115,8 @@ async function testEngine() {
     bundle,
   );
   assert(clamped.clamped_to_floor || clamped.unit_net_price >= clamped.floor_price, "floor enforced");
-  console.log("  ✓ floor price enforced on high discount");
+  assert(clamped.margin_limited_discount === true, "high stack should be margin-limited per line");
+  console.log("  ✓ floor price enforced on high discount (margin-safe per barang)");
 }
 
 async function testNeonBundle() {

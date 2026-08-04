@@ -79,8 +79,9 @@ function PricingSettingsPage() {
             margin min default di bawah; per kategori (opsional) di DB.
           </li>
           <li>
-            <strong className="text-foreground">Tier volume (T0–T3)</strong> — qty atau nilai baris
-            memenuhi syarat → diskon volume %.
+            <strong className="text-foreground">Tier volume (T0–T3)</strong> — min qty per barang
+            atau min belanja total keranjang → diskon volume %. Tiap barang dibatasi margin min
+            (anti rugi).
           </li>
           <li>
             <strong className="text-foreground">Tier pelanggan (P0–P4)</strong> — diskon % (Master
@@ -127,10 +128,11 @@ function PricingSettingsPage() {
       </section>
 
       <section className="rounded-lg border p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Tier harga volume (min belanja / qty)</h2>
+        <h2 className="font-semibold text-sm">Tier harga volume (min qty / min belanja keranjang)</h2>
         <p className="text-xs text-muted-foreground">
-          Diskon tier volume + tier pelanggan dijumlahkan, dibatasi cap di atas. Floor = HPP × (1 +
-          margin min).
+          Min qty = per barang. Min belanja = total keranjang (bukan per barang). Diskon % tier
+          diterapkan per barang, otomatis dibatasi margin min masing-masing (barang tipis margin
+          dapat diskon lebih kecil).
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -139,7 +141,7 @@ function PricingSettingsPage() {
                 <th className="py-2 pr-2">Kode</th>
                 <th className="py-2 pr-2">Nama</th>
                 <th className="py-2 pr-2">Min qty</th>
-                <th className="py-2 pr-2">Min nilai baris (Rp)</th>
+                <th className="py-2 pr-2">Min belanja keranjang (Rp)</th>
                 <th className="py-2">Diskon %</th>
               </tr>
             </thead>

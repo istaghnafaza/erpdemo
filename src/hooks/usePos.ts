@@ -414,6 +414,9 @@ export function usePos() {
         cartItem = applyPricingToCartItem(cartItem, activeCart.customer, pricingBundle);
       }
       addItemToCartFn(activeCartIndex, cartItem);
+      if (pricingBundle) {
+        repriceCartFn(activeCartIndex, pricingBundle);
+      }
     },
     [
       activeCartIndex,
@@ -421,6 +424,7 @@ export function usePos() {
       addItemToCartFn,
       legacyModeActive,
       pricingBundle,
+      repriceCartFn,
     ],
   );
 

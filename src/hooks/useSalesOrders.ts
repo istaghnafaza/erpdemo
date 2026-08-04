@@ -2,7 +2,7 @@
 // useSalesOrders — business logic for Sales Order module (Fase 9).
 // =============================================================================
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
@@ -16,21 +16,39 @@ import {
 } from "@/stores/sales-orders.store";
 import {
   getSalesOrders,
+  getSalesOrder,
   createSalesOrder,
   updateSalesOrder,
   processItemFulfillment,
   convertSalesOrderToInvoice,
 } from "@/lib/api/sales-orders";
-import { getSuppliers } from "@/lib/api/purchasing";
+import {
+  listSuppliersWithProductsApi,
+} from "@/lib/api/purchasing";
 import { getCustomers } from "@/lib/api/customers";
 import { getBranchProducts } from "@/lib/api/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getMockPosCatalog } from "@/lib/mock-pos-catalog";
 import { getMockTenantCustomers } from "@/stores/customers.store";
-import { MOCK_SUPPLIERS, type MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
+import { type MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
 import { mapNeonSalesOrderToDetails } from "@/lib/map-neon-sales-order";
+import { soOrderNeedsFulfillment } from "@/lib/so-fulfillment-utils";
+import {
+  formatIndentSupplierOrderMessage,
+  openSupplierWhatsAppOrder,
+} from "@/lib/supplier-wa-order";
+import type { FulfillItemResult } from "@/lib/api/sales-orders";
+import { ensureMockSuppliersSeeded, useSuppliersStore } from "@/stores/suppliers.store";
 import { useInventoryStore } from "@/stores/inventory.store";
 import type { Customer, DbSoStatus } from "@/types/database";
+
+export type SoStatusFilter = DbSoStatus | "all" | "pending_fulfillment";
+
+export interface SoSupplierOption {
+  id: string;
+  name: string;
+  phone?: string | null;
+}
 
 export interface SoProductOption {
   productId: string;
@@ -60,7 +78,7 @@ export function useSalesOrders() {
   const branchId = activeBranch?.id ?? "";
   const isMockTenant = isMockTenantId(tenantId);
 
-  const [statusFilter, setStatusFilter] = useState<DbSoStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<SoStatusFilter>("pending_fulfillment");
   const [formOpen, setFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<MockSalesOrderWithDetails | null>(null);
   const [detailOrder, setDetailOrder] = useState<MockSalesOrderWithDetails | null>(null);
@@ -79,7 +97,10 @@ export function useSalesOrders() {
     queryKey: queryKeys.salesOrders(tenantId, branchId, statusFilter),
     queryFn: async () => {
       const result = await getSalesOrders(tenantId, branchId, {
-        status: statusFilter === "all" ? undefined : statusFilter,
+        status:
+          statusFilter === "all" || statusFilter === "pending_fulfillment"
+            ? undefined
+            : statusFilter,
       });
       if (result.error) throw new Error(result.error);
       return (result.data ?? []).map(mapNeonSalesOrderToDetails) as MockSalesOrderWithDetails[];
@@ -110,10 +131,17 @@ export function useSalesOrders() {
     staleTime: 60_000,
   });
 
-  const suppliersQuery = useQuery({
-    queryKey: queryKeys.suppliers(tenantId, true),
+  const mockSupplierRows = useSuppliersStore((s) => s.suppliers);
+  const mockProductLinks = useSuppliersStore((s) => s.productLinks);
+
+  useEffect(() => {
+    if (isMockTenant) ensureMockSuppliersSeeded();
+  }, [isMockTenant]);
+
+  const suppliersWithProductsQuery = useQuery({
+    queryKey: queryKeys.suppliersWithProducts(tenantId),
     queryFn: async () => {
-      const result = await getSuppliers(tenantId, { activeOnly: true });
+      const result = await listSuppliersWithProductsApi(tenantId);
       if (result.error) throw new Error(result.error);
       return result.data ?? [];
     },
@@ -124,11 +152,28 @@ export function useSalesOrders() {
   const mockOrdersFiltered = useMemo(() => {
     let list = mockOrders;
     if (branchId) list = list.filter((o) => o.branch_id === branchId);
-    if (statusFilter !== "all") list = list.filter((o) => o.status === statusFilter);
+    if (statusFilter === "pending_fulfillment") {
+      list = list.filter(soOrderNeedsFulfillment);
+    } else if (statusFilter !== "all") {
+      list = list.filter((o) => o.status === statusFilter);
+    }
     return list;
   }, [mockOrders, branchId, statusFilter]);
 
-  const orders = isMockTenant ? mockOrdersFiltered : (ordersQuery.data ?? []);
+  const ordersRaw = isMockTenant ? mockOrdersFiltered : (ordersQuery.data ?? []);
+
+  const orders = useMemo(() => {
+    let list = ordersRaw;
+    if (!isMockTenant && statusFilter === "pending_fulfillment") {
+      list = list.filter(soOrderNeedsFulfillment);
+    }
+    return [...list].sort((a, b) => {
+      const aPending = soOrderNeedsFulfillment(a) ? 0 : 1;
+      const bPending = soOrderNeedsFulfillment(b) ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [ordersRaw, isMockTenant, statusFilter]);
   const loading = isMockTenant ? false : ordersQuery.isPending;
 
   const customers = useMemo((): Customer[] => {
@@ -163,18 +208,105 @@ export function useSalesOrders() {
     }));
   }, [branchId, isMockTenant, catalogQuery.data, computeStock]);
 
-  const suppliers = isMockTenant
-    ? MOCK_SUPPLIERS
-    : (suppliersQuery.data ?? []).length > 0
-      ? (suppliersQuery.data as typeof MOCK_SUPPLIERS)
-      : MOCK_SUPPLIERS;
+  const suppliers = useMemo((): SoSupplierOption[] => {
+    if (isMockTenant) {
+      return useSuppliersStore
+        .getState()
+        .listForTenant(tenantId)
+        .filter((s) => s.is_active)
+        .map((s) => ({ id: s.id, name: s.name, phone: s.phone }));
+    }
+    const rows = suppliersWithProductsQuery.data ?? [];
+    return rows.filter((s) => s.is_active).map((s) => ({ id: s.id, name: s.name, phone: s.phone }));
+  }, [isMockTenant, tenantId, suppliersWithProductsQuery.data, mockSupplierRows, mockProductLinks]);
+
+  const getSuppliersForProduct = useCallback(
+    (productId: string | null): SoSupplierOption[] => {
+      if (!productId) return suppliers;
+      if (isMockTenant) {
+        return useSuppliersStore
+          .getState()
+          .getSuppliersForProduct(productId, true)
+          .map((s) => ({ id: s.id, name: s.name, phone: s.phone }));
+      }
+      const rows = suppliersWithProductsQuery.data ?? [];
+      const linked = rows.filter(
+        (s) => s.is_active && s.product_ids.includes(productId),
+      );
+      if (linked.length === 0) {
+        return rows.filter((s) => s.is_active).map((s) => ({ id: s.id, name: s.name, phone: s.phone }));
+      }
+      return linked.map((s) => ({ id: s.id, name: s.name, phone: s.phone }));
+    },
+    [suppliers, isMockTenant, suppliersWithProductsQuery.data],
+  );
+
+  const getDefaultSupplierId = useCallback(
+    (productId: string | null): string | undefined => {
+      if (!productId) return suppliers[0]?.id;
+      if (isMockTenant) {
+        return useSuppliersStore.getState().getPreferredSupplierIdForProduct(productId) ?? undefined;
+      }
+      const rows = suppliersWithProductsQuery.data ?? [];
+      const linked = rows.filter((s) => s.is_active && s.product_ids.includes(productId));
+      return linked[0]?.id ?? suppliers[0]?.id;
+    },
+    [suppliers, isMockTenant, suppliersWithProductsQuery.data],
+  );
+
+  const refetchOrders = useCallback(async (): Promise<MockSalesOrderWithDetails[]> => {
+    if (isMockTenant) {
+      let list = useSalesOrdersStore.getState().mockOrders;
+      if (branchId) list = list.filter((o) => o.branch_id === branchId);
+      if (statusFilter === "pending_fulfillment") {
+        list = list.filter(soOrderNeedsFulfillment);
+      } else if (statusFilter !== "all") {
+        list = list.filter((o) => o.status === statusFilter);
+      }
+      return list;
+    }
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.salesOrders(tenantId, branchId, statusFilter),
+      queryFn: async () => {
+        const result = await getSalesOrders(tenantId, branchId, {
+          status:
+            statusFilter === "all" || statusFilter === "pending_fulfillment"
+              ? undefined
+              : statusFilter,
+        });
+        if (result.error) throw new Error(result.error);
+        return (result.data ?? []).map(mapNeonSalesOrderToDetails) as MockSalesOrderWithDetails[];
+      },
+    });
+  }, [isMockTenant, queryClient, tenantId, branchId, statusFilter]);
 
   const refreshOrders = useCallback(async () => {
-    if (isMockTenant) return;
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.salesOrders(tenantId, branchId),
+      queryKey: queryKeys.salesOrders(tenantId, branchId, statusFilter),
     });
-  }, [isMockTenant, queryClient, tenantId, branchId]);
+    await refetchOrders();
+  }, [queryClient, tenantId, branchId, statusFilter, refetchOrders]);
+
+  const syncDetailOrder = useCallback(
+    async (soId: string) => {
+      if (isMockTenant) {
+        const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
+        if (updated) setDetailOrder(updated);
+        return;
+      }
+      const result = await getSalesOrder(tenantId, soId);
+      if (result.data) {
+        setDetailOrder(mapNeonSalesOrderToDetails(result.data));
+      } else {
+        const list = await refetchOrders();
+        setDetailOrder(list.find((o) => o.id === soId) ?? null);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders(tenantId, branchId, statusFilter),
+      });
+    },
+    [isMockTenant, tenantId, branchId, statusFilter, refetchOrders, queryClient],
+  );
 
   const openCreateForm = useCallback(() => {
     setEditingOrder(null);
@@ -288,18 +420,17 @@ export function useSalesOrders() {
         const result = confirmMockOrder(soId);
         setActionLoading(false);
         if (!result.ok) return { success: false, error: result.error };
-        setDetailOrder((prev) =>
-          prev?.id === soId ? { ...prev, status: "confirmed" } : prev,
-        );
+        const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
+        if (updated) setDetailOrder(updated);
         return { success: true };
       }
       const result = await updateSalesOrder(tenantId, soId, { status: "confirmed" });
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await refreshOrders();
+      await syncDetailOrder(soId);
       return { success: true };
     },
-    [isMockTenant, confirmMockOrder, refreshOrders, tenantId],
+    [isMockTenant, confirmMockOrder, syncDetailOrder, tenantId],
   );
 
   const cancelOrder = useCallback(
@@ -322,6 +453,26 @@ export function useSalesOrders() {
     [isMockTenant, cancelMockOrder, refreshOrders, tenantId],
   );
 
+  const dispatchIndentWa = useCallback(
+    (indentPo: NonNullable<FulfillItemResult["indentPo"]>) => {
+      const message = formatIndentSupplierOrderMessage({
+        customerName: indentPo.customerName,
+        deliveryAddress: indentPo.deliveryAddress,
+        lines: [
+          {
+            productName: indentPo.productName,
+            sku: indentPo.sku,
+            qty: indentPo.qty,
+            unit: indentPo.unit,
+          },
+        ],
+        notes: indentPo.notes,
+      });
+      return openSupplierWhatsAppOrder(indentPo.supplierPhone, message);
+    },
+    [],
+  );
+
   const fulfillItem = useCallback(
     async (
       soId: string,
@@ -329,7 +480,12 @@ export function useSalesOrders() {
       stockQty: number,
       indentQty: number,
       supplierId?: string,
-    ) => {
+    ): Promise<{
+      success: boolean;
+      error?: string;
+      indentPo?: FulfillItemResult["indentPo"];
+      waOpened?: boolean;
+    }> => {
       setActionLoading(true);
       if (isMockTenant) {
         const result = processFulfillment(soId, soItemId, stockQty, indentQty, supplierId);
@@ -337,7 +493,8 @@ export function useSalesOrders() {
         if (!result.ok) return { success: false, error: result.error };
         const updated = useSalesOrdersStore.getState().mockOrders.find((o) => o.id === soId);
         if (updated) setDetailOrder(updated);
-        return { success: true };
+        const waOpened = result.indentPo ? dispatchIndentWa(result.indentPo) : false;
+        return { success: true, indentPo: result.indentPo, waOpened };
       }
       const result = await processItemFulfillment(
         tenantId,
@@ -350,10 +507,12 @@ export function useSalesOrders() {
       );
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await refreshOrders();
-      return { success: true };
+      await syncDetailOrder(soId);
+      const indentPo = result.data?.indentPo;
+      const waOpened = indentPo ? dispatchIndentWa(indentPo) : false;
+      return { success: true, indentPo, waOpened };
     },
-    [isMockTenant, processFulfillment, refreshOrders, tenantId, user],
+    [isMockTenant, processFulfillment, syncDetailOrder, tenantId, user, dispatchIndentWa],
   );
 
   const invoiceFromSo = useCallback(
@@ -370,10 +529,10 @@ export function useSalesOrders() {
       const result = await convertSalesOrderToInvoice(tenantId, soId);
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
-      await refreshOrders();
+      await syncDetailOrder(soId);
       return { success: true, invoiceNumber: result.data?.invoiceNumber };
     },
-    [isMockTenant, convertToInvoice, refreshOrders, tenantId],
+    [isMockTenant, convertToInvoice, syncDetailOrder, tenantId],
   );
 
   const getProductStock = useCallback(
@@ -409,6 +568,8 @@ export function useSalesOrders() {
     fulfillItem,
     invoiceFromSo,
     getProductStock,
+    getSuppliersForProduct,
+    getDefaultSupplierId,
     loadOrders: refreshOrders,
   };
 }

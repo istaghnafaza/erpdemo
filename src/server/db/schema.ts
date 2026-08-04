@@ -487,6 +487,24 @@ export const suppliers = pgTable("suppliers", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
+export const productSuppliers = pgTable(
+  "product_suppliers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    isPreferred: boolean("is_preferred").notNull().default(false),
+  },
+  (t) => [unique().on(t.tenantId, t.productId, t.supplierId)],
+);
+
 export const cashAccounts = pgTable("cash_accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")
@@ -620,6 +638,7 @@ export const transferStatusEnum = pgEnum("transfer_status", [
 export const poTypeEnum = pgEnum("po_type", ["regular", "indent"]);
 export const poStatusEnum = pgEnum("po_status", [
   "draft",
+  "awaiting_supplier",
   "sent",
   "partial_received",
   "received",

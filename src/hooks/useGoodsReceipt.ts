@@ -7,7 +7,7 @@ import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
-import { usePurchasingStore } from "@/stores/purchasing.store";
+import { usePurchasingStore, poReadyForGoodsReceipt } from "@/stores/purchasing.store";
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders } from "@/lib/api/purchasing";
 import type { MockGrWithItems, MockPoWithItems } from "@/lib/mock-purchasing";
 
@@ -35,7 +35,7 @@ export function useGoodsReceipt() {
   const pendingPos = isMockTenant
     ? getAllMockPos().filter(
         (p) =>
-          (p.status === "sent" || p.status === "partial_received") &&
+          poReadyForGoodsReceipt(p.status, p.type) &&
           (!branchId || p.branch_id === branchId),
       )
     : pendingPosList;
@@ -44,29 +44,32 @@ export function useGoodsReceipt() {
     if (isMockTenant || !tenantId) return;
     const result = await getPurchaseOrders(tenantId, branchId);
     setPendingPosList(
-      ((result.data ?? []) as MockPoWithItems[]).filter(
-        (p) => p.status === "sent" || p.status === "partial_received",
+      ((result.data ?? []) as MockPoWithItems[]).filter((p) =>
+        poReadyForGoodsReceipt(p.status, p.type),
       ),
     );
   }, [isMockTenant, tenantId, branchId]);
 
   const loadReceipts = useCallback(async () => {
-    setLoading(true);
     if (isMockTenant) {
       let list = mockGoodsReceipts;
       if (branchId) list = list.filter((g) => g.branch_id === branchId);
       setReceipts(list);
-      setLoading(false);
       return;
     }
     const result = await getGoodsReceipts(tenantId, branchId);
     setReceipts((result.data ?? []) as MockGrWithItems[]);
-    setLoading(false);
   }, [isMockTenant, mockGoodsReceipts, branchId, tenantId]);
 
   useEffect(() => {
-    void loadReceipts();
-    void loadPendingPos();
+    let cancelled = false;
+    setLoading(true);
+    void Promise.all([loadReceipts(), loadPendingPos()]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadReceipts, loadPendingPos]);
 
   const openReceiveForm = useCallback((po: MockPoWithItems) => {

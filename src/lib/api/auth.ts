@@ -14,8 +14,11 @@ import {
   neonSignOut,
   neonUpdateProfile,
 } from "@/lib/api/neon/fns";
-import type { ApiResponse, AuthUser, AppProfile, GoogleSignInResult, RegisterInput } from "@/types/app";
+import type { ApiResponse, AuthUser, AppProfile, GoogleSignInResult, RegisterInput, AccountProfileUpdates } from "@/types/app";
 import type { Profile } from "@/types/database";
+import { isMockTenantId } from "@/lib/mock-session";
+import { useUsersStore } from "@/stores/users.store";
+import { useAuthStore } from "@/stores/auth.store";
 
 // ---------------------------------------------------------------------------
 // signInWithPassword
@@ -129,7 +132,7 @@ export async function signInWithPin(
 // ---------------------------------------------------------------------------
 export async function updateProfile(
   userId: string,
-  updates: Partial<Pick<Profile, "name" | "pin">>,
+  updates: AccountProfileUpdates,
 ): Promise<ApiResponse<AppProfile>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>
@@ -139,6 +142,46 @@ export async function updateProfile(
     if (!result.data) return fail("Profil tidak ditemukan");
     return ok(result.data);
   }
+
+  const currentUser = useAuthStore.getState().currentUser;
+  if (!currentUser || currentUser.id !== userId) {
+    return fail("Sesi tidak valid");
+  }
+  if (isMockTenantId(currentUser.tenantId)) {
+    useUsersStore.getState().initForTenant(currentUser.tenantId);
+    const storeResult = useUsersStore.getState().updateUser(userId, {
+      name: updates.name,
+      phone: updates.phone,
+      address: updates.address,
+      dateOfBirth: updates.dateOfBirth,
+      pin: updates.pin,
+    });
+    if (!storeResult.ok) return fail(storeResult.error ?? "Gagal menyimpan profil");
+    const record = useUsersStore.getState().findById(userId);
+    if (!record) return fail("Profil tidak ditemukan");
+    const profile: AppProfile = {
+      id: record.id,
+      tenantId: record.tenantId,
+      name: record.name,
+      email: record.email,
+      role: record.role,
+      pin: record.pin,
+      phone: record.phone,
+      address: record.address,
+      dateOfBirth: record.dateOfBirth,
+      isActive: record.isActive,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+    useAuthStore.setState({
+      currentUser: {
+        ...currentUser,
+        profile,
+      },
+    });
+    return ok(profile);
+  }
+
   return fail("Update profil memerlukan VITE_DATA_BACKEND=neon");
 }
 

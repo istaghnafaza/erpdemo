@@ -49,4 +49,7 @@ export const queryKeys = {
     ["purchase-orders", tenantId, branchId] as const,
   suppliers: (tenantId: string, activeOnly: boolean) =>
     ["suppliers", tenantId, activeOnly] as const,
+  suppliersWithProducts: (tenantId: string) =>
+    ["suppliers-with-products", tenantId] as const,
+  products: (tenantId: string) => ["products", tenantId] as const,
 };

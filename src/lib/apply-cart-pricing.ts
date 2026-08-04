@@ -6,10 +6,19 @@ import { calculateLinePrice, customerTierDiscountById } from "@/lib/pricing-engi
 import type { CartItem, Customer } from "@/types/database";
 import type { PricingBundle } from "@/types/pricing";
 
+export function cartGrossSubtotalForPricing(items: CartItem[]): number {
+  return items.reduce((sum, item) => {
+    if (item.is_so_line) return sum;
+    const base = item.base_selling_price ?? item.selling_price + (item.discount ?? 0);
+    return sum + base * item.qty;
+  }, 0);
+}
+
 export function applyPricingToCartItem(
   item: CartItem,
   customer: Customer | null,
   bundle: PricingBundle,
+  cartGrossSubtotal?: number,
 ): CartItem {
   const base =
     item.base_selling_price ?? item.selling_price + (item.discount ?? 0);
@@ -24,6 +33,7 @@ export function applyPricingToCartItem(
       customer_tier_discount_percent: customerDisc,
       is_so_line: item.is_so_line,
       price_override_unit: item.price_override?.unit_price ?? null,
+      cart_gross_subtotal: cartGrossSubtotal,
     },
     bundle,
   );
@@ -39,6 +49,7 @@ export function applyPricingToCartItem(
     customer_discount_percent: result.customer_discount_percent,
     floor_price: result.floor_price,
     pricing_clamped: result.clamped_to_floor,
+    pricing_margin_limited: result.margin_limited_discount === true,
   };
 }
 
@@ -47,5 +58,6 @@ export function repriceCartItems(
   customer: Customer | null,
   bundle: PricingBundle,
 ): CartItem[] {
-  return items.map((item) => applyPricingToCartItem(item, customer, bundle));
+  const cartGross = cartGrossSubtotalForPricing(items);
+  return items.map((item) => applyPricingToCartItem(item, customer, bundle, cartGross));
 }

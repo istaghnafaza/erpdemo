@@ -22,11 +22,13 @@ import {
   posCarts,
   profiles,
   salesItems,
+  salesReturns,
   salesTransactions,
   stockMovements,
 } from "@/server/db/schema";
 import type { DateRangeFilter } from "@/types/app";
 import type { PosCheckoutExtras } from "@/types/pos-checkout-extras";
+import { reversePosSaleCashBookInTx } from "@/server/services/pos-checkout-side-effects";
 import { generateTransactionNumber } from "@/lib/transaction-number";
 import type {
   CashierSession,
@@ -150,6 +152,9 @@ async function restoreStockInTx(
 ): Promise<void> {
   if (!item.product_id) return;
 
+  const restoreQty = Math.max(0, item.qty - (item.qty_returned ?? 0));
+  if (restoreQty <= 0) return;
+
   const bp = await tx.query.branchProducts.findFirst({
     where: and(
       eq(branchProducts.tenantId, tenantId),
@@ -161,7 +166,7 @@ async function restoreStockInTx(
 
   const isLegacy = item.stock_source === "legacy";
   const currentQty = isLegacy ? bp.legacyStock : bp.stock;
-  const newQty = currentQty + item.qty;
+  const newQty = currentQty + restoreQty;
 
   await tx
     .update(branchProducts)
@@ -174,7 +179,7 @@ async function restoreStockInTx(
     productId: item.product_id,
     type: isLegacy ? "legacy_in" : "in",
     stockSource: item.stock_source,
-    qty: item.qty,
+    qty: restoreQty,
     qtyBefore: currentQty,
     qtyAfter: newQty,
     reference,
@@ -836,6 +841,13 @@ export async function createSaleTransaction(
   return saved;
 }
 
+const VOID_BLOCKED_RETURN_STATUSES = [
+  "pending_qc",
+  "qc_completed",
+  "pending_approval",
+  "pending_offset",
+] as const;
+
 export async function voidSaleTransaction(
   tenantId: string,
   transactionId: string,
@@ -852,6 +864,30 @@ export async function voidSaleTransaction(
     });
     if (!txRow || txRow.status === "voided") {
       return txRow ? toSalesTransaction(txRow) : null;
+    }
+
+    if (txRow.returnStatus !== "none") {
+      throw new Error("VOID_BLOCKED: transaksi sudah memiliki retur");
+    }
+
+    const activeReturns = await tx.query.salesReturns.findMany({
+      where: and(
+        eq(salesReturns.originalTransactionId, transactionId),
+        inArray(salesReturns.status, [...VOID_BLOCKED_RETURN_STATUSES]),
+      ),
+    });
+    if (activeReturns.length > 0) {
+      throw new Error("VOID_BLOCKED: masih ada retur aktif pada transaksi ini");
+    }
+
+    const completedReturns = await tx.query.salesReturns.findFirst({
+      where: and(
+        eq(salesReturns.originalTransactionId, transactionId),
+        eq(salesReturns.status, "completed"),
+      ),
+    });
+    if (completedReturns) {
+      throw new Error("VOID_BLOCKED: transaksi sudah memiliki retur selesai");
     }
 
     const itemRows = await tx.query.salesItems.findMany({
@@ -882,6 +918,15 @@ export async function voidSaleTransaction(
           .where(and(eq(customers.tenantId, tenantId), eq(customers.id, txRow.customerId)));
       }
     }
+
+    const saleForCash = toSalesTransaction(txRow);
+    await reversePosSaleCashBookInTx(
+      tx,
+      tenantId,
+      txRow.branchId,
+      saleForCash,
+      userId,
+    );
 
     const reverse = computeSessionDeltas(txRow.paymentMethod, txRow.grandTotal, txRow.amountPaid);
 

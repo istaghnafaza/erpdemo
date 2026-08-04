@@ -298,10 +298,13 @@ export function PaymentPanel({
         {returnOffsetAmount > 0 && cart.returnOffset && (
           <ReturnOffsetSummary offset={cart.returnOffset} />
         )}
+      </div>
 
-        <div className="flex justify-between font-bold text-base pt-2 border-t">
-          <span>Total Tagihan</span>
-          <span>{rupiah(total)}</span>
+      <div className="bg-gradient-primary text-primary-foreground rounded-xl p-4">
+        <div className="text-xs opacity-80">Total Tagihan</div>
+        <div className="text-2xl font-bold mt-1">{rupiah(total)}</div>
+        <div className="text-xs opacity-80 mt-1">
+          {cart.items.length} item · {cart.items.reduce((s, i) => s + i.qty, 0)} qty
         </div>
       </div>
 
@@ -314,22 +317,14 @@ export function PaymentPanel({
         />
       )}
 
-      <div>
-
+      {!isOnline && (
         <div className="rounded-lg bg-warning/15 text-warning-foreground text-xs p-2.5">
-
           Mode offline aktif — transaksi akan disimpan lokal dan disinkronkan otomatis saat online
-
           kembali.
-
         </div>
-
       )}
 
-
-
       <div>
-
         <Label className="text-xs">Keterangan Order</Label>
 
         <div className="grid grid-cols-1 gap-2 mt-2">

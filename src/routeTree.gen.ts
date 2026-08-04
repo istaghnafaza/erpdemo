@@ -44,6 +44,7 @@ import { Route as TenantSlugReportsStockOpnameRouteImport } from './routes/$tena
 import { Route as TenantSlugReportsSalesRouteImport } from './routes/$tenantSlug/reports/sales'
 import { Route as TenantSlugReportsProfitLossRouteImport } from './routes/$tenantSlug/reports/profit-loss'
 import { Route as TenantSlugReportsCashierAuditRouteImport } from './routes/$tenantSlug/reports/cashier-audit'
+import { Route as TenantSlugPurchasingSuppliersRouteImport } from './routes/$tenantSlug/purchasing/suppliers'
 import { Route as TenantSlugPurchasingPurchaseOrdersRouteImport } from './routes/$tenantSlug/purchasing/purchase-orders'
 import { Route as TenantSlugPurchasingGoodsReceiptRouteImport } from './routes/$tenantSlug/purchasing/goods-receipt'
 import { Route as TenantSlugInventoryStockTransferRouteImport } from './routes/$tenantSlug/inventory/stock-transfer'
@@ -238,6 +239,12 @@ const TenantSlugReportsCashierAuditRoute =
     path: '/reports/cashier-audit',
     getParentRoute: () => TenantSlugRoute,
   } as any)
+const TenantSlugPurchasingSuppliersRoute =
+  TenantSlugPurchasingSuppliersRouteImport.update({
+    id: '/purchasing/suppliers',
+    path: '/purchasing/suppliers',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
 const TenantSlugPurchasingPurchaseOrdersRoute =
   TenantSlugPurchasingPurchaseOrdersRouteImport.update({
     id: '/purchasing/purchase-orders',
@@ -310,6 +317,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
   '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
   '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/purchasing/suppliers': typeof TenantSlugPurchasingSuppliersRoute
   '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
@@ -354,6 +362,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
   '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
   '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/purchasing/suppliers': typeof TenantSlugPurchasingSuppliersRoute
   '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
@@ -400,6 +409,7 @@ export interface FileRoutesById {
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
   '/$tenantSlug/purchasing/goods-receipt': typeof TenantSlugPurchasingGoodsReceiptRoute
   '/$tenantSlug/purchasing/purchase-orders': typeof TenantSlugPurchasingPurchaseOrdersRoute
+  '/$tenantSlug/purchasing/suppliers': typeof TenantSlugPurchasingSuppliersRoute
   '/$tenantSlug/reports/cashier-audit': typeof TenantSlugReportsCashierAuditRoute
   '/$tenantSlug/reports/profit-loss': typeof TenantSlugReportsProfitLossRoute
   '/$tenantSlug/reports/sales': typeof TenantSlugReportsSalesRoute
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/inventory/stock-transfer'
     | '/$tenantSlug/purchasing/goods-receipt'
     | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/purchasing/suppliers'
     | '/$tenantSlug/reports/cashier-audit'
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
@@ -491,6 +502,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/inventory/stock-transfer'
     | '/$tenantSlug/purchasing/goods-receipt'
     | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/purchasing/suppliers'
     | '/$tenantSlug/reports/cashier-audit'
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
@@ -536,6 +548,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/inventory/stock-transfer'
     | '/$tenantSlug/purchasing/goods-receipt'
     | '/$tenantSlug/purchasing/purchase-orders'
+    | '/$tenantSlug/purchasing/suppliers'
     | '/$tenantSlug/reports/cashier-audit'
     | '/$tenantSlug/reports/profit-loss'
     | '/$tenantSlug/reports/sales'
@@ -818,6 +831,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantSlugReportsCashierAuditRouteImport
       parentRoute: typeof TenantSlugRoute
     }
+    '/$tenantSlug/purchasing/suppliers': {
+      id: '/$tenantSlug/purchasing/suppliers'
+      path: '/purchasing/suppliers'
+      fullPath: '/$tenantSlug/purchasing/suppliers'
+      preLoaderRoute: typeof TenantSlugPurchasingSuppliersRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
     '/$tenantSlug/purchasing/purchase-orders': {
       id: '/$tenantSlug/purchasing/purchase-orders'
       path: '/purchasing/purchase-orders'
@@ -905,6 +925,7 @@ interface TenantSlugRouteChildren {
   TenantSlugInventoryStockTransferRoute: typeof TenantSlugInventoryStockTransferRoute
   TenantSlugPurchasingGoodsReceiptRoute: typeof TenantSlugPurchasingGoodsReceiptRoute
   TenantSlugPurchasingPurchaseOrdersRoute: typeof TenantSlugPurchasingPurchaseOrdersRoute
+  TenantSlugPurchasingSuppliersRoute: typeof TenantSlugPurchasingSuppliersRoute
   TenantSlugReportsCashierAuditRoute: typeof TenantSlugReportsCashierAuditRoute
   TenantSlugReportsProfitLossRoute: typeof TenantSlugReportsProfitLossRoute
   TenantSlugReportsSalesRoute: typeof TenantSlugReportsSalesRoute
@@ -940,6 +961,7 @@ const TenantSlugRouteChildren: TenantSlugRouteChildren = {
   TenantSlugPurchasingGoodsReceiptRoute: TenantSlugPurchasingGoodsReceiptRoute,
   TenantSlugPurchasingPurchaseOrdersRoute:
     TenantSlugPurchasingPurchaseOrdersRoute,
+  TenantSlugPurchasingSuppliersRoute: TenantSlugPurchasingSuppliersRoute,
   TenantSlugReportsCashierAuditRoute: TenantSlugReportsCashierAuditRoute,
   TenantSlugReportsProfitLossRoute: TenantSlugReportsProfitLossRoute,
   TenantSlugReportsSalesRoute: TenantSlugReportsSalesRoute,

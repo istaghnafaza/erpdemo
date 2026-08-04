@@ -107,6 +107,39 @@ export async function postPosSaleToCashBookInTx(
   });
 }
 
+/** Balikkan pencatatan kas dari penjualan POS saat void. */
+export async function reversePosSaleCashBookInTx(
+  tx: Tx,
+  tenantId: string,
+  branchId: string,
+  sale: Pick<SalesTransaction, "payment_method" | "grand_total" | "amount_paid" | "transaction_number">,
+  userId: string | null,
+): Promise<void> {
+  let amount = 0;
+  let accountType: "cash" | "bank" | null = null;
+
+  if (sale.payment_method === "credit") {
+    if (sale.amount_paid <= 0) return;
+    amount = sale.amount_paid;
+    accountType = "cash";
+  } else {
+    amount = sale.grand_total;
+    accountType = cashAccountTypeForPayment(sale.payment_method);
+  }
+
+  if (!accountType || amount <= 0) return;
+
+  const accountId = await resolveOrCreateCashAccountInTx(tx, tenantId, branchId, accountType);
+  await insertCashTransactionInTx(tx, tenantId, branchId, accountId, {
+    type: "expense",
+    category: "Void Penjualan",
+    amount,
+    reference: sale.transaction_number,
+    description: `Void penjualan ${sale.transaction_number}`,
+    user_id: userId,
+  });
+}
+
 async function nextDeliverySequenceInTx(
   tx: Tx,
   tenantId: string,

@@ -100,7 +100,9 @@ export const neonSignInWithPin = createServerFn({ method: "POST" })
   });
 
 export const neonUpdateProfile = createServerFn({ method: "POST" })
-  .validator((data: { userId: string; updates: { name?: string; pin?: string } }) => data)
+  .validator(
+    (data: { userId: string; updates: import("@/types/app").AccountProfileUpdates }) => data,
+  )
   .handler(async ({ data }): Promise<AppProfile> => {
     const { updateUserProfile } = await import("@/server/services/auth");
     const { requireRequestSession } = await sessionHelpers();

@@ -227,9 +227,21 @@ export interface AppProfile {
   email: string;
   role: UserRole;
   pin: string | null;
+  phone?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Update profil akun sendiri (sidebar / pengaturan). */
+export interface AccountProfileUpdates {
+  name?: string;
+  phone?: string | null;
+  address?: string | null;
+  dateOfBirth?: string | null;
+  pin?: string;
 }
 
 /** Pegawai tenant — dikelola owner di modul Users. */

@@ -20,10 +20,15 @@ import {
   goodsReceipts,
   purchaseOrderItems,
   purchaseOrders,
+  productSuppliers,
+  salesOrderItems,
+  soFulfillments,
   stockMovements,
   suppliers,
 } from "@/server/db/schema";
 import { nextDocNumberForTable } from "@/server/services/doc-numbers";
+import { ensureProductSuppliersTable } from "@/server/db/ensure-product-suppliers";
+import { ensurePoStatusAwaitingSupplier } from "@/server/db/ensure-po-status-enum";
 import type {
   GoodsReceipt,
   GoodsReceiptInsert,
@@ -37,6 +42,8 @@ import type {
   Supplier,
   SupplierInsert,
   SupplierUpdate,
+  SupplierWithProducts,
+  ProductSupplier,
 } from "@/types/database";
 
 export async function listSuppliers(
@@ -204,6 +211,9 @@ export async function createPurchaseOrderRecord(
   po: Omit<PurchaseOrderInsert, "tenant_id">,
   items: Omit<PoItemInsert, "po_id" | "tenant_id">[],
 ): Promise<PurchaseOrder> {
+  if (po.status === "awaiting_supplier") {
+    await ensurePoStatusAwaitingSupplier();
+  }
   const db = getDb();
   const prefix = po.type === "indent" ? "PO-IND" : "PO";
   const poNumber =
@@ -263,6 +273,9 @@ export async function updatePurchaseOrderStatusById(
   poId: string,
   status: PurchaseOrder["status"],
 ): Promise<PurchaseOrder | null> {
+  if (status === "awaiting_supplier") {
+    await ensurePoStatusAwaitingSupplier();
+  }
   const db = getDb();
   const [row] = await db
     .update(purchaseOrders)
@@ -408,40 +421,72 @@ export async function createGoodsReceiptRecord(
       ),
     });
     if (!po) throw new Error("PO tidak ditemukan");
+    if (po.status === "awaiting_supplier") {
+      throw new Error("PO menunggu konfirmasi supplier — belum bisa diterima");
+    }
+    if (po.status !== "sent" && po.status !== "partial_received") {
+      throw new Error("PO belum siap untuk penerimaan barang");
+    }
+
+    const isIndentPo = po.type === "indent";
+
+    const indentFulfillments = isIndentPo
+      ? await tx.query.soFulfillments.findMany({
+          where: and(
+            eq(soFulfillments.tenantId, tenantId),
+            eq(soFulfillments.purchaseOrderId, gr.purchase_order_id),
+            eq(soFulfillments.source, "indent"),
+          ),
+        })
+      : [];
 
     for (const item of items) {
       if (!item.product_id || item.received_qty <= 0) continue;
 
-      const bp = await tx.query.branchProducts.findFirst({
-        where: and(
-          eq(branchProducts.tenantId, tenantId),
-          eq(branchProducts.branchId, gr.branch_id),
-          eq(branchProducts.productId, item.product_id),
-        ),
-      });
-      if (!bp) continue;
+      if (!isIndentPo) {
+        const bp = await tx.query.branchProducts.findFirst({
+          where: and(
+            eq(branchProducts.tenantId, tenantId),
+            eq(branchProducts.branchId, gr.branch_id),
+            eq(branchProducts.productId, item.product_id),
+          ),
+        });
+        if (!bp) continue;
 
-      const currentQty = bp.stock;
-      const newQty = currentQty + item.received_qty;
+        const currentQty = bp.stock;
+        const newQty = currentQty + item.received_qty;
 
-      await tx
-        .update(branchProducts)
-        .set({ stock: newQty })
-        .where(eq(branchProducts.id, bp.id));
+        await tx
+          .update(branchProducts)
+          .set({ stock: newQty })
+          .where(eq(branchProducts.id, bp.id));
 
-      await tx.insert(stockMovements).values({
-        tenantId,
-        branchId: gr.branch_id,
-        productId: item.product_id,
-        type: "in",
-        stockSource: "verified",
-        qty: item.received_qty,
-        qtyBefore: currentQty,
-        qtyAfter: newQty,
-        reference: grRow.grNumber,
-        notes: "Penerimaan barang dari PO",
-        userId,
-      });
+        await tx.insert(stockMovements).values({
+          tenantId,
+          branchId: gr.branch_id,
+          productId: item.product_id,
+          type: "in",
+          stockSource: "verified",
+          qty: item.received_qty,
+          qtyBefore: currentQty,
+          qtyAfter: newQty,
+          reference: grRow.grNumber,
+          notes: "Penerimaan barang dari PO",
+          userId,
+        });
+      } else {
+        for (const f of indentFulfillments) {
+          const soItem = await tx.query.salesOrderItems.findFirst({
+            where: eq(salesOrderItems.id, f.soItemId),
+          });
+          if (soItem?.productId === item.product_id && f.status !== "delivered") {
+            await tx
+              .update(soFulfillments)
+              .set({ status: "delivered" })
+              .where(eq(soFulfillments.id, f.id));
+          }
+        }
+      }
 
       const poItem = await tx.query.purchaseOrderItems.findFirst({
         where: and(
@@ -487,4 +532,148 @@ export async function updatePurchaseOrderById(
     .where(and(eq(purchaseOrders.tenantId, tenantId), eq(purchaseOrders.id, poId)))
     .returning();
   return row ? toPurchaseOrder(row) : null;
+}
+
+function toProductSupplier(row: typeof productSuppliers.$inferSelect): ProductSupplier {
+  return {
+    id: row.id,
+    tenant_id: row.tenantId,
+    product_id: row.productId,
+    supplier_id: row.supplierId,
+    is_preferred: row.isPreferred,
+  };
+}
+
+export async function listProductSupplierLinks(tenantId: string): Promise<ProductSupplier[]> {
+  await ensureProductSuppliersTable();
+  const db = getDb();
+  const rows = await db.query.productSuppliers.findMany({
+    where: eq(productSuppliers.tenantId, tenantId),
+  });
+  return rows.map(toProductSupplier);
+}
+
+export async function getProductIdsForSupplier(
+  tenantId: string,
+  supplierId: string,
+): Promise<string[]> {
+  await ensureProductSuppliersTable();
+  const db = getDb();
+  const rows = await db.query.productSuppliers.findMany({
+    where: and(
+      eq(productSuppliers.tenantId, tenantId),
+      eq(productSuppliers.supplierId, supplierId),
+    ),
+  });
+  return rows.map((r) => r.productId);
+}
+
+export async function listSuppliersWithProducts(tenantId: string): Promise<SupplierWithProducts[]> {
+  const all = await listSuppliers(tenantId);
+  const links = await listProductSupplierLinks(tenantId);
+  const bySupplier = new Map<string, string[]>();
+  for (const link of links) {
+    const list = bySupplier.get(link.supplier_id) ?? [];
+    list.push(link.product_id);
+    bySupplier.set(link.supplier_id, list);
+  }
+  return all.map((s) => ({ ...s, product_ids: bySupplier.get(s.id) ?? [] }));
+}
+
+export async function getSuppliersForProduct(
+  tenantId: string,
+  productId: string,
+  options?: { activeOnly?: boolean },
+): Promise<Supplier[]> {
+  await ensureProductSuppliersTable();
+  const db = getDb();
+  const links = await db.query.productSuppliers.findMany({
+    where: and(
+      eq(productSuppliers.tenantId, tenantId),
+      eq(productSuppliers.productId, productId),
+    ),
+  });
+
+  if (links.length === 0) {
+    return listSuppliers(tenantId, { activeOnly: options?.activeOnly ?? true });
+  }
+
+  const supplierIds = links.map((l) => l.supplierId);
+  const preferredId = links.find((l) => l.isPreferred)?.supplierId ?? supplierIds[0];
+
+  const rows = await db.query.suppliers.findMany({
+    where: and(eq(suppliers.tenantId, tenantId), inArray(suppliers.id, supplierIds)),
+  });
+
+  let mapped = rows.map(toSupplier);
+  if (options?.activeOnly ?? true) mapped = mapped.filter((s) => s.is_active);
+
+  mapped.sort((a, b) => {
+    if (a.id === preferredId) return -1;
+    if (b.id === preferredId) return 1;
+    return a.name.localeCompare(b.name, "id");
+  });
+
+  return mapped;
+}
+
+export async function getPreferredSupplierIdForProduct(
+  tenantId: string,
+  productId: string,
+): Promise<string | null> {
+  await ensureProductSuppliersTable();
+  const db = getDb();
+  const preferred = await db.query.productSuppliers.findFirst({
+    where: and(
+      eq(productSuppliers.tenantId, tenantId),
+      eq(productSuppliers.productId, productId),
+      eq(productSuppliers.isPreferred, true),
+    ),
+  });
+  if (preferred) return preferred.supplierId;
+
+  const any = await db.query.productSuppliers.findFirst({
+    where: and(
+      eq(productSuppliers.tenantId, tenantId),
+      eq(productSuppliers.productId, productId),
+    ),
+  });
+  return any?.supplierId ?? null;
+}
+
+export async function setSupplierProductLinks(
+  tenantId: string,
+  supplierId: string,
+  productIds: string[],
+  preferredProductId?: string | null,
+): Promise<void> {
+  await ensureProductSuppliersTable();
+  const db = getDb();
+  const uniqueIds = [...new Set(productIds.filter(Boolean))];
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(productSuppliers)
+      .where(
+        and(
+          eq(productSuppliers.tenantId, tenantId),
+          eq(productSuppliers.supplierId, supplierId),
+        ),
+      );
+
+    if (uniqueIds.length === 0) return;
+
+    await tx.insert(productSuppliers).values(
+      uniqueIds.map((productId) => ({
+        tenantId,
+        productId,
+        supplierId,
+        isPreferred: preferredProductId
+          ? productId === preferredProductId
+          : productId === uniqueIds[0],
+      })),
+    );
+  });
+
+  await invalidateSuppliers(tenantId);
 }

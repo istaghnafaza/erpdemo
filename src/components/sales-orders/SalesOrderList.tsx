@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { soStatusKind, soStatusLabel } from "@/stores/sales-orders.store";
+import { soOrderNeedsFulfillment, soOrderRemainingQty } from "@/lib/so-fulfillment-utils";
+import { cn } from "@/lib/utils";
 import type { MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
 
 const PAYMENT_KIND = {
@@ -48,6 +50,7 @@ export function SalesOrderList({ orders, loading, onSelect }: SalesOrderListProp
             <TableHead>Ref. POS</TableHead>
             <TableHead className="text-right">Total</TableHead>
             <TableHead>Status SO</TableHead>
+            <TableHead className="text-center">Sisa</TableHead>
             <TableHead>Pembayaran</TableHead>
             <TableHead>Tanggal</TableHead>
             <TableHead>Invoice</TableHead>
@@ -57,7 +60,10 @@ export function SalesOrderList({ orders, loading, onSelect }: SalesOrderListProp
           {orders.map((o) => (
             <TableRow
               key={o.id}
-              className="cursor-pointer hover:bg-muted/30"
+              className={cn(
+                "cursor-pointer hover:bg-muted/30",
+                soOrderNeedsFulfillment(o) && "bg-amber-50/40",
+              )}
               onClick={() => onSelect(o)}
             >
               <TableCell className="font-mono text-xs font-medium">{o.so_number}</TableCell>
@@ -80,6 +86,13 @@ export function SalesOrderList({ orders, loading, onSelect }: SalesOrderListProp
                   status={soStatusKind(o.status)}
                   label={soStatusLabel(o.status)}
                 />
+              </TableCell>
+              <TableCell className="text-center text-sm">
+                {soOrderRemainingQty(o) > 0 ? (
+                  <span className="font-medium text-amber-700">{soOrderRemainingQty(o)}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell>
                 <StatusBadge status={PAYMENT_KIND[o.payment_status]} />

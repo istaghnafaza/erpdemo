@@ -10,6 +10,7 @@ import {
   neonCreateFulfillment,
   neonCreateSalesOrder,
   neonGetFulfillmentsByItem,
+  neonFindSalesOrderByPosTransaction,
   neonGetSalesOrder,
   neonGetSalesOrders,
   neonProcessItemFulfillment,
@@ -259,6 +260,25 @@ export async function updateFulfillmentStatus(
   }
 }
 
+export type FulfillItemResult = {
+  indentPo?: {
+    poNumber: string;
+    supplierId: string;
+    supplierName: string;
+    supplierPhone: string | null;
+    productName: string;
+    sku: string;
+    qty: number;
+    unit: string;
+    purchasePrice: number;
+    soNumber: string;
+    customerName: string;
+    deliveryAddress: string | null;
+    estimatedDeliveryDate: string | null;
+    notes: string | null;
+  };
+};
+
 export async function processItemFulfillment(
   tenantId: string,
   soId: string,
@@ -267,7 +287,7 @@ export async function processItemFulfillment(
   indentQty: number,
   userId: string,
   supplierId?: string,
-): Promise<ApiResponse<null>> {
+): Promise<ApiResponse<FulfillItemResult>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>
       neonProcessItemFulfillment({
@@ -275,7 +295,7 @@ export async function processItemFulfillment(
       }),
     );
     if (result.error) return fail(result.error);
-    return ok(null);
+    return ok(result.data ?? {});
   }
   return fail("Fulfillment memerlukan VITE_DATA_BACKEND=neon");
 }
@@ -293,4 +313,23 @@ export async function convertSalesOrderToInvoice(
     return ok(result.data);
   }
   return fail("Convert invoice memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function findSalesOrderByPosTransaction(
+  tenantId: string,
+  branchId: string,
+  transactionNumber: string,
+): Promise<
+  ApiResponse<(SalesOrder & { items: SalesOrderItem[] }) | null>
+> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonFindSalesOrderByPosTransaction({
+        data: { tenantId, branchId, transactionNumber },
+      }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data ?? null);
+  }
+  return ok(null);
 }

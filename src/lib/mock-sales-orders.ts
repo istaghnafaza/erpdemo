@@ -5,7 +5,7 @@
 import { PRODUCTS, CUSTOMERS } from "@/lib/mock-data";
 import { MOCK_TENANT_ID } from "@/stores/auth.store";
 import { mockCustomerId, productId } from "@/lib/mock-pos-catalog";
-import type { SalesOrder, SalesOrderItem, SoFulfillment } from "@/types/database";
+import type { SalesOrder, SalesOrderItem, SoFulfillment, DbPoStatus } from "@/types/database";
 
 const BRANCH_SUDIRMAN = "22221111-0000-0000-0000-000000000001";
 const MOCK_USER_OWNER = "33331111-0000-0000-0000-000000000001";
@@ -15,8 +15,8 @@ export const MOCK_SUPPLIER_SEMEN = "77771111-0000-0000-0000-000000000001";
 export const MOCK_SUPPLIER_BESI = "77771111-0000-0000-0000-000000000002";
 
 export const MOCK_SUPPLIERS = [
-  { id: MOCK_SUPPLIER_SEMEN, name: "PT Sumber Semen Indonesia" },
-  { id: MOCK_SUPPLIER_BESI, name: "Toko Besi Makmur" },
+  { id: MOCK_SUPPLIER_SEMEN, name: "PT Sumber Semen Indonesia", phone: "081234567890" },
+  { id: MOCK_SUPPLIER_BESI, name: "Toko Besi Makmur", phone: "081298765432" },
 ];
 
 function soId(n: number): string {
@@ -45,6 +45,8 @@ export interface MockIndentPoRef {
   /** Satu PO indent bisa berisi beberapa baris SO (supplier sama). */
   lines: MockIndentPoLineRef[];
   status: "draft" | "sent";
+  /** Status PO lengkap dari database (Neon). */
+  po_status?: DbPoStatus;
 }
 
 export interface MockSalesOrderItem extends SalesOrderItem {

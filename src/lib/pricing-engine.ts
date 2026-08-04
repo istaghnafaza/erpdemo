@@ -28,18 +28,31 @@ export function resolveMinMarginPercent(
   return bundle.settings.default_min_margin_percent;
 }
 
-/** Tier volume tertinggi yang memenuhi qty ATAU nilai baris. */
+export function computeMaxDiscountPercent(
+  baseSellingPrice: number,
+  floorPrice: number,
+): number {
+  if (baseSellingPrice <= 0 || floorPrice <= 0 || baseSellingPrice <= floorPrice) return 0;
+  return Math.floor(((baseSellingPrice - floorPrice) / baseSellingPrice) * 1000) / 10;
+}
+
+/** Tier volume tertinggi yang memenuhi qty per baris ATAU min belanja keranjang. */
 export function pickVolumeTier(
   tiers: VolumePriceTier[],
   qty: number,
   lineBaseAmount: number,
+  cartGrossSubtotal?: number,
 ): VolumePriceTier {
   const active = tiers
     .filter((t) => t.is_active)
     .sort((a, b) => b.sort_order - a.sort_order);
 
+  const cartAmount = cartGrossSubtotal ?? lineBaseAmount;
+
   for (const tier of active) {
-    if (qty >= tier.min_qty || lineBaseAmount >= tier.min_line_amount) {
+    const meetsQty = tier.min_qty > 0 && qty >= tier.min_qty;
+    const meetsCartAmount = tier.min_line_amount > 0 && cartAmount >= tier.min_line_amount;
+    if (meetsQty || meetsCartAmount) {
       return tier;
     }
   }
@@ -84,18 +97,26 @@ export function calculateLinePrice(
     };
   }
 
-  const volumeTier = pickVolumeTier(bundle.volume_tiers, input.qty, lineBaseAmount);
+  const volumeTier = pickVolumeTier(
+    bundle.volume_tiers,
+    input.qty,
+    lineBaseAmount,
+    input.cart_gross_subtotal,
+  );
 
-  // Baris SO (indent): harga dasar — tanpa diskon tier volume (min qty) maupun pelanggan
+  // Baris SO (indent): harga dasar — tanpa diskon tier volume maupun pelanggan
   const volumeDisc = input.is_so_line ? 0 : volumeTier.discount_percent;
   const customerDisc = input.is_so_line ? 0 : input.customer_tier_discount_percent;
 
   const rawTotalDisc = volumeDisc + customerDisc;
-  const effectiveDisc = Math.min(
+  const maxMarginDisc = computeMaxDiscountPercent(base, floorPrice);
+  const cappedByPolicy = Math.min(
     rawTotalDisc,
     bundle.settings.max_stack_discount_percent,
     bundle.settings.max_line_discount_percent,
   );
+  const effectiveDisc = Math.min(cappedByPolicy, maxMarginDisc);
+  const marginLimited = effectiveDisc < cappedByPolicy;
 
   let unitNet = Math.round(base * (1 - effectiveDisc / 100));
   let clamped = false;
@@ -116,7 +137,8 @@ export function calculateLinePrice(
     unit_net_price: unitNet,
     unit_discount_amount: unitDiscount,
     floor_price: floorPrice,
-    clamped_to_floor: clamped,
+    clamped_to_floor: clamped || marginLimited,
+    margin_limited_discount: marginLimited,
     line_subtotal: unitNet * input.qty,
   };
 }
@@ -140,7 +162,7 @@ export function nextVolumeTierHint(
   baseUnitPrice: number,
 ): { tier: VolumePriceTier; qtyNeeded: number; amountNeeded: number } | null {
   const active = tiers.filter((t) => t.is_active).sort((a, b) => a.sort_order - b.sort_order);
-  const current = pickVolumeTier(active, qty, baseUnitPrice * qty);
+  const current = pickVolumeTier(active, qty, baseUnitPrice * qty, baseUnitPrice * qty);
   const currentOrder = current.sort_order ?? 0;
   const next = active.find((t) => t.sort_order > currentOrder);
   if (!next) return null;

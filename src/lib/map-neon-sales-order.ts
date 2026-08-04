@@ -2,12 +2,14 @@
 // Map Neon sales_orders rows → UI MockSalesOrderWithDetails shape
 // =============================================================================
 
+import type { MockIndentPoRef } from "@/lib/mock-sales-orders";
 import type { MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
 import type { SalesOrder, SalesOrderItem, SoFulfillment } from "@/types/database";
 
 export type NeonSalesOrderRow = SalesOrder & {
   items: (SalesOrderItem & { fulfillments?: SoFulfillment[] })[];
   customer?: { name: string; phone: string | null };
+  indent_pos?: MockIndentPoRef[];
 };
 
 export function mapNeonSalesOrderToDetails(order: NeonSalesOrderRow): MockSalesOrderWithDetails {
@@ -21,7 +23,7 @@ export function mapNeonSalesOrderToDetails(order: NeonSalesOrderRow): MockSalesO
       fulfillments: item.fulfillments ?? [],
     })),
     customer: order.customer,
-    indent_pos: [],
+    indent_pos: order.indent_pos ?? [],
     ar_invoice_number: null,
     source: posTxNumber ? "pos" : "manual",
     pos_transaction_id: null,

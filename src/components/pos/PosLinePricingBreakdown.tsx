@@ -54,7 +54,9 @@ export function PosLinePricingBreakdown({
             isReceipt ? "text-muted-foreground pl-2 italic" : "text-amber-700/90 pl-1 italic",
           )}
         >
-          Harga dasar (floor margin) — efektif {display.effectiveDiscountPercent}%
+          {item.pricing_margin_limited
+            ? `Diskon dibatasi margin min — efektif ${display.effectiveDiscountPercent}%`
+            : `Harga dasar (floor margin) — efektif ${display.effectiveDiscountPercent}%`}
         </div>
       )}
       {showLineTotal && (

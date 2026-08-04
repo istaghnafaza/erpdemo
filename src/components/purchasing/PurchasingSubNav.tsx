@@ -1,9 +1,15 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { FileText, PackageCheck } from "lucide-react";
+import { FileText, PackageCheck, Truck } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { cn } from "@/lib/utils";
 
 const TABS = [
+  {
+    route: "/$tenantSlug/purchasing/suppliers" as const,
+    match: "/purchasing/suppliers",
+    label: "Supplier",
+    icon: Truck,
+  },
   {
     route: "/$tenantSlug/purchasing/purchase-orders" as const,
     match: "/purchasing/purchase-orders",

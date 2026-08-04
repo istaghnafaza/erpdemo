@@ -10,6 +10,7 @@ import { useBranchStore } from "@/stores/branch.store";
 import {
   usePurchasingStore,
   type CreatePoDraft,
+  poReadyForGoodsReceipt,
 } from "@/stores/purchasing.store";
 import { useSalesOrdersStore } from "@/stores/sales-orders.store";
 import {
@@ -57,6 +58,7 @@ export function usePurchaseOrders() {
   const getAllMockPos = usePurchasingStore((s) => s.getAllMockPos);
   const createMockPo = usePurchasingStore((s) => s.createMockPo);
   const sendMockPo = usePurchasingStore((s) => s.sendMockPo);
+  const confirmMockSupplierPo = usePurchasingStore((s) => s.confirmMockSupplierPo);
   const cancelMockPo = usePurchasingStore((s) => s.cancelMockPo);
   const mockSalesOrders = useSalesOrdersStore((s) => s.mockOrders);
 
@@ -108,7 +110,7 @@ export function usePurchaseOrders() {
     let list = getAllMockPos();
     if (branchId) list = list.filter((p) => p.branch_id === branchId);
     return list;
-  }, [getAllMockPos, branchId, mockPurchaseOrders]);
+  }, [getAllMockPos, branchId, mockPurchaseOrders, mockSalesOrders]);
 
   const ordersRaw = isMockTenant ? mockOrdersFiltered : (ordersQuery.data ?? []);
   const loading = isMockTenant ? false : ordersQuery.isPending;
@@ -278,13 +280,15 @@ export function usePurchaseOrders() {
         if (updated) setDetailPo(updated);
         return { success: true };
       }
-      const result = await updatePurchaseOrderStatus(tenantId, poId, "sent");
+      const po = ordersRaw.find((p) => p.id === poId);
+      const nextStatus = po?.type === "indent" ? "awaiting_supplier" : "sent";
+      const result = await updatePurchaseOrderStatus(tenantId, poId, nextStatus);
       setActionLoading(false);
       if (result.error) return { success: false, error: result.error };
       await refreshOrders();
       return { success: true };
     },
-    [isMockTenant, sendMockPo, refreshOrders, getAllMockPos, tenantId],
+    [isMockTenant, sendMockPo, refreshOrders, getAllMockPos, ordersRaw, tenantId],
   );
 
   const cancelPo = useCallback(
@@ -307,13 +311,28 @@ export function usePurchaseOrders() {
     [isMockTenant, cancelMockPo, refreshOrders, tenantId],
   );
 
+  const confirmSupplierPo = useCallback(
+    async (poId: string) => {
+      setActionLoading(true);
+      if (isMockTenant) {
+        const result = confirmMockSupplierPo(poId);
+        setActionLoading(false);
+        if (!result.ok) return { success: false, error: result.error };
+        setDetailPo(null);
+        return { success: true };
+      }
+      const result = await updatePurchaseOrderStatus(tenantId, poId, "sent");
+      setActionLoading(false);
+      if (result.error) return { success: false, error: result.error };
+      setDetailPo(null);
+      await refreshOrders();
+      return { success: true };
+    },
+    [isMockTenant, confirmMockSupplierPo, refreshOrders, tenantId],
+  );
+
   const receivablePos = useMemo(
-    () =>
-      ordersRaw.filter(
-        (p) =>
-          p.status === "sent" ||
-          p.status === "partial_received",
-      ),
+    () => ordersRaw.filter((p) => poReadyForGoodsReceipt(p.status, p.type)),
     [ordersRaw],
   );
 
@@ -339,6 +358,7 @@ export function usePurchaseOrders() {
     closeForm: () => setFormOpen(false),
     createPo,
     sendPo,
+    confirmSupplierPo,
     cancelPo,
     loadOrders: refreshOrders,
   };

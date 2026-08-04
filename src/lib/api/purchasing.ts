@@ -14,6 +14,9 @@ import {
   neonGetPurchaseOrders,
   neonGetSupplier,
   neonGetSuppliers,
+  neonGetSuppliersForProduct,
+  neonListSuppliersWithProducts,
+  neonSetSupplierProductLinks,
   neonUpdatePurchaseOrderStatus,
   neonUpdateSupplier,
 } from "@/lib/api/neon/phase5-fns";
@@ -22,6 +25,7 @@ import type {
   Supplier,
   SupplierInsert,
   SupplierUpdate,
+  SupplierWithProducts,
   PurchaseOrder,
   PurchaseOrderInsert,
   PurchaseOrderUpdate,
@@ -143,6 +147,55 @@ export async function updateSupplier(
   } catch (err) {
     return fail(err);
   }
+}
+
+export async function listSuppliersWithProductsApi(
+  tenantId: string,
+): Promise<ApiResponse<SupplierWithProducts[]>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonListSuppliersWithProducts({ data: { tenantId } }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data ?? []);
+  }
+  return fail("Modul supplier memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function getSuppliersForProductApi(
+  tenantId: string,
+  productId: string,
+  options?: { activeOnly?: boolean },
+): Promise<ApiResponse<Supplier[]>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonGetSuppliersForProduct({
+        data: { tenantId, productId, activeOnly: options?.activeOnly },
+      }),
+    );
+    if (result.error) return fail(result.error);
+    return ok(result.data ?? []);
+  }
+  return fail("Filter supplier per produk memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function setSupplierProductLinksApi(
+  tenantId: string,
+  supplierId: string,
+  productIds: string[],
+  preferredProductId?: string | null,
+): Promise<ApiResponse<null>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonSetSupplierProductLinks({
+        data: { tenantId, supplierId, productIds, preferredProductId },
+      }),
+    );
+    if (result.error) return fail(result.error);
+    invalidateResponseCache(`suppliers:${tenantId}:`);
+    return ok(null);
+  }
+  return fail("Modul supplier memerlukan VITE_DATA_BACKEND=neon");
 }
 
 export async function getPurchaseOrders(

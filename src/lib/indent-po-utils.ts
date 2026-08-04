@@ -7,12 +7,13 @@ import type {
   MockSalesOrderWithDetails,
 } from "@/lib/mock-sales-orders";
 import type { MockPoItem, MockPoWithItems } from "@/lib/mock-purchasing";
+import type { DbPoStatus } from "@/types/database";
 
 export function indentQtyForSoItem(
   order: MockSalesOrderWithDetails,
   soItemId: string,
 ): number {
-  for (const po of order.indent_pos) {
+  for (const po of order.indent_pos ?? []) {
     const line = po.lines.find((l) => l.so_item_id === soItemId);
     if (line) return line.qty;
   }
@@ -23,14 +24,14 @@ export function findIndentPoGroupBySupplier(
   order: MockSalesOrderWithDetails,
   supplierId: string,
 ): MockIndentPoRef | undefined {
-  return order.indent_pos.find((p) => p.supplier_id === supplierId);
+  return order.indent_pos?.find((p) => p.supplier_id === supplierId);
 }
 
 export function findIndentPoGroupForSoItem(
   order: MockSalesOrderWithDetails,
   soItemId: string,
 ): MockIndentPoRef | undefined {
-  return order.indent_pos.find((p) => p.lines.some((l) => l.so_item_id === soItemId));
+  return (order.indent_pos ?? []).find((p) => p.lines.some((l) => l.so_item_id === soItemId));
 }
 
 /** Tambah / update baris dalam grup PO indent di SO. */
@@ -43,11 +44,12 @@ export function upsertIndentPoLineInSo(
     supplier_id: string;
     supplier_name: string;
     status?: "draft" | "sent";
+    po_status?: DbPoStatus;
   },
   soItemId: string,
   qty: number,
 ): MockIndentPoRef {
-  let po = order.indent_pos.find(
+  let po = (order.indent_pos ?? []).find(
     (p) => p.id === group.id || p.supplier_id === group.supplier_id,
   );
 
@@ -59,8 +61,10 @@ export function upsertIndentPoLineInSo(
       supplier_id: group.supplier_id,
       supplier_name: group.supplier_name,
       status: group.status ?? "draft",
+      po_status: group.po_status ?? (group.status === "sent" ? "awaiting_supplier" : "draft"),
       lines: [],
     };
+    order.indent_pos = order.indent_pos ?? [];
     order.indent_pos.push(po);
   }
 
@@ -69,6 +73,14 @@ export function upsertIndentPoLineInSo(
     existingLine.qty = qty;
   } else {
     po.lines.push({ so_item_id: soItemId, qty });
+  }
+
+  if (group.po_status) {
+    po.po_status = group.po_status;
+    po.status = group.po_status === "draft" ? "draft" : "sent";
+  } else if (group.status) {
+    po.status = group.status;
+    po.po_status = group.status === "sent" ? "awaiting_supplier" : "draft";
   }
 
   return po;
@@ -89,7 +101,7 @@ export function collectSoItemIdsFromIndentPos(
   }
 
   for (const so of mockSalesOrders) {
-    for (const ip of so.indent_pos) {
+    for (const ip of so.indent_pos ?? []) {
       for (const line of ip.lines) {
         ids.add(line.so_item_id);
       }

@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { poStatusKind, poStatusLabel, poTypeLabel } from "@/stores/purchasing.store";
+import { poStatusKind, displayPoStatusLabel, poTypeLabel, poReadyForGoodsReceipt } from "@/stores/purchasing.store";
 import type { MockPoWithItems } from "@/lib/mock-purchasing";
 
 interface PurchaseOrderListProps {
@@ -71,7 +71,10 @@ export function PurchaseOrderList({ orders, loading, onSelect }: PurchaseOrderLi
                 <CurrencyDisplay value={po.grand_total} />
               </TableCell>
               <TableCell>
-                <StatusBadge status={poStatusKind(po.status)} label={poStatusLabel(po.status)} />
+                <StatusBadge
+                  status={poStatusKind(po.status)}
+                  label={displayPoStatusLabel(po.status, po.type)}
+                />
               </TableCell>
               <TableCell className="text-muted-foreground text-sm">
                 <DateDisplay value={po.created_at} />

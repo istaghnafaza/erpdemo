@@ -127,7 +127,7 @@ export function DashboardKpiDetailDialog({
             <FormulaBlock>
               <strong>Cara hitung:</strong> Σ grandTotal transaksi <em>completed</em> pada periode
               ini. Margin rata-rata = (Σ subtotal − harga beli per baris stok) ÷ penjualan. Baris
-              Sales Order (<code>isSoLine</code>) ikut omzet tetapi dikecualikan dari margin.
+              Semua baris penjualan (stok dan SO) ikut perhitungan omzet dan keuntungan.
             </FormulaBlock>
             <Link
               to="/$tenantSlug/sales"

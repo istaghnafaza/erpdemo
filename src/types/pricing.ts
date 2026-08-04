@@ -59,6 +59,8 @@ export interface LinePricingInput {
   customer_tier_discount_percent: number;
   is_so_line?: boolean;
   price_override_unit?: number | null;
+  /** Total gross keranjang (non-SO) — untuk syarat min belanja tier volume. */
+  cart_gross_subtotal?: number;
 }
 
 export interface LinePricingResult {
@@ -72,6 +74,8 @@ export interface LinePricingResult {
   unit_discount_amount: number;
   floor_price: number;
   clamped_to_floor: boolean;
+  /** Diskon tier dibatasi margin min per barang (anti rugi). */
+  margin_limited_discount?: boolean;
   line_subtotal: number;
 }
 

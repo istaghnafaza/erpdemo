@@ -188,6 +188,7 @@ function SalesTransactionsPage() {
         storeName={currentTenant?.name ?? selectedBranch?.name ?? ""}
         branchAddress={selectedBranch?.address ?? null}
         branchPhone={selectedBranch?.phone ?? currentTenant?.phone ?? null}
+        branchId={selectedBranch?.id ?? ""}
         tenantId={currentTenant?.id ?? ""}
         userId={user.id}
         userRole={user.role}

@@ -543,7 +543,6 @@ export async function getProfitLossSummaryReport(
   let cogs = 0;
 
   for (const item of rows) {
-    if (item.isSoLine) continue;
     const eq = Math.max(0, item.qty - item.qtyReturned);
     if (eq <= 0 || item.qty <= 0) continue;
     revenue += Math.round((item.subtotal * eq) / item.qty);

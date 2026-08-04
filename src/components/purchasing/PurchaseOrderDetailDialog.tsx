@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { poStatusKind, poStatusLabel, poTypeLabel } from "@/stores/purchasing.store";
+import { poStatusKind, displayPoStatusLabel, poTypeLabel, poReadyForGoodsReceipt } from "@/stores/purchasing.store";
 import { useAuthStore } from "@/stores/auth.store";
 import type { MockPoWithItems } from "@/lib/mock-purchasing";
 
@@ -28,6 +28,7 @@ interface PurchaseOrderDetailDialogProps {
   onClose: () => void;
   loading: boolean;
   onSend: () => void;
+  onConfirmSupplier?: () => void;
   onCancel: () => void;
   onReceive?: () => void;
 }
@@ -37,13 +38,15 @@ export function PurchaseOrderDetailDialog({
   onClose,
   loading,
   onSend,
+  onConfirmSupplier,
   onCancel,
   onReceive,
 }: PurchaseOrderDetailDialogProps) {
   const tenantSlug = useAuthStore((s) => s.currentTenant?.slug) ?? "";
   if (!po) return null;
 
-  const canReceive = po.status === "sent" || po.status === "partial_received";
+  const canReceive = poReadyForGoodsReceipt(po.status, po.type);
+  const awaitingSupplier = po.type === "indent" && po.status === "awaiting_supplier";
 
   return (
     <Dialog open={!!po} onOpenChange={(o) => !o && onClose()}>
@@ -54,7 +57,10 @@ export function PurchaseOrderDetailDialog({
             <Badge className={po.type === "indent" ? "bg-violet-600" : ""}>
               {poTypeLabel(po.type)}
             </Badge>
-            <StatusBadge status={poStatusKind(po.status)} label={poStatusLabel(po.status)} />
+            <StatusBadge
+              status={poStatusKind(po.status)}
+              label={displayPoStatusLabel(po.status, po.type)}
+            />
           </DialogTitle>
         </DialogHeader>
 
@@ -83,7 +89,14 @@ export function PurchaseOrderDetailDialog({
           )}
         </div>
 
-        {po.type === "indent" && (
+        {awaitingSupplier && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+            PO indent menunggu konfirmasi supplier. Setelah supplier mengonfirmasi ketersediaan,
+            klik &quot;Supplier Konfirmasi&quot; untuk mengaktifkan penerimaan barang.
+          </p>
+        )}
+
+        {po.type === "indent" && !awaitingSupplier && (
           <p className="text-xs text-violet-700 dark:text-violet-400 bg-violet-500/10 border border-violet-500/20 rounded-lg p-3">
             PO Indent — penerimaan barang tidak menambah stok cabang. Barang dikirim langsung ke
             alamat pelanggan SO.
@@ -147,6 +160,11 @@ export function PurchaseOrderDetailDialog({
                 Kirim ke Supplier
               </Button>
             </>
+          )}
+          {awaitingSupplier && onConfirmSupplier && (
+            <Button className="bg-orange-600 hover:bg-orange-700" onClick={onConfirmSupplier} disabled={loading}>
+              Supplier Konfirmasi
+            </Button>
           )}
           {canReceive && onReceive && (
             <Button className="bg-orange-600 hover:bg-orange-700" onClick={onReceive}>

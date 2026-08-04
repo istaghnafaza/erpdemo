@@ -6,11 +6,28 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toProfile } from "@/server/db/mappers";
 import { authUsers, profiles, userBranches } from "@/server/db/schema";
-import { verifyPassword } from "@/server/auth/password";
+import { verifyPassword, hashPassword } from "@/server/auth/password";
 import { createSessionToken } from "@/server/auth/session";
 import { getPlatformAdminDisplayName } from "@/server/services/platform-admin";
-import type { AuthUser, AppProfile } from "@/types/app";
+import type { AuthUser, AppProfile, AccountProfileUpdates } from "@/types/app";
 import type { Profile, ProfileUpdate } from "@/types/database";
+
+function profileToAppProfile(p: Profile): AppProfile {
+  return {
+    id: p.id,
+    tenantId: p.tenant_id,
+    name: p.name,
+    email: p.email,
+    role: p.role,
+    pin: p.pin,
+    phone: p.phone ?? null,
+    address: p.address ?? null,
+    dateOfBirth: p.date_of_birth ?? null,
+    isActive: p.is_active,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  };
+}
 
 function buildAuthUser(profile: Profile, branchIds: string[]): AuthUser {
   return {
@@ -18,17 +35,7 @@ function buildAuthUser(profile: Profile, branchIds: string[]): AuthUser {
     email: profile.email,
     tenantId: profile.tenant_id,
     isPlatformAdmin: false,
-    profile: {
-      id: profile.id,
-      tenantId: profile.tenant_id,
-      name: profile.name,
-      email: profile.email,
-      role: profile.role,
-      pin: profile.pin,
-      isActive: profile.is_active,
-      createdAt: profile.created_at,
-      updatedAt: profile.updated_at,
-    },
+    profile: profileToAppProfile(profile),
     activeBranchId: branchIds[0] ?? null,
     allowedBranchIds: branchIds,
     isOwner: profile.role === "owner",
@@ -196,30 +203,27 @@ export async function signInWithPin(
 
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<Profile, "name" | "pin">>,
+  updates: AccountProfileUpdates,
 ): Promise<AppProfile | null> {
   const db = getDb();
   const patch: Partial<typeof profiles.$inferInsert> = {};
-  if (updates.name !== undefined) patch.name = updates.name;
-  if (updates.pin !== undefined) patch.pin = updates.pin;
+  if (updates.name !== undefined) patch.name = updates.name.trim();
+  if (updates.phone !== undefined) patch.phone = updates.phone?.trim() || null;
+  if (updates.address !== undefined) patch.address = updates.address?.trim() || null;
+  if (updates.dateOfBirth !== undefined) patch.dateOfBirth = updates.dateOfBirth || null;
+  if (updates.pin !== undefined) {
+    if (!/^\d{6}$/.test(updates.pin)) throw new Error("PIN harus 6 digit angka");
+    patch.pin = updates.pin;
+    const passwordHash = await hashPassword(updates.pin);
+    await db.update(authUsers).set({ passwordHash }).where(eq(authUsers.id, userId));
+  }
 
   const [row] = await db
     .update(profiles)
-    .set(patch)
+    .set({ ...patch, updatedAt: new Date() })
     .where(eq(profiles.id, userId))
     .returning();
   if (!row) return null;
 
-  const p = toProfile(row);
-  return {
-    id: p.id,
-    tenantId: p.tenant_id,
-    name: p.name,
-    email: p.email,
-    role: p.role,
-    pin: p.pin,
-    isActive: p.is_active,
-    createdAt: p.created_at,
-    updatedAt: p.updated_at,
-  };
+  return profileToAppProfile(toProfile(row));
 }

@@ -44,6 +44,7 @@ import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
 import { OnboardingProgressWidget } from "@/components/onboarding/OnboardingProgressWidget";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { PlanBanner } from "@/components/subscription/PlanBanner";
+import { SidebarAccountPlan } from "@/components/subscription/SidebarAccountPlan";
 import { useModuleNavBadges } from "@/hooks/useModuleNavBadges";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
 import {
@@ -63,6 +64,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+import type { Tenant } from "@/types/database";
+import type { AuthUser } from "@/types/app";
 
 interface NavItem {
   suffix: string;
@@ -315,6 +319,8 @@ export function AppShell({
           pathname={pathname}
           logoHref={`/${tenantSlug}/dashboard`}
           moduleBadges={moduleBadges}
+          tenant={currentTenant}
+          user={currentUser}
           needsBranchSetup={needsStoreSetup}
           onboardingComplete={onboardingComplete}
           isOwner={isOwner}
@@ -340,6 +346,8 @@ export function AppShell({
               onNavigate={() => setMobileOpen(false)}
               logoHref={`/${tenantSlug}/dashboard`}
               moduleBadges={moduleBadges}
+              tenant={currentTenant}
+              user={currentUser}
               needsBranchSetup={needsStoreSetup}
               isOwner={isOwner}
               onBranchSetup={goToBranchSetup}
@@ -476,6 +484,8 @@ function SidebarContent({
   onNavigate,
   logoHref,
   moduleBadges,
+  tenant,
+  user,
   needsBranchSetup,
   onboardingComplete,
   isOwner,
@@ -487,6 +497,8 @@ function SidebarContent({
   onNavigate?: () => void;
   logoHref?: string;
   moduleBadges: { deliveries: number; sales_orders: number; online_orders: number };
+  tenant: Tenant | null;
+  user: AuthUser | null;
   needsBranchSetup?: boolean;
   onboardingComplete?: boolean;
   isOwner?: boolean;
@@ -574,15 +586,7 @@ function SidebarContent({
       </nav>
 
       <div className="p-3 border-t border-white/10">
-        <div className="rounded-xl bg-white/5 p-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary-glow" />
-            <span className="text-xs font-semibold">Demo MVP</span>
-          </div>
-          <p className="text-[11px] text-sidebar-foreground/70 leading-relaxed">
-            Mode presentasi calon klien — data simulasi.
-          </p>
-        </div>
+        <SidebarAccountPlan tenant={tenant} user={user} />
       </div>
     </>
   );

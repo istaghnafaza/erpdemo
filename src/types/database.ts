@@ -19,7 +19,7 @@ export type DbStockSource      = 'verified' | 'legacy' | 'unverified';
 export type DbMovementType     = 'in' | 'out' | 'adjustment' | 'opname' | 'transfer_out' | 'transfer_in' | 'legacy_in' | 'legacy_out';
 export type DbTransferStatus   = 'draft' | 'sent' | 'received' | 'cancelled';
 export type DbPoType           = 'regular' | 'indent';
-export type DbPoStatus         = 'draft' | 'sent' | 'partial_received' | 'received' | 'cancelled';
+export type DbPoStatus         = 'draft' | 'awaiting_supplier' | 'sent' | 'partial_received' | 'received' | 'cancelled';
 export type DbSoStatus         = 'draft' | 'confirmed' | 'partial_delivered' | 'completed' | 'cancelled';
 export type DbSoPaymentStatus  = 'unpaid' | 'partial' | 'paid';
 export type DbSoItemStatus     = 'pending' | 'partial' | 'fulfilled';
@@ -256,6 +256,8 @@ export interface CartItem {
   customer_discount_percent?: number;
   floor_price?: number;
   pricing_clamped?: boolean;
+  /** Diskon tier dibatasi margin min barang ini (anti rugi). */
+  pricing_margin_limited?: boolean;
   price_override?: { unit_price: number; reason: string } | null;
 }
 
@@ -455,6 +457,16 @@ export interface Supplier {
 
 export type SupplierInsert = Omit<Supplier, 'id'> & { id?: string };
 export type SupplierUpdate = Partial<Omit<SupplierInsert, 'tenant_id'>>;
+
+export interface ProductSupplier {
+  id: string;
+  tenant_id: string;
+  product_id: string;
+  supplier_id: string;
+  is_preferred: boolean;
+}
+
+export type SupplierWithProducts = Supplier & { product_ids: string[] };
 
 
 // ---------------------------------------------------------------------------

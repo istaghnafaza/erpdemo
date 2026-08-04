@@ -112,7 +112,7 @@ function mergeIndentPosFromSalesOrders(existing: MockPoWithItems[]): MockPoWithI
         delivery_address: so.delivery_address,
         subtotal,
         grand_total: grandTotal,
-        status: ip.status === "sent" ? "sent" : "draft",
+        status: ip.po_status ?? (ip.status === "sent" ? "awaiting_supplier" : "draft"),
         expected_date: so.estimated_delivery_date,
         notes: `Indent dari ${so.so_number}`,
         created_by: so.created_by,
@@ -138,6 +138,7 @@ interface PurchasingState {
 
   createMockPo: (draft: CreatePoDraft) => { ok: boolean; error?: string; po?: MockPoWithItems };
   sendMockPo: (poId: string) => { ok: boolean; error?: string };
+  confirmMockSupplierPo: (poId: string) => { ok: boolean; error?: string };
   cancelMockPo: (poId: string) => { ok: boolean; error?: string };
 
   receiveMockGoods: (
@@ -349,15 +350,44 @@ export const usePurchasingStore = create<PurchasingState>()(
 
       set((s) => {
         const p = s.mockPurchaseOrders.find((x) => x.id === poId);
+        const nextStatus = po.type === "indent" ? "awaiting_supplier" : "sent";
         if (p) {
-          p.status = "sent";
-          return;
+          p.status = nextStatus;
         }
         if (po.type === "indent") {
           useSalesOrdersStore.setState((so) => {
             for (const o of so.mockOrders) {
               const ip = o.indent_pos.find((x) => x.id === poId);
-              if (ip) ip.status = "sent";
+              if (ip) {
+                ip.status = "sent";
+                ip.po_status = nextStatus;
+              }
+            }
+          });
+        }
+      });
+      return { ok: true };
+    },
+
+    confirmMockSupplierPo: (poId) => {
+      const all = get().getAllMockPos();
+      const po = all.find((p) => p.id === poId);
+      if (!po) return { ok: false, error: "PO tidak ditemukan" };
+      if (po.status !== "awaiting_supplier") {
+        return { ok: false, error: "PO tidak menunggu konfirmasi supplier" };
+      }
+
+      set((s) => {
+        const p = s.mockPurchaseOrders.find((x) => x.id === poId);
+        if (p) p.status = "sent";
+        if (po.type === "indent") {
+          useSalesOrdersStore.setState((so) => {
+            for (const o of so.mockOrders) {
+              const ip = o.indent_pos.find((x) => x.id === poId);
+              if (ip) {
+                ip.status = "sent";
+                ip.po_status = "sent";
+              }
             }
           });
         }
@@ -381,8 +411,14 @@ export const usePurchasingStore = create<PurchasingState>()(
       const all = get().getAllMockPos();
       const po = all.find((p) => p.id === poId);
       if (!po) return { ok: false, error: "PO tidak ditemukan" };
-      if (po.status === "draft" || po.status === "cancelled") {
-        return { ok: false, error: "Kirim PO ke supplier terlebih dahulu" };
+      if (po.status === "draft" || po.status === "cancelled" || po.status === "awaiting_supplier") {
+        return {
+          ok: false,
+          error:
+            po.status === "awaiting_supplier"
+              ? "Menunggu konfirmasi supplier terlebih dahulu"
+              : "Kirim PO ke supplier terlebih dahulu",
+        };
       }
 
       const isIndent = po.type === "indent";
@@ -473,6 +509,7 @@ export const usePurchasingStore = create<PurchasingState>()(
 export function poStatusLabel(status: DbPoStatus): string {
   const map: Record<DbPoStatus, string> = {
     draft: "Draft",
+    awaiting_supplier: "Menunggu jawaban supplier",
     sent: "Terkirim",
     partial_received: "Sebagian Diterima",
     received: "Diterima",
@@ -484,15 +521,42 @@ export function poStatusLabel(status: DbPoStatus): string {
 export function poStatusKind(status: DbPoStatus) {
   const map: Record<
     DbPoStatus,
-    "draft" | "sent" | "partial_received" | "received" | "cancelled"
+    "draft" | "pending" | "sent" | "partial_received" | "received" | "cancelled"
   > = {
     draft: "draft",
+    awaiting_supplier: "pending",
     sent: "sent",
     partial_received: "partial_received",
     received: "received",
     cancelled: "cancelled",
   };
   return map[status];
+}
+
+/** Label status PO — indent menunggu supplier vs reguler terkirim. */
+export function displayPoStatusLabel(status: DbPoStatus, type?: DbPoType): string {
+  if (type === "indent" && status === "awaiting_supplier") {
+    return "Menunggu jawaban supplier";
+  }
+  if (type === "indent" && status === "sent") {
+    return "Supplier konfirmasi — siap penerimaan";
+  }
+  return poStatusLabel(status);
+}
+
+export function indentPoStatusLabel(status: DbPoStatus): string {
+  if (status === "awaiting_supplier" || status === "sent") {
+    return status === "awaiting_supplier"
+      ? "Menunggu jawaban supplier"
+      : "Supplier konfirmasi — siap penerimaan";
+  }
+  return poStatusLabel(status);
+}
+
+/** PO indent menunggu jawaban supplier belum boleh masuk antrian GR. */
+export function poReadyForGoodsReceipt(status: DbPoStatus, type?: DbPoType): boolean {
+  if (type === "indent" && status === "awaiting_supplier") return false;
+  return status === "sent" || status === "partial_received";
 }
 
 export function poTypeLabel(type: DbPoType): string {
