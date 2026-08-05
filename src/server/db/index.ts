@@ -19,7 +19,12 @@ if (typeof globalThis.WebSocket === "undefined") {
 }
 
 function createPool(url: string) {
-  return new Pool({ connectionString: url });
+  const pool = new Pool({ connectionString: url });
+  // Prevent idle WebSocket disconnects from crashing the dev server process.
+  pool.on("error", (err) => {
+    console.error("[SES] Neon pool idle connection error:", err.message);
+  });
+  return pool;
 }
 
 function createDb(url: string): Db {

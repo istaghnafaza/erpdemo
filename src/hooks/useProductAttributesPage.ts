@@ -1,34 +1,80 @@
 // =============================================================================
-// useProductAttributesPage — kelola attribute produk per kategori (Settings).
+// useProductAttributesPage — kelola / baca katalog platform
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/auth.store";
 import { useProductAttributesStore } from "@/stores/product-attributes.store";
+import { fetchPublishedCatalog } from "@/lib/api/platform-catalog";
 import { canEdit } from "@/lib/rbac";
 
-export function useProductAttributesPage() {
+export function useProductAttributesPage(options?: { developerMode?: boolean }) {
   const user = useAuthStore((s) => s.currentUser?.profile ?? null);
+  const isPlatformAdmin = useAuthStore((s) => s.currentUser?.isPlatformAdmin ?? false);
+  const developerMode = options?.developerMode ?? false;
+  const canEditCatalog = developerMode && isPlatformAdmin;
   const canEditAttributes = canEdit(user?.role, "settings");
 
   const seedIfEmpty = useProductAttributesStore((s) => s.seedIfEmpty);
-  const attributes = useProductAttributesStore((s) => s.attributes);
-  const listCategories = useProductAttributesStore((s) => s.listCategories);
-  const listForCategory = useProductAttributesStore((s) => s.listForCategory);
-  const addAttribute = useProductAttributesStore((s) => s.addAttribute);
-  const updateAttribute = useProductAttributesStore((s) => s.updateAttribute);
-  const reorderAttribute = useProductAttributesStore((s) => s.reorderAttribute);
-  const addValue = useProductAttributesStore((s) => s.addValue);
-  const updateValue = useProductAttributesStore((s) => s.updateValue);
-  const reorderValue = useProductAttributesStore((s) => s.reorderValue);
+  const setCatalogReadOnly = useProductAttributesStore((s) => s.setCatalogReadOnly);
+  const loadFromPayload = useProductAttributesStore((s) => s.loadFromPayload);
+  const publishedVersion = useProductAttributesStore((s) => s.publishedVersion);
+  const catalogReadOnly = useProductAttributesStore((s) => s.catalogReadOnly);
+  const catalogCategories = useProductAttributesStore((s) => s.catalogCategories);
+  const productTypes = useProductAttributesStore((s) => s.productTypes);
+  const typeAttributes = useProductAttributesStore((s) => s.typeAttributes);
+  const globalAttributes = useProductAttributesStore((s) => s.globalAttributes);
 
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const listCategories = useProductAttributesStore((s) => s.listCategories);
+  const listCatalogCategories = useProductAttributesStore((s) => s.listCatalogCategories);
+  const listGlobalAttributes = useProductAttributesStore((s) => s.listGlobalAttributes);
+  const listProductTypesForCategory = useProductAttributesStore((s) => s.listProductTypesForCategory);
+  const listAttributesForProductType = useProductAttributesStore((s) => s.listAttributesForProductType);
+  const getPayload = useProductAttributesStore((s) => s.getPayload);
+  const applySeedFromDeveloper = useProductAttributesStore((s) => s.applySeedFromDeveloper);
+
+  const addCategory = useProductAttributesStore((s) => s.addCategory);
+  const updateCategory = useProductAttributesStore((s) => s.updateCategory);
+  const reorderCategory = useProductAttributesStore((s) => s.reorderCategory);
+  const addGlobalAttribute = useProductAttributesStore((s) => s.addGlobalAttribute);
+  const updateGlobalAttribute = useProductAttributesStore((s) => s.updateGlobalAttribute);
+  const addProductType = useProductAttributesStore((s) => s.addProductType);
+  const updateProductType = useProductAttributesStore((s) => s.updateProductType);
+  const reorderProductType = useProductAttributesStore((s) => s.reorderProductType);
+  const assignGlobalAttribute = useProductAttributesStore((s) => s.assignGlobalAttribute);
+  const removeTypeAttribute = useProductAttributesStore((s) => s.removeTypeAttribute);
+  const updateTypeAttribute = useProductAttributesStore((s) => s.updateTypeAttribute);
+  const reorderTypeAttribute = useProductAttributesStore((s) => s.reorderTypeAttribute);
+  const addTypeAttributeValue = useProductAttributesStore((s) => s.addTypeAttributeValue);
+  const updateTypeAttributeValue = useProductAttributesStore((s) => s.updateTypeAttributeValue);
+  const reorderTypeAttributeValue = useProductAttributesStore((s) => s.reorderTypeAttributeValue);
+
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedProductTypeId, setSelectedProductTypeId] = useState("");
 
   useEffect(() => {
     seedIfEmpty();
-  }, [seedIfEmpty]);
+    setCatalogReadOnly(!canEditCatalog);
+  }, [seedIfEmpty, setCatalogReadOnly, canEditCatalog]);
 
-  const categories = useMemo(() => listCategories(), [listCategories, attributes]);
+  useEffect(() => {
+    if (developerMode) return;
+    void (async () => {
+      try {
+        const r = await fetchPublishedCatalog();
+        if (r.data && r.data.version > publishedVersion) {
+          loadFromPayload(r.data);
+        }
+      } catch {
+        /* fallback: local seed */
+      }
+    })();
+  }, [developerMode, loadFromPayload, publishedVersion]);
+
+  const categories = useMemo(
+    () => listCategories(true),
+    [listCategories, catalogCategories, productTypes],
+  );
 
   useEffect(() => {
     if (!selectedCategory && categories.length > 0) {
@@ -36,27 +82,82 @@ export function useProductAttributesPage() {
     }
   }, [categories, selectedCategory]);
 
-  const categoryAttributes = useMemo(
-    () => (selectedCategory ? listForCategory(selectedCategory, true) : []),
-    [selectedCategory, listForCategory, attributes],
+  const categoryEntities = useMemo(
+    () => listCatalogCategories(true) ?? [],
+    [listCatalogCategories, catalogCategories],
   );
 
-  const refreshCategories = useCallback(() => listCategories(), [listCategories, attributes]);
+  const categoryProductTypes = useMemo(
+    () => (selectedCategory ? listProductTypesForCategory(selectedCategory, true) : []),
+    [selectedCategory, listProductTypesForCategory, productTypes],
+  );
+
+  useEffect(() => {
+    if (categoryProductTypes.length === 0) {
+      setSelectedProductTypeId("");
+      return;
+    }
+    if (!categoryProductTypes.some((pt) => pt.id === selectedProductTypeId)) {
+      setSelectedProductTypeId(categoryProductTypes[0].id);
+    }
+  }, [categoryProductTypes, selectedProductTypeId]);
+
+  const productTypeAttributes = useMemo(
+    () =>
+      selectedProductTypeId
+        ? listAttributesForProductType(selectedProductTypeId, true)
+        : [],
+    [selectedProductTypeId, listAttributesForProductType, typeAttributes, globalAttributes],
+  );
+
+  const availableGlobalAttributes = useMemo(() => {
+    const assigned = new Set(productTypeAttributes.map((a) => a.globalAttributeId));
+    return listGlobalAttributes(true).filter((g) => g.isActive && !assigned.has(g.id));
+  }, [productTypeAttributes, listGlobalAttributes, globalAttributes]);
+
+  const globalAttributesList = useMemo(
+    () => listGlobalAttributes(true),
+    [listGlobalAttributes, globalAttributes],
+  );
+
+  const handleCategoryChange = useCallback((cat: string) => {
+    setSelectedCategory(cat);
+    setSelectedProductTypeId("");
+  }, []);
 
   return {
     user,
+    isPlatformAdmin,
+    canEditCatalog,
     canEditAttributes,
+    catalogReadOnly,
     categories,
+    categoryEntities,
     selectedCategory,
-    setSelectedCategory,
-    categoryAttributes,
-    addAttribute,
-    updateAttribute,
-    reorderAttribute,
-    addValue,
-    updateValue,
-    reorderValue,
-    refreshCategories,
-    allAttributes: attributes,
+    setSelectedCategory: handleCategoryChange,
+    globalAttributes: globalAttributesList,
+    categoryProductTypes,
+    selectedProductTypeId,
+    setSelectedProductTypeId,
+    productTypeAttributes,
+    availableGlobalAttributes,
+    getPayload,
+    applySeedFromDeveloper,
+    loadFromPayload,
+    addCategory,
+    updateCategory,
+    reorderCategory,
+    addGlobalAttribute,
+    updateGlobalAttribute,
+    addProductType,
+    updateProductType,
+    reorderProductType,
+    assignGlobalAttribute,
+    removeTypeAttribute,
+    updateTypeAttribute,
+    reorderTypeAttribute,
+    addTypeAttributeValue,
+    updateTypeAttributeValue,
+    reorderTypeAttributeValue,
   };
 }

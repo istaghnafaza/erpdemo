@@ -44,7 +44,16 @@ export function clearClientDemoDataForRealTenant(tenantId: string): void {
   useSalesTransactionsStore.setState({ transactions: [] });
   useDeliveriesStore.setState({ deliveries: [] });
   useCustomerDeliverySitesStore.setState({ sites: [], lastUsedSiteByCustomer: {} });
-  useProductAttributesStore.setState({ attributes: [], seeded: false });
+  useProductAttributesStore.setState({
+    catalogCategories: [],
+    globalAttributes: [],
+    productTypes: [],
+    typeAttributes: [],
+    seeded: false,
+    seedVersion: 0,
+    publishedVersion: 0,
+    catalogReadOnly: true,
+  });
   usePosHeldCartsStore.setState({ carts: [] });
   useSalesOrdersStore.setState({ mockOrders: [] });
   usePurchasingStore.setState({

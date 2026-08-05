@@ -18,6 +18,7 @@ import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as PlatformDashboardRouteImport } from './routes/platform/dashboard'
+import { Route as PlatformCatalogRouteImport } from './routes/platform/catalog'
 import { Route as TenantSlugTokoSayaRouteImport } from './routes/$tenantSlug/toko-saya'
 import { Route as TenantSlugShopRouteImport } from './routes/$tenantSlug/shop'
 import { Route as TenantSlugSalesOrdersRouteImport } from './routes/$tenantSlug/sales-orders'
@@ -97,6 +98,11 @@ const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
 const PlatformDashboardRoute = PlatformDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => PlatformRoute,
+} as any)
+const PlatformCatalogRoute = PlatformCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
   getParentRoute: () => PlatformRoute,
 } as any)
 const TenantSlugTokoSayaRoute = TenantSlugTokoSayaRouteImport.update({
@@ -309,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
@@ -354,6 +361,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/receivables': typeof TenantSlugReceivablesRoute
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
@@ -401,6 +409,7 @@ export interface FileRoutesById {
   '/$tenantSlug/sales-orders': typeof TenantSlugSalesOrdersRoute
   '/$tenantSlug/shop': typeof TenantSlugShopRouteWithChildren
   '/$tenantSlug/toko-saya': typeof TenantSlugTokoSayaRoute
+  '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
@@ -449,6 +458,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/shop'
     | '/$tenantSlug/toko-saya'
+    | '/platform/catalog'
     | '/platform/dashboard'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
@@ -494,6 +504,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/receivables'
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/toko-saya'
+    | '/platform/catalog'
     | '/platform/dashboard'
     | '/onboarding'
     | '/$tenantSlug/finance/cash-book'
@@ -540,6 +551,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales-orders'
     | '/$tenantSlug/shop'
     | '/$tenantSlug/toko-saya'
+    | '/platform/catalog'
     | '/platform/dashboard'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
@@ -647,6 +659,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/platform/dashboard'
       preLoaderRoute: typeof PlatformDashboardRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/catalog': {
+      id: '/platform/catalog'
+      path: '/catalog'
+      fullPath: '/platform/catalog'
+      preLoaderRoute: typeof PlatformCatalogRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/$tenantSlug/toko-saya': {
@@ -989,10 +1008,12 @@ const TenantSlugRouteWithChildren = TenantSlugRoute._addFileChildren(
 )
 
 interface PlatformRouteChildren {
+  PlatformCatalogRoute: typeof PlatformCatalogRoute
   PlatformDashboardRoute: typeof PlatformDashboardRoute
 }
 
 const PlatformRouteChildren: PlatformRouteChildren = {
+  PlatformCatalogRoute: PlatformCatalogRoute,
   PlatformDashboardRoute: PlatformDashboardRoute,
 }
 

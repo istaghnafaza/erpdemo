@@ -77,8 +77,15 @@ export function useInventoryProducts() {
   const deactivateMockProduct = useInventoryStore((s) => s.deactivateMockProduct);
   const updateMockProduct = useInventoryStore((s) => s.updateMockProduct);
   const addMockProduct = useInventoryStore((s) => s.addMockProduct);
-  const attributeDefinitions = useProductAttributesStore((s) => s.attributes);
+  const globalAttributes = useProductAttributesStore((s) => s.globalAttributes);
+  const productTypes = useProductAttributesStore((s) => s.productTypes);
+  const typeAttributes = useProductAttributesStore((s) => s.typeAttributes);
   const seedAttributes = useProductAttributesStore((s) => s.seedIfEmpty);
+
+  const productCatalog = useMemo(
+    () => ({ globalAttributes, productTypes, typeAttributes }),
+    [globalAttributes, productTypes, typeAttributes],
+  );
 
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
@@ -374,12 +381,12 @@ export function useInventoryProducts() {
   }, []);
 
   const downloadTemplateExcel = useCallback(() => {
-    downloadImportTemplateExcel(attributeDefinitions);
-  }, [attributeDefinitions]);
+    downloadImportTemplateExcel(productCatalog);
+  }, [productCatalog]);
 
   const downloadTemplateCsv = useCallback(() => {
-    downloadImportTemplateCsv(attributeDefinitions);
-  }, [attributeDefinitions]);
+    downloadImportTemplateCsv(productCatalog);
+  }, [productCatalog]);
 
   const handleDeactivate = useCallback(
     async (productIdVal: string) => {
@@ -525,7 +532,6 @@ export function useInventoryProducts() {
     formOpen,
     editingProductId,
     editingDefaults,
-    attributeDefinitions,
     existingSkus,
     openDetail,
     closeDetail,

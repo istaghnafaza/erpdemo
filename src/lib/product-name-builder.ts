@@ -1,30 +1,41 @@
 // =============================================================================
-// Smart Product Name / SKU builder dari attribute terpilih.
+// Smart Product Name / SKU builder dari jenis barang + attribute terpilih.
 // =============================================================================
 
+import {
+  isBulkMaterialCategory,
+  resolveCategoryForAttributes,
+} from "@/lib/category-attribute-map";
 import type {
-  ProductAttributeDefinition,
+  NameInclusionFlags,
   ProductAttributeSelections,
+  ProductType,
+  ResolvedProductTypeAttribute,
 } from "@/types/product-attributes";
+import { PRODUCT_TYPE_NAME_KEY } from "@/types/product-attributes";
 
-export function listActiveAttributesForCategory(
-  attributes: ProductAttributeDefinition[],
-  categoryName: string,
-): ProductAttributeDefinition[] {
-  return attributes
-    .filter((a) => a.categoryName === categoryName && a.isActive)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+export { resolveCategoryForAttributes, isBulkMaterialCategory } from "@/lib/category-attribute-map";
+
+export function listActiveAttributesForProductType(
+  attributes: ResolvedProductTypeAttribute[],
+): ResolvedProductTypeAttribute[] {
+  return attributes.filter((a) => a.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export function buildProductNameFromAttributes(
-  attributes: ProductAttributeDefinition[],
-  categoryName: string,
+export function buildProductNameFromTypeAttributes(
+  productType: ProductType | undefined,
+  attributes: ResolvedProductTypeAttribute[],
   selections: ProductAttributeSelections,
+  nameInclusions?: NameInclusionFlags,
 ): string {
   const parts: string[] = [];
-  for (const attr of listActiveAttributesForCategory(attributes, categoryName)) {
-    const valueId = selections[attr.id];
+  if (productType?.name && nameInclusions?.[PRODUCT_TYPE_NAME_KEY] !== false) {
+    parts.push(productType.name);
+  }
+  for (const attr of listActiveAttributesForProductType(attributes)) {
+    const valueId = selections[attr.assignmentId];
     if (!valueId) continue;
+    if (nameInclusions && nameInclusions[attr.assignmentId] === false) continue;
     const val = attr.values.find((v) => v.id === valueId && v.isActive);
     if (val) parts.push(val.label);
   }
@@ -33,39 +44,51 @@ export function buildProductNameFromAttributes(
 
 /** Nama material curah: "Pasir Lumajang / Truk" */
 export function buildBulkMaterialName(
-  attributes: ProductAttributeDefinition[],
+  productType: ProductType | undefined,
+  attributes: ResolvedProductTypeAttribute[],
   categoryName: string,
   selections: ProductAttributeSelections,
+  nameInclusions?: NameInclusionFlags,
 ): string {
-  if (categoryName !== "Pasir & Material Curah") {
-    return buildProductNameFromAttributes(attributes, categoryName, selections);
+  if (!isBulkMaterialCategory(categoryName)) {
+    return buildProductNameFromTypeAttributes(
+      productType,
+      attributes,
+      selections,
+      nameInclusions,
+    );
   }
-  const attrs = listActiveAttributesForCategory(attributes, categoryName);
-  const jenis = attrs.find((a) => a.name === "Jenis");
+  const attrs = listActiveAttributesForProductType(attributes);
   const satuan = attrs.find((a) => a.name === "Satuan Jual");
-  const jenisVal =
-    jenis && selections[jenis.id]
-      ? jenis.values.find((v) => v.id === selections[jenis!.id] && v.isActive)
-      : undefined;
   const satuanVal =
-    satuan && selections[satuan.id]
-      ? satuan.values.find((v) => v.id === selections[satuan!.id] && v.isActive)
+    satuan && selections[satuan.assignmentId]
+      ? satuan.values.find((v) => v.id === selections[satuan!.assignmentId] && v.isActive)
       : undefined;
-  if (jenisVal && satuanVal) {
+  const includeType = nameInclusions?.[PRODUCT_TYPE_NAME_KEY] !== false;
+  if (productType?.name && satuanVal && includeType) {
     const unitLabel = satuanVal.label.replace(/^per\s+/i, "");
-    return `${jenisVal.label} / ${unitLabel}`;
+    return `${productType.name} / ${unitLabel}`;
   }
-  return buildProductNameFromAttributes(attributes, categoryName, selections);
+  if (productType?.name && satuanVal && !includeType) {
+    return satuanVal.label.replace(/^per\s+/i, "");
+  }
+  return buildProductNameFromTypeAttributes(
+    productType,
+    attributes,
+    selections,
+    nameInclusions,
+  );
 }
 
-export function buildProductSkuFromAttributes(
-  attributes: ProductAttributeDefinition[],
-  categoryName: string,
+export function buildProductSkuFromTypeAttributes(
+  productType: ProductType | undefined,
+  attributes: ResolvedProductTypeAttribute[],
   selections: ProductAttributeSelections,
 ): string {
   const parts: string[] = [];
-  for (const attr of listActiveAttributesForCategory(attributes, categoryName)) {
-    const valueId = selections[attr.id];
+  if (productType?.abbreviation) parts.push(productType.abbreviation.toUpperCase());
+  for (const attr of listActiveAttributesForProductType(attributes)) {
+    const valueId = selections[attr.assignmentId];
     if (!valueId) continue;
     const val = attr.values.find((v) => v.id === valueId && v.isActive);
     if (val?.abbreviation) parts.push(val.abbreviation.toUpperCase());
@@ -74,9 +97,7 @@ export function buildProductSkuFromAttributes(
 }
 
 export function ensureUniqueSku(baseSku: string, existingSkus: Iterable<string>): string {
-  const taken = new Set(
-    Array.from(existingSkus).map((s) => s.trim().toUpperCase()),
-  );
+  const taken = new Set(Array.from(existingSkus).map((s) => s.trim().toUpperCase()));
   const normalized = baseSku.trim().toUpperCase();
   if (!normalized) return "";
   if (!taken.has(normalized)) return normalized;
@@ -98,4 +119,14 @@ export function suggestAbbreviation(label: string): string {
     .join("")
     .slice(0, 4)
     .toUpperCase();
+}
+
+/** @deprecated Legacy — kept for any stale imports */
+export function listActiveAttributesForCategory(): never[] {
+  return [];
+}
+
+/** @deprecated Legacy */
+export function buildProductNameFromAttributes(): string {
+  return "";
 }

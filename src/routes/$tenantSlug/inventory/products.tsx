@@ -53,7 +53,6 @@ function ProductsPage() {
     formOpen,
     editingProductId,
     editingDefaults,
-    attributeDefinitions,
     existingSkus,
     openDetail,
     closeDetail,
@@ -176,7 +175,6 @@ function ProductsPage() {
         editing={!!editingProductId}
         defaults={editingDefaults}
         categoryNames={categoryNames}
-        attributeDefinitions={attributeDefinitions}
         existingSkus={existingSkus}
         canEditPurchasePrice={canSeePurchasePrice && ["owner", "manager"].includes(user.role)}
         onSave={handleSaveProduct}

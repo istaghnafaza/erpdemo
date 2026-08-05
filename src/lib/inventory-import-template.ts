@@ -3,9 +3,39 @@
 // =============================================================================
 
 import * as XLSX from "xlsx";
-import { SEED_PRODUCT_ATTRIBUTE_CATEGORIES } from "@/lib/mock-product-attributes";
-import { listActiveAttributesForCategory } from "@/lib/product-name-builder";
-import type { ProductAttributeDefinition } from "@/types/product-attributes";
+import { SEED_PRODUCT_ATTRIBUTE_CATEGORIES } from "@/lib/product-catalog-seed";
+import { resolveCategoryForAttributes } from "@/lib/category-attribute-map";
+import type {
+  GlobalAttribute,
+  ProductType,
+  ProductTypeAttribute,
+} from "@/types/product-attributes";
+
+export interface ProductCatalogForImport {
+  globalAttributes: GlobalAttribute[];
+  productTypes: ProductType[];
+  typeAttributes: ProductTypeAttribute[];
+}
+
+function getCategoryAttributeNames(
+  catalog: ProductCatalogForImport,
+  categoryName: string,
+): string[] {
+  const canonical = resolveCategoryForAttributes(categoryName);
+  const gaMap = new Map(catalog.globalAttributes.map((g) => [g.id, g.name]));
+  const names = new Set<string>();
+  for (const pt of catalog.productTypes.filter(
+    (p) => p.categoryName === canonical && p.isActive,
+  )) {
+    for (const ta of catalog.typeAttributes.filter(
+      (t) => t.productTypeId === pt.id && t.isActive,
+    )) {
+      const n = gaMap.get(ta.globalAttributeId);
+      if (n) names.add(n);
+    }
+  }
+  return Array.from(names).sort();
+}
 
 const TAIL_COLUMNS = [
   "Nama Produk (opsional)",
@@ -22,11 +52,62 @@ const TAIL_COLUMNS = [
 
 /** Contoh baris per kategori — nilai attribute harus cocok dengan seed / referensi. */
 const EXAMPLE_ROWS: Record<string, Record<string, string>> = {
+  "Semen & Beton": {
+    "Jenis Barang": "Semen Portland",
+    Kemasan: "50 kg",
+    Tipe: "Standard",
+    Aplikasi: "Struktur / Cor",
+    Merk: "Tiga Roda",
+    "Nama Produk (opsional)": "",
+    "SKU (opsional)": "",
+    Barcode: "",
+    Satuan: "sak",
+    "Harga Beli": "57000",
+    "Harga Jual": "65000",
+    "Stok Awal": "80",
+    "Reorder Point": "20",
+    "Lokasi Gudang": "A-01",
+    "Legacy Stock (Y/Tidak)": "Tidak",
+  },
+  "Bata & Blok": {
+    "Jenis Barang": "Bata Merah",
+    Ukuran: "Standard",
+    Kualitas: "Kelas I",
+    Merk: "Lokal / Custom",
+    "Nama Produk (opsional)": "",
+    "SKU (opsional)": "",
+    Barcode: "",
+    Satuan: "pcs",
+    "Harga Beli": "800",
+    "Harga Jual": "1100",
+    "Stok Awal": "1200",
+    "Reorder Point": "500",
+    "Lokasi Gudang": "B-03",
+    "Legacy Stock (Y/Tidak)": "Tidak",
+  },
+  "Cat & Finishing": {
+    "Jenis Barang": "Cat Tembok",
+    Kemasan: "5 kg",
+    Finishing: "Interior",
+    Warna: "Putih",
+    Merk: "Dulux",
+    "Nama Produk (opsional)": "",
+    "SKU (opsional)": "",
+    Barcode: "",
+    Satuan: "kaleng",
+    "Harga Beli": "38000",
+    "Harga Jual": "45000",
+    "Stok Awal": "20",
+    "Reorder Point": "5",
+    "Lokasi Gudang": "C-02",
+    "Legacy Stock (Y/Tidak)": "Tidak",
+  },
   "Pipa & Sanitasi": {
-    Jenis: "Pipa PVC",
+    "Jenis Barang": "Pipa PVC",
     Bahan: "PVC",
     Ukuran: '3/4"',
-    Spesifikasi: "AW",
+    Kelas: "AW (Air Bersih)",
+    Aplikasi: "Instalasi Air Bersih",
     Merk: "Rucika",
     "Nama Produk (opsional)": "",
     "SKU (opsional)": "",
@@ -40,10 +121,12 @@ const EXAMPLE_ROWS: Record<string, Record<string, string>> = {
     "Legacy Stock (Y/Tidak)": "Tidak",
   },
   "Besi & Logam": {
-    Jenis: "Besi Hollow",
+    "Jenis Barang": "Besi Hollow",
     Ukuran: "4x4 cm",
+    Panjang: "6 m",
     Spesifikasi: "Galvanis",
-    Merk: "Krakatau",
+    Aplikasi: "Rangka / Hollow",
+    Merk: "Krakatau Steel",
     "Nama Produk (opsional)": "",
     "SKU (opsional)": "",
     Barcode: "",
@@ -55,41 +138,12 @@ const EXAMPLE_ROWS: Record<string, Record<string, string>> = {
     "Lokasi Gudang": "F-02",
     "Legacy Stock (Y/Tidak)": "Tidak",
   },
-  "Cat & Pelapis": {
-    Jenis: "Cat Tembok",
-    Kemasan: "5 kg",
-    Varian: "Putih",
-    Merk: "Dulux",
-    "Nama Produk (opsional)": "",
-    "SKU (opsional)": "",
-    Barcode: "",
-    Satuan: "kaleng",
-    "Harga Beli": "38000",
-    "Harga Jual": "45000",
-    "Stok Awal": "20",
-    "Reorder Point": "5",
-    "Lokasi Gudang": "C-02",
-    "Legacy Stock (Y/Tidak)": "Tidak",
-  },
-  "Semen & Bahan Bangunan": {
-    Jenis: "Semen Portland",
-    Ukuran: "50 kg",
-    Merk: "Tiga Roda",
-    "Nama Produk (opsional)": "",
-    "SKU (opsional)": "",
-    Barcode: "",
-    Satuan: "sak",
-    "Harga Beli": "57000",
-    "Harga Jual": "65000",
-    "Stok Awal": "80",
-    "Reorder Point": "20",
-    "Lokasi Gudang": "A-01",
-    "Legacy Stock (Y/Tidak)": "Tidak",
-  },
   "Keramik & Lantai": {
-    Jenis: "Keramik Lantai",
-    Ukuran: "40x40",
-    Varian: "Putih",
+    "Jenis Barang": "Keramik Lantai",
+    Ukuran: "40x40 cm",
+    Finish: "Glazur / Kilat",
+    "Warna / Motif": "Putih",
+    Tebal: "8 mm",
     Merk: "Roman",
     "Nama Produk (opsional)": "",
     "SKU (opsional)": "",
@@ -103,9 +157,10 @@ const EXAMPLE_ROWS: Record<string, Record<string, string>> = {
     "Legacy Stock (Y/Tidak)": "Tidak",
   },
   "Kayu & Triplek": {
-    Jenis: "Triplek",
+    "Jenis Barang": "Triplek",
     Ukuran: "9 mm",
-    Grade: "MR",
+    Grade: "MR (Moisture Resistant)",
+    Treatment: "Standar",
     Merk: "Jaya Wood",
     "Nama Produk (opsional)": "",
     "SKU (opsional)": "",
@@ -118,10 +173,45 @@ const EXAMPLE_ROWS: Record<string, Record<string, string>> = {
     "Lokasi Gudang": "G-01",
     "Legacy Stock (Y/Tidak)": "Tidak",
   },
+  "Atap & Rangka": {
+    "Jenis Barang": "Genteng Beton",
+    Ukuran: "Standard",
+    Material: "Beton",
+    Warna: "Merah",
+    Merk: "Mulia / Multi",
+    "Nama Produk (opsional)": "",
+    "SKU (opsional)": "",
+    Barcode: "",
+    Satuan: "pcs",
+    "Harga Beli": "3500",
+    "Harga Jual": "5000",
+    "Stok Awal": "200",
+    "Reorder Point": "100",
+    "Lokasi Gudang": "H-02",
+    "Legacy Stock (Y/Tidak)": "Tidak",
+  },
+  Listrik: {
+    "Jenis Barang": "Kabel",
+    Kapasitas: "2.5 mm²",
+    Spesifikasi: "NYM",
+    "Warna Kabel": "Campuran / Roll",
+    Merk: "Panasonic",
+    "Nama Produk (opsional)": "",
+    "SKU (opsional)": "",
+    Barcode: "",
+    Satuan: "rol",
+    "Harga Beli": "320000",
+    "Harga Jual": "395000",
+    "Stok Awal": "9",
+    "Reorder Point": "4",
+    "Lokasi Gudang": "I-01",
+    "Legacy Stock (Y/Tidak)": "Tidak",
+  },
   "Pasir & Material Curah": {
-    Jenis: "Pasir Lumajang",
+    "Jenis Barang": "Pasir Lumajang",
     "Satuan Jual": "per Truk",
     Sumber: "Lumajang",
+    Gradasi: "Halus",
     "Nama Produk (opsional)": "Pasir Lumajang / Truk",
     "SKU (opsional)": "",
     Barcode: "",
@@ -139,16 +229,13 @@ function sanitizeSheetName(name: string): string {
   return name.replace(/[\\/*?:[\]]/g, "").slice(0, 31);
 }
 
-function buildHeaders(attributes: ProductAttributeDefinition[], categoryName: string): string[] {
-  const attrs = listActiveAttributesForCategory(attributes, categoryName);
-  return [...attrs.map((a) => a.name), ...TAIL_COLUMNS];
+function buildHeaders(catalog: ProductCatalogForImport, categoryName: string): string[] {
+  const attrs = getCategoryAttributeNames(catalog, categoryName);
+  return ["Jenis Barang", ...attrs, ...TAIL_COLUMNS];
 }
 
-function buildExampleRow(
-  attributes: ProductAttributeDefinition[],
-  categoryName: string,
-): string[] {
-  const headers = buildHeaders(attributes, categoryName);
+function buildExampleRow(catalog: ProductCatalogForImport, categoryName: string): string[] {
+  const headers = buildHeaders(catalog, categoryName);
   const sample = EXAMPLE_ROWS[categoryName] ?? {};
   return headers.map((h) => sample[h] ?? "");
 }
@@ -168,7 +255,7 @@ function buildGuideSheet(): string[][] {
     [""],
     ["Material curah (Pasir & Material Curah)"],
     ["• Buat produk TERPISAH per satuan jual: Pasir Lumajang / Truk vs Pasir Lumajang / Pikap"],
-    ["• Pilih Jenis + Satuan Jual berbeda pada baris berbeda"],
+    ["• Pilih Jenis Barang + Satuan Jual berbeda pada baris berbeda"],
     [""],
     ["Validasi saat import"],
     ["• Harga Jual HARUS lebih besar dari Harga Beli"],
@@ -183,15 +270,22 @@ function buildGuideSheet(): string[][] {
   ];
 }
 
-function buildReferenceSheet(attributes: ProductAttributeDefinition[]): string[][] {
+function buildReferenceSheet(catalog: ProductCatalogForImport): string[][] {
   const rows: string[][] = [
-    ["Kategori", "Attribute", "Nilai (isi persis)", "Singkatan SKU"],
+    ["Kategori", "Jenis Barang", "Attribute", "Nilai (isi persis)", "Singkatan SKU"],
   ];
+  const gaMap = new Map(catalog.globalAttributes.map((g) => [g.id, g.name]));
+  const ptMap = new Map(catalog.productTypes.map((p) => [p.id, p.name]));
   for (const category of SEED_PRODUCT_ATTRIBUTE_CATEGORIES) {
-    const attrs = listActiveAttributesForCategory(attributes, category);
-    for (const attr of attrs) {
-      for (const val of attr.values.filter((v) => v.isActive).sort((a, b) => a.sortOrder - b.sortOrder)) {
-        rows.push([category, attr.name, val.label, val.abbreviation]);
+    const canonical = resolveCategoryForAttributes(category);
+    for (const ta of catalog.typeAttributes.filter((t) => t.isActive)) {
+      const pt = catalog.productTypes.find((p) => p.id === ta.productTypeId);
+      if (!pt || pt.categoryName !== canonical) continue;
+      const attrName = gaMap.get(ta.globalAttributeId) ?? "?";
+      for (const val of ta.values
+        .filter((v) => v.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder)) {
+        rows.push([category, ptMap.get(ta.productTypeId) ?? pt.name, attrName, val.label, val.abbreviation]);
       }
     }
   }
@@ -199,33 +293,31 @@ function buildReferenceSheet(attributes: ProductAttributeDefinition[]): string[]
 }
 
 function buildCategorySheetData(
-  attributes: ProductAttributeDefinition[],
+  catalog: ProductCatalogForImport,
   categoryName: string,
 ): string[][] {
-  const headers = buildHeaders(attributes, categoryName);
+  const headers = buildHeaders(catalog, categoryName);
   const note = `Kategori: ${categoryName} — isi dari baris 4. Jangan ubah header baris 2.`;
   return [
     [note],
     headers,
-    buildExampleRow(attributes, categoryName),
+    buildExampleRow(catalog, categoryName),
     headers.map(() => ""),
   ];
 }
 
-export function buildImportTemplateWorkbook(
-  attributes: ProductAttributeDefinition[],
-): XLSX.WorkBook {
+export function buildImportTemplateWorkbook(catalog: ProductCatalogForImport): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildGuideSheet()), "Panduan");
   XLSX.utils.book_append_sheet(
     wb,
-    XLSX.utils.aoa_to_sheet(buildReferenceSheet(attributes)),
+    XLSX.utils.aoa_to_sheet(buildReferenceSheet(catalog)),
     "Referensi Attribute",
   );
 
   for (const category of SEED_PRODUCT_ATTRIBUTE_CATEGORIES) {
-    const sheetData = buildCategorySheetData(attributes, category);
+    const sheetData = buildCategorySheetData(catalog, category);
     XLSX.utils.book_append_sheet(
       wb,
       XLSX.utils.aoa_to_sheet(sheetData),
@@ -236,8 +328,8 @@ export function buildImportTemplateWorkbook(
   return wb;
 }
 
-export function downloadImportTemplateExcel(attributes: ProductAttributeDefinition[]): void {
-  const wb = buildImportTemplateWorkbook(attributes);
+export function downloadImportTemplateExcel(catalog: ProductCatalogForImport): void {
+  const wb = buildImportTemplateWorkbook(catalog);
   XLSX.writeFile(wb, "template-import-barang.xlsx");
 }
 
@@ -251,27 +343,27 @@ function sheetToCsv(sheetData: string[][]): string {
 }
 
 /** Semua kolom attribute (union) untuk satu file CSV flat. */
-function buildWideCsvHeaders(attributes: ProductAttributeDefinition[]): string[] {
+function buildWideCsvHeaders(catalog: ProductCatalogForImport): string[] {
   const attrNames = new Set<string>();
   for (const category of SEED_PRODUCT_ATTRIBUTE_CATEGORIES) {
-    for (const a of listActiveAttributesForCategory(attributes, category)) {
-      attrNames.add(a.name);
+    for (const n of getCategoryAttributeNames(catalog, category)) {
+      attrNames.add(n);
     }
   }
-  return ["Kategori", ...Array.from(attrNames).sort(), ...TAIL_COLUMNS];
+  return ["Kategori", "Jenis Barang", ...Array.from(attrNames).sort(), ...TAIL_COLUMNS];
 }
 
-function buildWideCsvRows(attributes: ProductAttributeDefinition[]): string[][] {
-  const headers = buildWideCsvHeaders(attributes);
+function buildWideCsvRows(catalog: ProductCatalogForImport): string[][] {
+  const headers = buildWideCsvHeaders(catalog);
   const rows: string[][] = [headers];
 
   for (const category of SEED_PRODUCT_ATTRIBUTE_CATEGORIES) {
     const sample = EXAMPLE_ROWS[category] ?? {};
-    const categoryAttrs = listActiveAttributesForCategory(attributes, category);
+    const categoryAttrs = getCategoryAttributeNames(catalog, category);
     const exampleRow = headers.map((h) => {
       if (h === "Kategori") return category;
       if ((TAIL_COLUMNS as readonly string[]).includes(h)) return sample[h] ?? "";
-      if (categoryAttrs.some((a) => a.name === h)) return sample[h] ?? "";
+      if (h === "Jenis Barang" || categoryAttrs.includes(h)) return sample[h] ?? "";
       return "";
     });
     rows.push(exampleRow);
@@ -282,8 +374,8 @@ function buildWideCsvRows(attributes: ProductAttributeDefinition[]): string[][] 
 }
 
 /** Satu file CSV — kolom Kategori + attribute (flat). */
-export function downloadImportTemplateCsv(attributes: ProductAttributeDefinition[]): void {
-  const csv = sheetToCsv(buildWideCsvRows(attributes));
+export function downloadImportTemplateCsv(catalog: ProductCatalogForImport): void {
+  const csv = sheetToCsv(buildWideCsvRows(catalog));
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

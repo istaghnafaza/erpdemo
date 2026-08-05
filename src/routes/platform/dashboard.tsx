@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building2,
   CreditCard,
+  Database,
   LogOut,
   RefreshCw,
   Sparkles,
@@ -83,6 +84,12 @@ function PlatformDashboardPage() {
       subtitle="Monitor owner, langganan, dan kinerja toko untuk prospek bisnis"
       actions={
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/platform/catalog">
+              <Database className="h-4 w-4 mr-2" />
+              Master Data Katalog
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh
