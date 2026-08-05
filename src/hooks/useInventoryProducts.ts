@@ -443,6 +443,9 @@ export function useInventoryProducts() {
         });
       } else {
         const cat = categories.find((c) => c.name === data.categoryName);
+        const initialStock = data.initialStock ?? 0;
+        const legacyQty = data.legacyStock ?? 0;
+        const isLegacy = legacyQty > 0;
         const created = await createProduct(tenantId, {
           sku: uniqueSku,
           barcode: data.barcode ?? null,
@@ -457,6 +460,8 @@ export function useInventoryProducts() {
             selling_price: data.sellingPrice ?? 0,
             reorder_point: data.reorderPoint ?? 5,
             warehouse_location: data.warehouseLocation ?? "",
+            stock: isLegacy ? 0 : initialStock,
+            legacy_stock: isLegacy ? legacyQty : 0,
           });
         }
       }

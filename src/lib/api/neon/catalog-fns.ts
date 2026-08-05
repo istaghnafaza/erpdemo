@@ -162,7 +162,10 @@ export const neonUpsertBranchProduct = createServerFn({ method: "POST" })
       tenantId: string;
       branchId: string;
       productId: string;
-      payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location">;
+      payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location"> & {
+        stock?: number;
+        legacy_stock?: number;
+      };
     }) => data,
   )
   .handler(async ({ data }) => {

@@ -4,6 +4,8 @@
 
 import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { ensurePosSchema } from "@/server/db/ensure-pos-schema";
+import { formatDbError, nullIfEmptyUuid } from "@/server/lib/format-db-error";
 import {
   invalidateBranchProducts,
   invalidateCustomers,
@@ -631,18 +633,40 @@ export async function createSaleTransaction(
   items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
   extras?: PosCheckoutExtras,
 ): Promise<SalesTransaction> {
+  await ensurePosSchema();
   const db = getDb();
 
-  if (transaction.client_tx_id) {
+  const clientTxId = nullIfEmptyUuid(transaction.client_tx_id ?? null);
+  if (clientTxId) {
     const existing = await db.query.salesTransactions.findFirst({
       where: and(
         eq(salesTransactions.tenantId, tenantId),
-        eq(salesTransactions.clientTxId, transaction.client_tx_id),
+        eq(salesTransactions.clientTxId, clientTxId),
       ),
     });
     if (existing) return toSalesTransaction(existing);
   }
 
+  try {
+    return await createSaleTransactionInner(
+      db,
+      tenantId,
+      { ...transaction, client_tx_id: clientTxId },
+      items,
+      extras,
+    );
+  } catch (err) {
+    throw new Error(formatDbError(err));
+  }
+}
+
+async function createSaleTransactionInner(
+  db: ReturnType<typeof getDb>,
+  tenantId: string,
+  transaction: Omit<SalesTransactionInsert, "tenant_id">,
+  items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
+  extras?: PosCheckoutExtras,
+): Promise<SalesTransaction> {
   const saved = await db.transaction(async (tx) => {
     const transactionNumber = await resolveTransactionNumber(
       tx,
@@ -664,7 +688,7 @@ export async function createSaleTransaction(
       const customer = await tx.query.customers.findFirst({
         where: and(
           eq(customers.tenantId, tenantId),
-          eq(customers.id, transaction.customer_id),
+          eq(customers.id, nullIfEmptyUuid(transaction.customer_id)!),
         ),
       });
       const creditDebt = transaction.grand_total - transaction.amount_paid;
@@ -698,10 +722,10 @@ export async function createSaleTransaction(
         tenantId,
         branchId: transaction.branch_id,
         sessionId: transaction.session_id,
-        cartId: transaction.cart_id,
+        cartId: nullIfEmptyUuid(transaction.cart_id),
         transactionNumber,
-        clientTxId: transaction.client_tx_id ?? null,
-        customerId: transaction.customer_id,
+        clientTxId: nullIfEmptyUuid(transaction.client_tx_id ?? null),
+        customerId: nullIfEmptyUuid(transaction.customer_id),
         customerName: transaction.customer_name,
         subtotal: transaction.subtotal,
         discountAmount: transaction.discount_amount,
@@ -711,8 +735,8 @@ export async function createSaleTransaction(
         qrisProvider: transaction.qris_provider,
         amountPaid: transaction.amount_paid,
         changeAmount: transaction.change_amount,
-        inputBy: transaction.input_by,
-        paidBy: transaction.paid_by,
+        inputBy: nullIfEmptyUuid(transaction.input_by),
+        paidBy: nullIfEmptyUuid(transaction.paid_by),
         isCrossSession: transaction.is_cross_session,
         hasLegacyItems: transaction.has_legacy_items,
         isOfflineTransaction: transaction.is_offline_transaction,
@@ -731,7 +755,7 @@ export async function createSaleTransaction(
         items.map((item) => ({
           transactionId: txRow.id,
           tenantId,
-          productId: item.product_id,
+          productId: nullIfEmptyUuid(item.product_id),
           productName: item.product_name,
           sku: item.sku,
           unit: item.unit,

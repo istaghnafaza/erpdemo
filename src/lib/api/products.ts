@@ -369,7 +369,10 @@ export async function upsertBranchProduct(
   tenantId: string,
   branchId: string,
   productId: string,
-  payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location">
+  payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location"> & {
+    stock?: number;
+    legacy_stock?: number;
+  },
 ): Promise<ApiResponse<BranchProduct>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>

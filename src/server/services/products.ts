@@ -264,9 +264,14 @@ export async function upsertBranchProduct(
   tenantId: string,
   branchId: string,
   productId: string,
-  payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location">,
+  payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location"> & {
+    stock?: number;
+    legacy_stock?: number;
+  },
 ): Promise<BranchProduct> {
   const db = getDb();
+  const stock = payload.stock ?? 0;
+  const legacyStock = payload.legacy_stock ?? 0;
   const [row] = await db
     .insert(branchProducts)
     .values({
@@ -276,6 +281,8 @@ export async function upsertBranchProduct(
       sellingPrice: payload.selling_price,
       reorderPoint: payload.reorder_point,
       warehouseLocation: payload.warehouse_location,
+      stock,
+      legacyStock,
     })
     .onConflictDoUpdate({
       target: [branchProducts.branchId, branchProducts.productId],
@@ -283,6 +290,8 @@ export async function upsertBranchProduct(
         sellingPrice: payload.selling_price,
         reorderPoint: payload.reorder_point,
         warehouseLocation: payload.warehouse_location,
+        ...(payload.stock !== undefined ? { stock: payload.stock } : {}),
+        ...(payload.legacy_stock !== undefined ? { legacyStock: payload.legacy_stock } : {}),
       },
     })
     .returning();
