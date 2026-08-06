@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CreditCard, Plus, QrCode, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,11 @@ export function BranchPaymentSettingsSection({
   tenantId,
   branches,
 }: BranchPaymentSettingsSectionProps) {
-  const activeBranches = branches.filter((b) => b.is_active);
-  const [branchId, setBranchId] = useState(activeBranches[0]?.id ?? "");
+  const activeBranches = useMemo(
+    () => branches.filter((b) => b.is_active),
+    [branches],
+  );
+  const [branchId, setBranchId] = useState("");
   const [settings, setSettings] = useState<BranchPaymentSettings>({
     transferAccounts: [],
     qrisEntries: [],
@@ -41,21 +44,33 @@ export function BranchPaymentSettingsSection({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (activeBranches.length === 0) return;
+    setBranchId((current) => {
+      if (current && activeBranches.some((b) => b.id === current)) return current;
+      return activeBranches[0].id;
+    });
+  }, [activeBranches]);
+
   const load = useCallback(async () => {
     if (!tenantId || !branchId) return;
     setLoading(true);
-    const result = await getBranchPaymentSettings(tenantId, branchId);
-    setSettings(result.data ?? { transferAccounts: [], qrisEntries: [] });
-    setLoading(false);
+    try {
+      const result = await getBranchPaymentSettings(tenantId, branchId);
+      if (result.error) {
+        toast.error(result.error);
+        setSettings({ transferAccounts: [], qrisEntries: [] });
+        return;
+      }
+      setSettings(result.data ?? { transferAccounts: [], qrisEntries: [] });
+    } finally {
+      setLoading(false);
+    }
   }, [tenantId, branchId]);
 
   useEffect(() => {
-    if (!branchId && activeBranches[0]) {
-      setBranchId(activeBranches[0].id);
-      return;
-    }
     void load();
-  }, [branchId, activeBranches, load]);
+  }, [load]);
 
   const save = async () => {
     if (!branchId) return;

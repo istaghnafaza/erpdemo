@@ -2,7 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import type { BranchPaymentSettings } from "@/types/payment-settings";
 
 async function sessionHelpers() {
-  return import("@/server/auth/session");
+  const [session, requestSession] = await Promise.all([
+    import("@/server/auth/session"),
+    import("@/server/auth/request-session"),
+  ]);
+  return { ...session, ...requestSession };
 }
 
 export const neonGetBranchPaymentSettings = createServerFn({ method: "POST" })

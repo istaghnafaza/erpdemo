@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
-import { withResponseCache, invalidateResponseCache } from "./response-cache";
+import { withResponseCacheOnOk, invalidateResponseCache } from "./response-cache";
 import { neonCall } from "./backend";
 import {
   neonAssignUserToBranch,
@@ -51,7 +51,7 @@ export interface ForceCloseBranchSessionsResult {
 }
 
 export async function getBranches(tenantId: string): Promise<ApiResponse<Branch[]>> {
-  return withResponseCache(`branches:${tenantId}:all`, 60_000, async () => {
+  return withResponseCacheOnOk(`branches:${tenantId}:all`, 60_000, async () => {
     if (isNeonBackend()) {
       const result = await neonCall(() => neonGetBranches({ data: { tenantId } }));
       if (result.error) return fail(result.error);
@@ -64,7 +64,7 @@ export async function getBranches(tenantId: string): Promise<ApiResponse<Branch[
 }
 
 export async function getActiveBranches(tenantId: string): Promise<ApiResponse<Branch[]>> {
-  return withResponseCache(`branches:${tenantId}:active`, 60_000, async () => {
+  return withResponseCacheOnOk(`branches:${tenantId}:active`, 60_000, async () => {
     if (isNeonBackend()) {
       const result = await neonCall(() => neonGetActiveBranches({ data: { tenantId } }));
       if (result.error) return fail(result.error);
@@ -84,7 +84,7 @@ export async function getActiveBranches(tenantId: string): Promise<ApiResponse<B
 export async function getBranchesWithManager(
   tenantId: string,
 ): Promise<ApiResponse<BranchWithManager[]>> {
-  return withResponseCache(`branches:${tenantId}:with-manager`, 60_000, async () => {
+  return withResponseCacheOnOk(`branches:${tenantId}:with-manager`, 60_000, async () => {
     if (isNeonBackend()) {
       const result = await neonCall(() => neonGetBranchesWithManager({ data: { tenantId } }));
       if (result.error) return fail(result.error);

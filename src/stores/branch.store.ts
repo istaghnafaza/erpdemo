@@ -11,6 +11,7 @@ import { MOCK_BRANCH_ONBOARDING } from "@/lib/mock-ids";
 import { MOCK_BRANCHES } from "@/stores/auth.store";
 import { resolveEffectiveActiveBranch, resolveScopedBranchIds } from "@/lib/branch-scope";
 import type { Branch } from "@/types/database";
+import { EMPTY_BRANCH_PAYMENT_SETTINGS } from "@/types/payment-settings";
 
 const BRANCH_CACHE_TTL_MS = 60_000;
 let branchesCachedTenantId: string | null = null;
@@ -130,7 +131,9 @@ export const useBranchStore = create<BranchState>()(
         try {
           const result = await getActiveBranches(tenantId);
           if (result.error) {
-            set({ error: result.error, isLoading: false });
+            branchesCachedTenantId = null;
+            branchesCachedAt = 0;
+            set({ error: result.error, isLoading: false, branches: [], activeBranch: null });
             return;
           }
 
@@ -169,6 +172,7 @@ export const useBranchStore = create<BranchState>()(
           phone: input.phone?.trim() || null,
           manager_id: null,
           is_active: true,
+          payment_settings: { ...EMPTY_BRANCH_PAYMENT_SETTINGS },
           created_at: new Date().toISOString(),
         };
 

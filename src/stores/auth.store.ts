@@ -20,6 +20,7 @@ let lastRefreshAt = 0;
 import { tenantUserToAuthUser } from "@/lib/mock-users";
 import type { AuthUser, RegisterInput } from "@/types/app";
 import type { Branch, Tenant } from "@/types/database";
+import { EMPTY_BRANCH_PAYMENT_SETTINGS } from "@/types/payment-settings";
 import { useUsersStore } from "@/stores/users.store";
 
 export { MOCK_TENANT_ID };
@@ -156,6 +157,7 @@ export const MOCK_BRANCHES: Branch[] = [
     phone: "021-5551234",
     manager_id: null,
     is_active: true,
+    payment_settings: { ...EMPTY_BRANCH_PAYMENT_SETTINGS },
     created_at: new Date().toISOString(),
   },
   {
@@ -167,6 +169,7 @@ export const MOCK_BRANCHES: Branch[] = [
     phone: "021-5556789",
     manager_id: null,
     is_active: true,
+    payment_settings: { ...EMPTY_BRANCH_PAYMENT_SETTINGS },
     created_at: new Date().toISOString(),
   },
   {
@@ -178,6 +181,7 @@ export const MOCK_BRANCHES: Branch[] = [
     phone: "021-5559876",
     manager_id: null,
     is_active: true,
+    payment_settings: { ...EMPTY_BRANCH_PAYMENT_SETTINGS },
     created_at: new Date().toISOString(),
   },
 ];

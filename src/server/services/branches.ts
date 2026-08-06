@@ -19,8 +19,10 @@ import {
 } from "@/server/db/schema";
 import { ensureBranchPaymentSettingsColumn } from "@/server/db/ensure-branch-payment-settings";
 import type { Branch, BranchInsert, BranchUpdate, Profile } from "@/types/database";
-import type { BranchPaymentSettings } from "@/types/payment-settings";
-import { normalizeBranchPaymentSettings } from "@/types/payment-settings";
+import {
+  normalizeBranchPaymentSettings,
+  type BranchPaymentSettings,
+} from "@/types/payment-settings";
 
 export function deriveBranchCode(name: string): string {
   const letters = name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -39,7 +41,12 @@ export function ensureUniqueBranchCode(preferred: string, existingCodes: string[
   throw new Error("Terlalu banyak cabang dengan kode serupa — coba nama cabang lain");
 }
 
+async function ensureBranchSchemaReady(): Promise<void> {
+  await ensureBranchPaymentSettingsColumn();
+}
+
 async function queryBranchesFromDb(tenantId: string, activeOnly = false): Promise<Branch[]> {
+  await ensureBranchSchemaReady();
   const db = getDb();
   const rows = await db.query.branches.findMany({
     where: activeOnly
@@ -57,6 +64,7 @@ export async function listBranches(tenantId: string, activeOnly = false): Promis
 }
 
 export async function getBranch(tenantId: string, branchId: string): Promise<Branch | null> {
+  await ensureBranchSchemaReady();
   const db = getDb();
   const row = await db.query.branches.findFirst({
     where: and(eq(branches.tenantId, tenantId), eq(branches.id, branchId)),
@@ -79,6 +87,7 @@ export async function countActiveBranches(tenantId: string): Promise<number> {
 
 export async function listBranchesWithManager(tenantId: string): Promise<BranchWithManager[]> {
   return getCached(branchesWithManagerKey(tenantId), CACHE_TTL.branches, async () => {
+    await ensureBranchSchemaReady();
     const db = getDb();
     const rows = await db
     .select({
@@ -102,6 +111,7 @@ export async function listBranchesWithManager(tenantId: string): Promise<BranchW
 }
 
 export async function listUserBranches(tenantId: string, userId: string): Promise<Branch[]> {
+  await ensureBranchSchemaReady();
   const db = getDb();
   const rows = await db
     .select({ branch: branches })
