@@ -1,0 +1,56 @@
+name: SEPS CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_DATA_BACKEND: neon
+          VITE_APP_NAME: SEPS
+          VITE_APP_ENV: ci
+
+  neon-uat:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Neon health + UAT sync
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Skip: NEON_DATABASE_URL secret not configured in GitHub repo settings"
+            exit 0
+          fi
+          npm run neon:health
+          npm run neon:migrate
+          npm run neon:uat:sync

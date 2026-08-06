@@ -4,6 +4,19 @@ Panduan langkah demi langkah agar **production (`seps.fazagroup.id`) tidak jadi 
 
 ---
 
+## Status otomatis (sudah dikerjakan)
+
+| Item | Status |
+|------|--------|
+| Branch Git `staging` | ✅ Ada di GitHub |
+| CI GitHub Actions (build + UAT) | ✅ `.github/workflows/ci.yml` |
+| Skrip Neon branch staging | ✅ `npm run neon:staging:branch` |
+| Skrip Railway staging env | ✅ `npm run railway:env:staging` |
+| Housekeeping sesi kasir tb-arkananta | ✅ 46 sesi duplikat ditutup (tinggal 3 aktif) |
+| `railway.staging.json` | ✅ Config healthcheck `/health` |
+
+---
+
 ## Ringkasan
 
 | Lingkungan | URL | Git branch | Database |
@@ -14,136 +27,136 @@ Panduan langkah demi langkah agar **production (`seps.fazagroup.id`) tidak jadi 
 
 ---
 
-## Langkah 1 — Neon: branch staging
+## Langkah 1 — Neon: branch staging (otomatis)
 
-1. Buka [Neon Console](https://console.neon.tech) → project SEPS
-2. **Branches** → **Create branch**
-   - Name: `staging`
-   - Parent: `main` (copy schema + data saat ini)
-3. Salin connection string branch **staging**:
-   - `DATABASE_URL`
-   - `DATABASE_URL_DIRECT` (direct, tanpa pooler — untuk migrasi)
+Tambahkan ke `.env` (sekali saja):
 
-Simpan di password manager — jangan commit ke Git.
+```env
+NEON_API_KEY=...      # Neon Console → Account → API Keys
+NEON_PROJECT_ID=...   # Neon Console → Project → Settings
+```
+
+Jalankan:
+
+```bash
+npm run neon:staging:branch
+```
+
+Hasil: file **`.env.staging.local`** (gitignored) berisi `DATABASE_URL` branch staging + `AUTH_SECRET` staging.
+
+Lalu migrasi ke staging:
+
+```bash
+# PowerShell — pakai connection string staging sementara
+$env:DATABASE_URL = (Get-Content .env.staging.local | Where-Object { $_ -match '^DATABASE_URL=' }) -replace 'DATABASE_URL=',''
+$env:DATABASE_URL_DIRECT = $env:DATABASE_URL
+npm run neon:migrate
+npm run neon:uat:sync
+```
+
+**Manual (jika tanpa API key):** Neon Console → Branches → Create `staging` → salin connection string ke `.env.staging.local`.
 
 ---
 
 ## Langkah 2 — Git: branch `staging`
 
-Di komputer dev:
+Sudah ada. Sinkronkan dengan production:
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b staging
-git push -u origin staging
+git checkout staging
+git merge main
+git push origin staging
 ```
 
-Ke depan: merge `feat/xyz` → `staging` dulu, uji online, baru merge `staging` → `main`.
+Workflow: `feat/*` → merge **`staging`** → uji online → merge **`main`**.
 
 ---
 
 ## Langkah 3 — Railway: service staging
 
-1. Railway → project yang sama → **New Service** → **GitHub Repo** → repo `erpdemo`
-2. Settings:
-   - **Root Directory:** `/`
-   - **Branch:** `staging` (bukan `main`)
-   - Builder: Dockerfile (sama dengan production)
-3. **Variables** → Raw Editor — salin dari `.env.staging.example`, isi secret staging Neon:
+1. Railway → project SEPS → **+ New Service** → GitHub `erpdemo`
+2. Settings → **Branch:** `staging`
+3. Jalankan lokal:
 
-```env
-DATABASE_URL=postgresql://...@...-staging...neon.tech/neondb?sslmode=require
-DATABASE_URL_DIRECT=postgresql://...@...-staging...neon.tech/neondb?sslmode=require
-AUTH_SECRET=<generate baru, min 32 char, beda dari production>
-AUTH_URL=https://staging.seps.fazagroup.id
-PORT=8080
-VITE_DATA_BACKEND=neon
-VITE_APP_NAME=SEPS Staging
-VITE_APP_ENV=staging
-VITE_PUBLIC_APP_URL=https://staging.seps.fazagroup.id
-NODE_ENV=production
+```bash
+npm run railway:env:staging
 ```
 
-4. **Deploy** — tunggu build hijau
-5. Salin URL Railway sementara: `https://erpdemo-staging.up.railway.app`
+4. Copy isi **`.env.railway.staging.local`** → Railway staging → **Variables → Raw Editor → Save**
+5. Klik banner ungu **Staged changes → Deploy** (bukan Redeploy lama)
+6. Networking → **Custom Domain** → `staging.seps.fazagroup.id`
 
-> **Penting:** `VITE_*` harus ada **sebelum** build. Set variables lalu trigger deploy baru.
+> **Jangan** pakai database production untuk service staging — wajib branch Neon `staging`.
 
 ---
 
 ## Langkah 4 — DNS Hostinger
 
 1. hPanel → **fazagroup.id** → DNS
-2. Tambah record:
+2. Tambah CNAME:
 
 | Type | Name | Target |
 |------|------|--------|
-| CNAME | `staging.seps` | `<target dari Railway staging → Networking → Custom Domain>` |
+| CNAME | `staging.seps` | `<target dari Railway staging → Networking>` |
 
-3. Railway staging service → **Networking** → **Custom Domain** → `staging.seps.fazagroup.id`
-4. Tunggu SSL (5–30 menit)
+3. Tunggu SSL (5–30 menit)
 
 ---
 
-## Langkah 5 — Verifikasi staging
+## Langkah 5 — GitHub Secrets (CI otomatis)
+
+Repo GitHub → **Settings → Secrets → Actions**:
+
+| Secret | Isi |
+|--------|-----|
+| `NEON_DATABASE_URL` | Connection string branch **staging** |
+| `NEON_DATABASE_URL_DIRECT` | Sama (direct) |
+
+Setiap push ke `main` / `staging` → GitHub Actions menjalankan build + `neon:uat:sync`.
+
+---
+
+## Langkah 6 — Verifikasi
 
 ```bash
 curl https://staging.seps.fazagroup.id/health
 ```
 
-Harus `"ok": true` dan `"databaseConfigured": true`.
-
-Smoke test manual:
-
-1. Login (bisa pakai tenant yang di-copy dari branch Neon)
-2. POS — buka shift → 1 transaksi tunai
-3. Fitur yang baru diubah
+Smoke test: login → POS 1 transaksi → fitur yang diubah.
 
 ---
 
-## Langkah 6 — Workflow harian
+## Perintah operasional
 
 ```bash
-# Kerja fitur
-git checkout -b feat/nama-fitur
-# ... coding ...
-npm run neon:predeploy   # dengan .env menunjuk ke Neon staging
-
-git push origin feat/nama-fitur
-# Merge ke staging (GitHub PR atau lokal)
-git checkout staging && git merge feat/nama-fitur && git push
-
-# Uji https://staging.seps.fazagroup.id
-
-# Production (hanya setelah staging OK)
-git checkout main && git merge staging && git push
-# Railway production auto-deploy
+npm run neon:predeploy                              # sebelum merge main
+npm run neon:housekeeping:sessions                  # tutup sesi kasir duplikat
+npm run neon:housekeeping:sessions -- --dry-run     # preview
+npm run neon:diagnose:pos tb-arkananta              # tes checkout tenant
 ```
 
 ---
 
-## Migrasi di staging vs production
+## Workflow harian
 
 ```bash
-# .env sementara → DATABASE_URL branch staging
-npm run neon:migrate
-npm run neon:uat:sync
+git checkout -b feat/nama-fitur
+# ... coding ...
+npm run neon:predeploy   # .env → Neon staging
 
-# Setelah OK di staging, ulangi di production .env
-npm run neon:migrate
+git push origin feat/nama-fitur
+git checkout staging && git merge feat/nama-fitur && git push
+
+# Uji https://staging.seps.fazagroup.id
+
+git checkout main && git merge staging && git push
 ```
 
 ---
 
 ## Google OAuth (opsional staging)
 
-Di Google Cloud Console, tambahkan:
-
-- Origin: `https://staging.seps.fazagroup.id`
-- Redirect: `https://staging.seps.fazagroup.id/auth/google/callback`
-
-Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `VITE_GOOGLE_CLIENT_ID` di Railway staging.
+Google Cloud Console → tambah origin + redirect untuk `https://staging.seps.fazagroup.id`.
 
 ---
 
@@ -153,7 +166,8 @@ Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `VITE_GOOGLE_CLIENT_ID` di Railw
 |--------|--------|
 | Build OK tapi app mock/neon salah | Redeploy setelah set `VITE_DATA_BACKEND=neon` |
 | 502 / health gagal | Cek Railway logs, `DATABASE_URL` |
-| Login redirect error | `AUTH_URL` harus exact match domain staging |
-| POS gagal duplicate TRX | Sudah diperbaiki — deploy `main` terbaru |
+| Login redirect error | `AUTH_URL` exact match domain staging |
+| POS duplicate TRX | Deploy `main` terbaru (fix nomor unik) |
+| Banyak sesi open | `npm run neon:housekeeping:sessions` |
 
 Lihat juga: [RELEASE_PROCESS.md](./RELEASE_PROCESS.md)

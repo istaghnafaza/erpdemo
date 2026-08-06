@@ -34,7 +34,10 @@
     "neon:uat:dashboard": "npx tsx scripts/uat-dashboard-margin-runner.ts",
     "neon:predeploy": "npm run build && npm run neon:health && npm run neon:migrate && npm run neon:uat:sync",
     "neon:diagnose:pos": "npx tsx scripts/diagnose-pos-checkout.ts",
-    "railway:env": "node scripts/print-railway-env.mjs"
+    "neon:staging:branch": "node scripts/setup-neon-staging-branch.mjs",
+    "neon:housekeeping:sessions": "node scripts/close-orphan-cashier-sessions.mjs",
+    "railway:env": "node scripts/print-railway-env.mjs",
+    "railway:env:staging": "node scripts/print-railway-staging-env.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
