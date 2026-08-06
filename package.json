@@ -32,6 +32,8 @@
     "neon:uat:pricing": "npx tsx scripts/uat-pricing-runner.ts",
     "neon:uat:returns": "npx tsx scripts/uat-sales-returns-runner.ts",
     "neon:uat:dashboard": "npx tsx scripts/uat-dashboard-margin-runner.ts",
+    "neon:predeploy": "npm run build && npm run neon:health && npm run neon:migrate && npm run neon:uat:sync",
+    "neon:diagnose:pos": "npx tsx scripts/diagnose-pos-checkout.ts",
     "railway:env": "node scripts/print-railway-env.mjs"
   },
   "dependencies": {

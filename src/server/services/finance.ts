@@ -4,6 +4,7 @@
 
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { nullIfEmptyUuid } from "@/server/lib/format-db-error";
 import { toCashAccount, toCashTransaction } from "@/server/db/mappers";
 import { cashAccounts, cashTransactions } from "@/server/db/schema";
 import type { DateRangeFilter } from "@/types/app";
@@ -150,7 +151,7 @@ export async function insertCashTransactionInTx(
       amount: payload.amount,
       reference: payload.reference ?? null,
       description: payload.description ?? null,
-      userId: payload.user_id ?? null,
+      userId: nullIfEmptyUuid(payload.user_id),
     })
     .returning();
 

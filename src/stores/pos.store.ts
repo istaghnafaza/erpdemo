@@ -18,6 +18,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import {
   openSession as apiOpenSession,
+  getOpenSession as apiGetOpenSession,
   closeSession as apiCloseSession,
   updateCart,
   createTransaction,
@@ -183,6 +184,7 @@ export interface PosState {
     branchCode: string;
   }): void;
   openSession(openingBalance: number): Promise<boolean>;
+  restoreOpenSession(): Promise<boolean>;
   closeSession(actualBalance: number, notes?: string): Promise<boolean>;
   clearSession(): void;
 
@@ -355,6 +357,49 @@ export const usePosStore = create<PosState>()(
         s.branchCode = branchCode;
         s.isMockSession = isMockTenantId(tenantId);
       });
+    },
+
+    // -------------------------------------------------------------------------
+    // restoreOpenSession — reuse existing DB shift (avoid duplicate open sessions)
+    // -------------------------------------------------------------------------
+    restoreOpenSession: async () => {
+      const { tenantId, branchId, cashierId, isMockSession, activeSession } = get();
+      if (isMockSession || activeSession || !tenantId || !branchId || !cashierId) {
+        return Boolean(activeSession);
+      }
+
+      set((s) => {
+        s.sessionLoading = true;
+        s.sessionError = null;
+      });
+
+      try {
+        const result = await apiGetOpenSession(tenantId, branchId, cashierId);
+        if (result.error) {
+          set((s) => {
+            s.sessionError = result.error;
+            s.sessionLoading = false;
+          });
+          return false;
+        }
+        if (result.data) {
+          set((s) => {
+            s.activeSession = result.data;
+            s.sessionLoading = false;
+          });
+          return true;
+        }
+        set((s) => {
+          s.sessionLoading = false;
+        });
+        return false;
+      } catch (err) {
+        set((s) => {
+          s.sessionError = err instanceof Error ? err.message : "Gagal memuat sesi";
+          s.sessionLoading = false;
+        });
+        return false;
+      }
     },
 
     // -------------------------------------------------------------------------

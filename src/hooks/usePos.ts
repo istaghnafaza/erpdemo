@@ -103,6 +103,7 @@ export function usePos() {
   const sessionLoading = usePosStore((s) => s.sessionLoading);
   const sessionError = usePosStore((s) => s.sessionError);
   const openSessionFn = usePosStore((s) => s.openSession);
+  const restoreOpenSessionFn = usePosStore((s) => s.restoreOpenSession);
   const closeSessionFn = usePosStore((s) => s.closeSession);
   const carts = usePosStore((s) => s.carts);
   const activeCartIndex = usePosStore((s) => s.activeCartIndex);
@@ -161,6 +162,13 @@ export function usePos() {
     // Depend on ids only, not full user/activeBranch objects, to avoid re-init on unrelated re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeBranch?.id, tenantId, initContext]);
+
+  // Restore open shift from DB so refresh/redeploy does not force duplicate sessions.
+  useEffect(() => {
+    if (!user || !activeBranch || !tenantId || isMockTenant) return;
+    void restoreOpenSessionFn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeBranch?.id, tenantId, restoreOpenSessionFn]);
 
   useEffect(() => {
     seedDeliverySites();

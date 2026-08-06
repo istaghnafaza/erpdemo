@@ -239,6 +239,9 @@ export async function openSession(
   tenantId: string,
   payload: Omit<CashierSessionInsert, "tenant_id">,
 ): Promise<CashierSession> {
+  const existing = await getOpenSession(tenantId, payload.branch_id, payload.cashier_id);
+  if (existing) return existing;
+
   const db = getDb();
   const [row] = await db
     .insert(cashierSessions)
@@ -656,7 +659,7 @@ export async function createSaleTransaction(
       extras,
     );
   } catch (err) {
-    throw new Error(formatDbError(err));
+    throw new Error(formatDbError(err, "createSaleTransaction"));
   }
 }
 
@@ -840,7 +843,7 @@ async function createSaleTransactionInner(
       transaction.branch_id,
       sale,
       extras,
-      transaction.paid_by,
+      nullIfEmptyUuid(transaction.paid_by),
     );
 
     if (extras?.returnOffset) {

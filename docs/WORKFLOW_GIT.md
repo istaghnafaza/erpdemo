@@ -63,9 +63,10 @@ git push -u origin feat/nama-fitur-jelas
 
 **Sebelum gabung ke etalase (`main`):**
 
+Panduan release production-safe: **[RELEASE_PROCESS.md](./RELEASE_PROCESS.md)**.
+
 ```bash
-npm run build
-npm run neon:health    # jika sentuh database/server
+npm run neon:predeploy   # build + health + migrate + uat:sync (wajib jika sentuh DB/POS)
 ```
 
 **Siap deploy:**

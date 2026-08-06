@@ -1,6 +1,9 @@
 /** Map raw Postgres / Drizzle errors to user-facing Indonesian messages. */
-export function formatDbError(err: unknown): string {
+export function formatDbError(err: unknown, context?: string): string {
   const raw = err instanceof Error ? err.message : String(err);
+
+  // Full detail in server logs — safe for operators, not shown to cashier UI.
+  console.error(`[SEPS] db error${context ? ` (${context})` : ""}:`, raw);
 
   if (raw.includes("STOCK_DEFICIT")) {
     const sku = raw.split(":").slice(1).join(":").trim();
@@ -34,7 +37,11 @@ export function formatDbError(err: unknown): string {
   }
 
   if (raw.startsWith("Failed query:")) {
-    return "Gagal menyimpan transaksi ke database. Coba lagi atau hubungi admin.";
+    const tableMatch = raw.match(/insert into "([^"]+)"/i);
+    if (tableMatch) {
+      return `Gagal menyimpan data (${tableMatch[1]}). Tutup shift, buka sesi baru, lalu coba lagi.`;
+    }
+    return "Gagal menyimpan transaksi ke database. Tutup shift, buka sesi baru, lalu coba lagi.";
   }
 
   return raw.length > 180 ? `${raw.slice(0, 177)}…` : raw;
