@@ -14,11 +14,13 @@ export function formatDbError(err: unknown, context?: string): string {
   if (raw.includes("CREDIT_EXCEEDED")) {
     return "Limit kredit pelanggan terlampaui.";
   }
-  if (raw.includes("duplicate key") && raw.includes("transaction_number")) {
-    return "Nomor transaksi sudah tercatat. Cek Histori Penjualan.";
-  }
-  if (raw.includes("duplicate key") && raw.includes("client_tx_id")) {
-    return "Transaksi sudah pernah disinkronkan.";
+  if (raw.includes("duplicate key") || raw.includes("unique constraint")) {
+    if (raw.includes("transaction_number")) {
+      return "Nomor transaksi bentrok. Coba lagi — sistem akan memakai nomor berikutnya.";
+    }
+    if (raw.includes("client_tx_id")) {
+      return "Transaksi sudah pernah disinkronkan.";
+    }
   }
   if (raw.includes("invalid input syntax for type uuid")) {
     return "Data transaksi tidak valid (UUID). Muat ulang halaman dan coba lagi.";

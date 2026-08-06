@@ -626,8 +626,22 @@ async function resolveTransactionNumber(
   if (!branch) throw new Error("Cabang tidak ditemukan");
 
   const now = new Date();
-  const seq = await countDailyTransactions(db, tenantId, branchId, now);
-  return generateTransactionNumber(branch.code, now, seq);
+  let seq = await countDailyTransactions(db, tenantId, branchId, now);
+
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const candidate = generateTransactionNumber(branch.code, now, seq);
+    const taken = await db.query.salesTransactions.findFirst({
+      where: and(
+        eq(salesTransactions.tenantId, tenantId),
+        eq(salesTransactions.transactionNumber, candidate),
+      ),
+      columns: { id: true },
+    });
+    if (!taken) return candidate;
+    seq += 1;
+  }
+
+  throw new Error("Gagal menghasilkan nomor transaksi unik");
 }
 
 export async function createSaleTransaction(
