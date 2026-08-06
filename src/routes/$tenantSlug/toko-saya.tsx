@@ -100,6 +100,7 @@ function TokoSayaPage() {
     tenantId,
     tenant,
     setTenant,
+    branches,
     visibleBranches,
     managerCandidates,
     loading,
