@@ -13,6 +13,7 @@ import { useBranchStore } from "@/stores/branch.store";
 import { useDeliveriesStore } from "@/stores/deliveries.store";
 import { useSalesOrdersStore } from "@/stores/sales-orders.store";
 import { useCustomerPortalStore } from "@/stores/customer-portal.store";
+import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 import type { DeliveryStatus } from "@/types/deliveries";
 import type { DbSoStatus } from "@/types/database";
 
@@ -41,7 +42,10 @@ export function useModuleNavBadges() {
 
   return useMemo(() => {
     if (useNeonBadges && neonQuery.data) {
-      return neonQuery.data;
+      return {
+        ...neonQuery.data,
+        online_orders: FEATURE_ONLINE_ORDERS_ENABLED ? neonQuery.data.online_orders : 0,
+      };
     }
 
     if (!tenantId || !branchId || useNeonBadges) {
@@ -72,7 +76,7 @@ export function useModuleNavBadges() {
     return {
       deliveries: deliveryCount,
       sales_orders: salesOrderCount,
-      online_orders: onlineOrderCount,
+      online_orders: FEATURE_ONLINE_ORDERS_ENABLED ? onlineOrderCount : 0,
     };
   }, [
     tenantId,

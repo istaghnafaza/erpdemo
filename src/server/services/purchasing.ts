@@ -15,6 +15,7 @@ import {
   toSupplier,
 } from "@/server/db/mappers";
 import {
+  accountsPayable,
   branchProducts,
   goodsReceiptItems,
   goodsReceipts,
@@ -302,6 +303,74 @@ async function recomputePoStatus(
   return "sent";
 }
 
+type PurchasingTx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+/** Auto-create hutang supplier dari penerimaan barang (BUG-06). */
+async function createPayableFromGrInTx(
+  tx: PurchasingTx,
+  tenantId: string,
+  gr: {
+    id: string;
+    branchId: string;
+    grNumber: string;
+    supplierId: string;
+    purchaseOrderId: string;
+  },
+  items: Omit<GrItemInsert, "gr_id" | "tenant_id">[],
+): Promise<void> {
+  let totalAmount = 0;
+
+  for (const item of items) {
+    if (!item.product_id || item.received_qty <= 0) continue;
+    const poItem = await tx.query.purchaseOrderItems.findFirst({
+      where: and(
+        eq(purchaseOrderItems.poId, gr.purchaseOrderId),
+        eq(purchaseOrderItems.productId, item.product_id),
+      ),
+    });
+    if (poItem) {
+      totalAmount += item.received_qty * poItem.purchasePrice;
+    }
+  }
+
+  if (totalAmount <= 0) return;
+
+  const invoiceNumber = `AP-${gr.grNumber}`;
+  const existing = await tx.query.accountsPayable.findFirst({
+    where: and(
+      eq(accountsPayable.tenantId, tenantId),
+      eq(accountsPayable.invoiceNumber, invoiceNumber),
+    ),
+  });
+  if (existing) return;
+
+  const supplier = await tx.query.suppliers.findFirst({
+    where: and(eq(suppliers.tenantId, tenantId), eq(suppliers.id, gr.supplierId)),
+  });
+  const po = await tx.query.purchaseOrders.findFirst({
+    where: and(eq(purchaseOrders.tenantId, tenantId), eq(purchaseOrders.id, gr.purchaseOrderId)),
+  });
+
+  const fallbackDue = new Date();
+  fallbackDue.setDate(fallbackDue.getDate() + 30);
+  const dueDate = po?.expectedDate
+    ? String(po.expectedDate).slice(0, 10)
+    : fallbackDue.toISOString().slice(0, 10);
+
+  await tx.insert(accountsPayable).values({
+    tenantId,
+    branchId: gr.branchId,
+    invoiceNumber,
+    supplierId: gr.supplierId,
+    supplierName: supplier?.name ?? "Supplier",
+    purchaseOrderId: gr.purchaseOrderId,
+    totalAmount,
+    paidAmount: 0,
+    dueDate,
+    status: "unpaid",
+  });
+}
+
 export async function listGoodsReceipts(
   tenantId: string,
   branchId?: string,
@@ -507,6 +576,8 @@ export async function createGoodsReceiptRecord(
       .update(purchaseOrders)
       .set({ status: newStatus })
       .where(eq(purchaseOrders.id, gr.purchase_order_id));
+
+    await createPayableFromGrInTx(tx, tenantId, grRow, items);
 
     return toGoodsReceipt(grRow);
   });

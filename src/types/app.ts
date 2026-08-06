@@ -564,6 +564,25 @@ export interface ReportsBundle {
     marginPct: number;
     grossMarginPct: number;
   };
+  cashierAudit?: {
+    cashiers: {
+      id: string;
+      name: string;
+      role: string;
+      transactions: number;
+      revenue: number;
+      voids: number;
+      excessiveDiscounts: number;
+    }[];
+    transactions: {
+      id: string;
+      invoice: string;
+      date: string;
+      cashier: string;
+      total: number;
+      status: "completed" | "void";
+    }[];
+  };
 }
 
 /** Badge sidebar modul operasional (Sprint 3 P1-5). */

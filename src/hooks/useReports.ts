@@ -181,7 +181,7 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
     ? (neonReports?.profitLoss ?? emptyNeonProfitLoss)
     : mockProfitLoss;
   const cashierAudit = useNeonData
-    ? { cashiers: [], transactions: [] }
+    ? (neonReports?.cashierAudit ?? { cashiers: [], transactions: [] })
     : mockCashierAudit;
   const opnameVariance = useNeonData ? [] : mockOpnameVariance;
 

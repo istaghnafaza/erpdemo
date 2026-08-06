@@ -2,18 +2,23 @@
 // Reports service — dashboard & laporan aggregations (Phase 5)
 // =============================================================================
 
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getReadDb } from "@/server/db";
 import {
   computeItemMargin,
   effectiveItemSubtotal,
 } from "@/lib/sales-margin";
+import type {
+  CashierAuditRow,
+  CashierTransactionRow,
+} from "@/lib/reports-calculations";
 import {
   branchProducts,
   branches,
   cashTransactions,
   dailyBranchSales,
   products,
+  profiles,
   salesItems,
   salesTransactions,
 } from "@/server/db/schema";
@@ -578,6 +583,104 @@ function buildEmptyReportChart(periodDays: number) {
   return rows;
 }
 
+export async function getCashierAuditReport(
+  tenantId: string,
+  branchIds: string[],
+  dateRange: DateRangeFilter,
+): Promise<{ cashiers: CashierAuditRow[]; transactions: CashierTransactionRow[] }> {
+  if (branchIds.length === 0) return { cashiers: [], transactions: [] };
+
+  const db = getReadDb();
+  const txRows = await db.query.salesTransactions.findMany({
+    where: and(
+      eq(salesTransactions.tenantId, tenantId),
+      inArray(salesTransactions.branchId, branchIds),
+      inArray(salesTransactions.status, ["completed", "voided"]),
+      gte(salesTransactions.createdAt, new Date(dateRange.from)),
+      lte(salesTransactions.createdAt, new Date(dateRange.to)),
+    ),
+    orderBy: [desc(salesTransactions.createdAt)],
+    limit: 200,
+  });
+
+  if (txRows.length === 0) return { cashiers: [], transactions: [] };
+
+  const cashierIds = [
+    ...new Set(
+      txRows.map((t) => t.paidBy ?? t.inputBy).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const profileRows =
+    cashierIds.length > 0
+      ? await db.query.profiles.findMany({
+          where: and(
+            eq(profiles.tenantId, tenantId),
+            inArray(profiles.id, cashierIds),
+          ),
+        })
+      : [];
+
+  const profileMap = new Map(profileRows.map((p) => [p.id, p]));
+
+  type CashierAgg = CashierAuditRow & { _discountFlag: boolean };
+  const aggMap = new Map<string, CashierAgg>();
+
+  for (const tx of txRows) {
+    const cashierId = tx.paidBy ?? tx.inputBy ?? "unknown";
+    const profile = profileMap.get(cashierId);
+    const name = profile?.name ?? "Kasir";
+    const role = profile?.role ?? "cashier";
+
+    if (!aggMap.has(cashierId)) {
+      aggMap.set(cashierId, {
+        id: cashierId,
+        name,
+        role,
+        transactions: 0,
+        revenue: 0,
+        voids: 0,
+        excessiveDiscounts: 0,
+        _discountFlag: false,
+      });
+    }
+
+    const agg = aggMap.get(cashierId)!;
+    if (tx.status === "completed") {
+      agg.transactions += 1;
+      agg.revenue += tx.grandTotal;
+    } else if (tx.status === "voided") {
+      agg.voids += 1;
+    }
+
+    if (tx.discountAmount > 0 && tx.subtotal > 0 && tx.discountAmount / tx.subtotal > 0.15) {
+      agg._discountFlag = true;
+    }
+  }
+
+  const cashiers: CashierAuditRow[] = Array.from(aggMap.values())
+    .map(({ _discountFlag, ...row }) => ({
+      ...row,
+      excessiveDiscounts: _discountFlag ? 1 : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const transactions: CashierTransactionRow[] = txRows.slice(0, 50).map((tx) => {
+    const cashierId = tx.paidBy ?? tx.inputBy;
+    const profile = cashierId ? profileMap.get(cashierId) : undefined;
+    return {
+      id: tx.id,
+      invoice: tx.transactionNumber,
+      date: tx.createdAt.toISOString(),
+      cashier: profile?.name ?? "Kasir",
+      total: tx.grandTotal,
+      status: tx.status === "voided" ? "void" : "completed",
+    };
+  });
+
+  return { cashiers, transactions };
+}
+
 export async function getReportsBundleReport(
   tenantId: string,
   branchIds: string[],
@@ -606,6 +709,7 @@ export async function getReportsBundleReport(
   if (branchIds.length === 0) return empty;
 
   const dateRange = reportPeriodToDateRange(periodDays);
+  const cashierAudit = await getCashierAuditReport(tenantId, branchIds, dateRange);
   const dayMap = new Map<string, (typeof empty.salesReport.chart)[number]>();
   for (const row of buildEmptyReportChart(periodDays)) {
     dayMap.set(row.date, { ...row });
@@ -701,5 +805,6 @@ export async function getReportsBundleReport(
       marginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
       grossMarginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
     },
+    cashierAudit,
   };
 }

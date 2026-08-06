@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 import { Globe } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,9 @@ import type { OnlineOrderStatus } from "@/types/customer-portal";
 
 export const Route = createFileRoute("/$tenantSlug/online-orders/")({
   beforeLoad: ({ params }) => {
+    if (!FEATURE_ONLINE_ORDERS_ENABLED) {
+      throw redirect({ to: "/$tenantSlug/dashboard", params: { tenantSlug: params.tenantSlug } });
+    }
     requireAuth();
     requireFeature(params.tenantSlug, "online_orders");
   },

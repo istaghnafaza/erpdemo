@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 
 import type { Tenant } from "@/types/database";
 import type { AuthUser } from "@/types/app";
@@ -283,9 +284,10 @@ export function AppShell({
 
   const user = currentUser!.profile;
 
-  const visibleNav: NavItem[] = NAV_DEFINITIONS.filter((n) =>
-    canAccess(user.role, n.feature),
-  ).map((n) => ({ ...n, to: `/${tenantSlug}${n.suffix}` }));
+  const visibleNav: NavItem[] = NAV_DEFINITIONS.filter((n) => {
+    if (!FEATURE_ONLINE_ORDERS_ENABLED && n.feature === "online_orders") return false;
+    return canAccess(user.role, n.feature);
+  }).map((n) => ({ ...n, to: `/${tenantSlug}${n.suffix}` }));
 
   const moduleBadges = useModuleNavBadges();
 

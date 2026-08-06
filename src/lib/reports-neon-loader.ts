@@ -49,7 +49,7 @@ export async function loadNeonReports(
     topProducts: bundle.topProducts,
     paymentMethods: bundle.paymentMethods,
     profitLoss: bundle.profitLoss,
-    cashierAudit: { cashiers: [], transactions: [] },
+    cashierAudit: bundle.cashierAudit ?? { cashiers: [], transactions: [] },
     opnameVariance: [],
   };
 }

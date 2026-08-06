@@ -19,6 +19,7 @@ import {
 import {
   branchProducts,
   branches,
+  cashAccounts,
   cashierSessions,
   customers,
   posCarts,
@@ -31,6 +32,7 @@ import {
 import type { DateRangeFilter } from "@/types/app";
 import type { PosCheckoutExtras } from "@/types/pos-checkout-extras";
 import { reversePosSaleCashBookInTx } from "@/server/services/pos-checkout-side-effects";
+import { insertCashTransactionInTx } from "@/server/services/finance";
 import { generateTransactionNumber } from "@/lib/transaction-number";
 import type {
   CashierSession,
@@ -267,17 +269,68 @@ export async function closeSession(
   notes?: string,
 ): Promise<CashierSession | null> {
   const db = getDb();
-  const [row] = await db
-    .update(cashierSessions)
-    .set({
-      status: "closed",
-      closedAt: new Date(),
-      actualCashBalance,
-      notes: notes ?? null,
-    })
-    .where(and(eq(cashierSessions.tenantId, tenantId), eq(cashierSessions.id, sessionId)))
-    .returning();
-  return row ? toCashierSession(row) : null;
+
+  return db.transaction(async (tx) => {
+    const session = await tx.query.cashierSessions.findFirst({
+      where: and(eq(cashierSessions.tenantId, tenantId), eq(cashierSessions.id, sessionId)),
+    });
+    if (!session || session.status === "closed") {
+      return session ? toCashierSession(session) : null;
+    }
+
+    const discrepancy = actualCashBalance - session.expectedCashBalance;
+
+    if (discrepancy !== 0) {
+      let account = await tx.query.cashAccounts.findFirst({
+        where: and(
+          eq(cashAccounts.tenantId, tenantId),
+          eq(cashAccounts.branchId, session.branchId),
+          eq(cashAccounts.type, "cash"),
+          eq(cashAccounts.isActive, true),
+        ),
+      });
+
+      if (!account) {
+        const [created] = await tx
+          .insert(cashAccounts)
+          .values({
+            tenantId,
+            branchId: session.branchId,
+            name: "Kas Toko",
+            type: "cash",
+            balance: 0,
+            isActive: true,
+          })
+          .returning();
+        account = created!;
+      }
+
+      const isSurplus = discrepancy > 0;
+      await insertCashTransactionInTx(tx, tenantId, session.branchId, account.id, {
+        type: isSurplus ? "income" : "expense",
+        category: "Selisih Kasir",
+        amount: Math.abs(discrepancy),
+        reference: `SHIFT-${sessionId.slice(0, 8)}`,
+        description: isSurplus
+          ? `Lebih kas saat tutup shift (+${Math.abs(discrepancy)})`
+          : `Kurang kas saat tutup shift (-${Math.abs(discrepancy)})`,
+        user_id: session.cashierId,
+      });
+    }
+
+    const [row] = await tx
+      .update(cashierSessions)
+      .set({
+        status: "closed",
+        closedAt: new Date(),
+        actualCashBalance,
+        notes: notes ?? null,
+      })
+      .where(and(eq(cashierSessions.tenantId, tenantId), eq(cashierSessions.id, sessionId)))
+      .returning();
+
+    return row ? toCashierSession(row) : null;
+  });
 }
 
 export interface ForceCloseBranchSessionsResult {
@@ -958,6 +1011,9 @@ export async function voidSaleTransaction(
           })
           .where(and(eq(customers.tenantId, tenantId), eq(customers.id, txRow.customerId)));
       }
+
+      const { voidReceivableForSaleInTx } = await import("@/server/services/receivables");
+      await voidReceivableForSaleInTx(tx, tenantId, transactionId);
     }
 
     const saleForCash = toSalesTransaction(txRow);

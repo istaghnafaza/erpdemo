@@ -226,3 +226,29 @@ export async function createReceivableFromCreditSale(
     status: "unpaid",
   });
 }
+
+type ReceivableTx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+/** Tutup piutang terkait penjualan saat void (BUG-01). */
+export async function voidReceivableForSaleInTx(
+  tx: ReceivableTx,
+  tenantId: string,
+  salesTransactionId: string,
+): Promise<void> {
+  const ar = await tx.query.accountsReceivable.findFirst({
+    where: and(
+      eq(accountsReceivable.tenantId, tenantId),
+      eq(accountsReceivable.salesTransactionId, salesTransactionId),
+    ),
+  });
+  if (!ar) return;
+
+  if (ar.paidAmount > 0) {
+    throw new Error("VOID_BLOCKED: piutang sudah ada pembayaran — batalkan manual di modul Piutang");
+  }
+
+  await tx
+    .update(accountsReceivable)
+    .set({ paidAmount: ar.totalAmount, status: "paid" })
+    .where(eq(accountsReceivable.id, ar.id));
+}
