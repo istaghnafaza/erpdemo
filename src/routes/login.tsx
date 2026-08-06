@@ -13,6 +13,7 @@ import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
 import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
 import { AUTH_UI } from "@/lib/auth-features";
+import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 import { validateLoginForm } from "@/lib/validation/login-form";
 
 export const Route = createFileRoute("/login")({
@@ -110,14 +111,16 @@ function LoginPage() {
         </p>
       }
     >
-      <p className="text-sm mb-4">
-        <a
-          href="/toko-simetri/shop"
-          className="text-primary font-medium hover:underline inline-flex items-center gap-1"
-        >
-          Order online sebagai pelanggan →
-        </a>
-      </p>
+      {FEATURE_ONLINE_ORDERS_ENABLED ? (
+        <p className="text-sm mb-4">
+          <a
+            href="/toko-simetri/shop"
+            className="text-primary font-medium hover:underline inline-flex items-center gap-1"
+          >
+            Order online sebagai pelanggan →
+          </a>
+        </p>
+      ) : null}
 
       {showNeonLogin && AUTH_UI.showGoogleAuth ? (
         <>

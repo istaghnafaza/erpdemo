@@ -45,6 +45,7 @@ import { requireAuth, requireFeature } from "@/routes/$tenantSlug";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
 import { PlanUsageCard } from "@/components/subscription/PlanUsageCard";
+import { BranchPaymentSettingsSection } from "@/components/branches/BranchPaymentSettingsSection";
 import { navigateToBranchSetup } from "@/lib/branch-setup-utils";
 import { checkCanAddBranchClient } from "@/lib/plan-guard";
 import { toast } from "sonner";
@@ -223,6 +224,10 @@ function TokoSayaPage() {
       subtitle="Kelola info bisnis dan cabang/toko — edit detail cabang atau tutup operasional."
     >
       <TenantBusinessForm tenant={tenant} onUpdated={setTenant} />
+
+      <div className="mb-6">
+        <BranchPaymentSettingsSection tenantId={tenantId} branches={branches} />
+      </div>
 
       <div className="mb-6">
         <PlanUsageCard

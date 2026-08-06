@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Banknote, CreditCard, QrCode, ArrowRightLeft, Receipt as ReceiptIcon } from "lucide-react";
 
@@ -28,6 +29,8 @@ import { ReturnOffsetPicker } from "@/components/pos/ReturnOffsetPicker";
 import { ReturnOffsetSummary } from "@/components/pos/ReturnOffsetLines";
 import { cartReturnOffsetAmount } from "@/stores/pos.store";
 import type { PosReturnOffset } from "@/lib/pos-return-offset";
+import { getBranchPaymentSettings } from "@/lib/api/payment-settings";
+import { queryKeys } from "@/lib/query-keys";
 
 import type { ActiveCart } from "@/stores/pos.store";
 
@@ -169,6 +172,22 @@ export function PaymentPanel({
   const soLineCount = cart.items.filter((i) => i.is_so_line).length;
 
   const returnOffsetAmount = cartReturnOffsetAmount(cart);
+
+  const paymentSettingsQuery = useQuery({
+    queryKey: queryKeys.branchPaymentSettings(tenantId ?? "", branchId ?? ""),
+    queryFn: async () => {
+      const result = await getBranchPaymentSettings(tenantId!, branchId!);
+      if (result.error) throw new Error(result.error);
+      return result.data!;
+    },
+    enabled: Boolean(tenantId && branchId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const activeTransferAccounts =
+    paymentSettingsQuery.data?.transferAccounts.filter((a) => a.isActive) ?? [];
+  const activeQrisEntries =
+    paymentSettingsQuery.data?.qrisEntries.filter((q) => q.isActive && q.imageUrl) ?? [];
 
 
 
@@ -479,6 +498,32 @@ export function PaymentPanel({
 
 
 
+      {method === "transfer" && (
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Transfer ke rekening
+          </p>
+          {activeTransferAccounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Rekening belum diatur. Owner/manager dapat mengatur di Toko Saya → Pengaturan
+              Pembayaran.
+            </p>
+          ) : (
+            activeTransferAccounts.map((acc) => (
+              <div key={acc.id} className="rounded-md border bg-background p-2.5 text-sm">
+                <div className="font-semibold">{acc.label || acc.bankName}</div>
+                <div className="text-muted-foreground text-xs mt-0.5">
+                  {acc.bankName} · {acc.accountNumber}
+                </div>
+                <div className="text-xs mt-1">a.n. {acc.accountHolder}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+
+
       {isQrisMethod && (
 
         <div className="grid grid-cols-4 gap-1.5">
@@ -514,19 +559,30 @@ export function PaymentPanel({
 
 
       {isQrisMethod && (
-
-        <div className="bg-muted rounded-lg p-4 text-center">
-
-          <div className="h-24 w-24 mx-auto bg-white rounded-lg grid place-items-center border-2 border-dashed">
-
-            <QrCode className="h-12 w-12 text-muted-foreground" />
-
-          </div>
-
-          <p className="text-xs text-muted-foreground mt-2">Scan QR untuk membayar</p>
-
+        <div className="space-y-2">
+          {activeQrisEntries.length === 0 ? (
+            <div className="bg-muted rounded-lg p-4 text-center">
+              <div className="h-24 w-24 mx-auto bg-white rounded-lg grid place-items-center border-2 border-dashed">
+                <QrCode className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                QRIS belum diatur — upload di Toko Saya → Pengaturan Pembayaran
+              </p>
+            </div>
+          ) : (
+            activeQrisEntries.map((q) => (
+              <div key={q.id} className="bg-muted rounded-lg p-4 text-center">
+                <p className="text-xs font-medium mb-2">{q.label}</p>
+                <img
+                  src={q.imageUrl}
+                  alt={q.label}
+                  className="mx-auto max-h-48 rounded-lg border bg-white object-contain"
+                />
+                <p className="text-xs text-muted-foreground mt-2">Scan QR untuk membayar</p>
+              </div>
+            ))
+          )}
         </div>
-
       )}
 
 

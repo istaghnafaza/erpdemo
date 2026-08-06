@@ -2,6 +2,10 @@
 // Map Drizzle rows → database.ts snake_case types
 // =============================================================================
 
+import {
+  normalizeBranchPaymentSettings,
+  type BranchPaymentSettings,
+} from "@/types/payment-settings";
 import type {
   Branch,
   BranchProduct,
@@ -121,6 +125,9 @@ export function toBranch(row: BranchRow): Branch {
     phone: row.phone,
     manager_id: row.managerId,
     is_active: row.isActive,
+    payment_settings: normalizeBranchPaymentSettings(
+      row.paymentSettings as BranchPaymentSettings | null | undefined,
+    ),
     created_at: row.createdAt.toISOString(),
   };
 }

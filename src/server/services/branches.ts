@@ -17,7 +17,10 @@ import {
   stockTransfers,
   userBranches,
 } from "@/server/db/schema";
+import { ensureBranchPaymentSettingsColumn } from "@/server/db/ensure-branch-payment-settings";
 import type { Branch, BranchInsert, BranchUpdate, Profile } from "@/types/database";
+import type { BranchPaymentSettings } from "@/types/payment-settings";
+import { normalizeBranchPaymentSettings } from "@/types/payment-settings";
 
 export function deriveBranchCode(name: string): string {
   const letters = name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -394,6 +397,9 @@ export async function updateBranch(
     }
     patch.isActive = updates.is_active;
   }
+  if (updates.payment_settings !== undefined) {
+    patch.paymentSettings = updates.payment_settings;
+  }
 
   const [row] = await db
     .update(branches)
@@ -403,6 +409,34 @@ export async function updateBranch(
   if (!row) return null;
   await invalidateBranches(tenantId);
   return toBranch(row);
+}
+
+export async function getBranchPaymentSettings(
+  tenantId: string,
+  branchId: string,
+): Promise<BranchPaymentSettings> {
+  await ensureBranchPaymentSettingsColumn();
+  const db = getDb();
+  const row = await db.query.branches.findFirst({
+    where: and(eq(branches.tenantId, tenantId), eq(branches.id, branchId)),
+    columns: { paymentSettings: true },
+  });
+  if (!row) return normalizeBranchPaymentSettings(null);
+  return normalizeBranchPaymentSettings(
+    row.paymentSettings as BranchPaymentSettings | null | undefined,
+  );
+}
+
+export async function updateBranchPaymentSettings(
+  tenantId: string,
+  branchId: string,
+  settings: BranchPaymentSettings,
+): Promise<BranchPaymentSettings> {
+  await ensureBranchPaymentSettingsColumn();
+  const normalized = normalizeBranchPaymentSettings(settings);
+  const updated = await updateBranch(tenantId, branchId, { payment_settings: normalized });
+  if (!updated) throw new Error("Cabang tidak ditemukan");
+  return updated.payment_settings;
 }
 
 export async function assignUserToBranch(

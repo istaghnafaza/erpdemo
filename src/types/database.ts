@@ -69,6 +69,7 @@ export interface Branch {
   phone: string | null;
   manager_id: string | null;
   is_active: boolean;
+  payment_settings: import("@/types/payment-settings").BranchPaymentSettings;
   created_at: string;
 }
 

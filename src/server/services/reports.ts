@@ -37,13 +37,13 @@ import type {
   TopProduct,
 } from "@/types/app";
 
-function localDateKey(isoOrDate: Date | string): string {
-  const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import {
+  addDaysToDateKey,
+  dateKeyInAppTz,
+  monthStartKeyFromDateKey,
+  todayKeyInAppTz,
+  utcRangeForAppDateKey,
+} from "@/lib/app-timezone";
 
 function aggregateRowToDaily(row: typeof dailyBranchSales.$inferSelect): DailySalesSummary {
   return {
@@ -77,7 +77,7 @@ async function getDailySalesFromRaw(
   const byDate = new Map<string, DailySalesSummary>();
 
   for (const tx of rows) {
-    const date = tx.createdAt.toISOString().split("T")[0]!;
+    const date = dateKeyInAppTz(tx.createdAt);
     if (!byDate.has(date)) {
       byDate.set(date, {
         date,
@@ -112,7 +112,7 @@ export async function getDailySalesReport(
   const db = getReadDb();
   const fromDate = dateRange.from.split("T")[0]!;
   const toDate = dateRange.to.split("T")[0]!;
-  const today = localDateKey(new Date());
+  const today = todayKeyInAppTz();
 
   const aggRows = await db.query.dailyBranchSales.findMany({
     where: and(
@@ -134,9 +134,10 @@ export async function getDailySalesReport(
   }
 
   if (toDate >= today && fromDate <= today) {
+    const { from, to } = utcRangeForAppDateKey(today);
     const todayRows = await getDailySalesFromRaw(tenantId, branchId, {
-      from: `${today}T00:00:00.000Z`,
-      to: `${today}T23:59:59.999Z`,
+      from: from.toISOString(),
+      to: to.toISOString(),
     });
     for (const day of todayRows) {
       byDate.set(day.date, day);
@@ -293,9 +294,9 @@ export async function getStockAlertsReport(
   return alerts;
 }
 
-/** Alias — periode dashboard memakai tanggal lokal (WIB), selaras histori penjualan. */
+/** Alias — periode dashboard memakai tanggal WIB, selaras histori penjualan. */
 function txDateKey(iso: Date | string): string {
-  return localDateKey(iso);
+  return dateKeyInAppTz(iso);
 }
 
 function inDateRange(dateKey: string, from: string, to: string): boolean {
@@ -316,30 +317,20 @@ export async function getDashboardStatsReport(
   tenantId: string,
   branchId: string,
 ): Promise<DashboardStats> {
-  const today = new Date();
-  const todayStr = txDateKey(today);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = txDateKey(yesterday);
-
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - 6);
-  const weekStartStr = txDateKey(weekStart);
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthStartStr = txDateKey(monthStart);
-
-  const last30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const last30Str = txDateKey(last30);
+  const todayStr = todayKeyInAppTz();
+  const yesterdayStr = addDaysToDateKey(todayStr, -1);
+  const weekStartStr = addDaysToDateKey(todayStr, -6);
+  const monthStartStr = monthStartKeyFromDateKey(todayStr);
+  const last30Str = addDaysToDateKey(todayStr, -29);
 
   const db = getReadDb();
+  const { from: last30From } = utcRangeForAppDateKey(last30Str);
   const txAll = await db.query.salesTransactions.findMany({
     where: and(
       eq(salesTransactions.tenantId, tenantId),
       eq(salesTransactions.branchId, branchId),
       inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
-      gte(salesTransactions.createdAt, new Date(`${last30Str}T00:00:00.000Z`)),
+      gte(salesTransactions.createdAt, last30From),
     ),
   });
 
@@ -361,7 +352,7 @@ export async function getDashboardStatsReport(
         eq(salesItems.tenantId, tenantId),
         eq(salesTransactions.branchId, branchId),
         inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
-        gte(salesTransactions.createdAt, new Date(`${last30Str}T00:00:00.000Z`)),
+        gte(salesTransactions.createdAt, last30From),
       ),
     );
 
@@ -408,7 +399,7 @@ export async function getDashboardStatsReport(
       eq(cashTransactions.tenantId, tenantId),
       eq(cashTransactions.branchId, branchId),
       eq(cashTransactions.type, "expense"),
-      gte(cashTransactions.createdAt, new Date(`${last30Str}T00:00:00.000Z`)),
+      gte(cashTransactions.createdAt, last30From),
     ),
   });
 
@@ -458,7 +449,7 @@ export async function getDashboardStatsReport(
     getApSummary(tenantId, branchId),
     getStockAlertsReport(tenantId, branchId),
     getDailySalesReport(tenantId, branchId, {
-      from: `${last30Str}T00:00:00.000Z`,
+      from: last30From.toISOString(),
       to: new Date().toISOString(),
     }),
     listCashAccounts(tenantId, branchId, { activeOnly: true }),
@@ -498,12 +489,12 @@ export async function getDashboardBundleReport(
 ): Promise<DashboardBranchBundle[]> {
   if (branchIds.length === 0) return [];
 
-  const today = new Date();
-  const todayKey = txDateKey(today);
-  const last30From = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const to = today.toISOString();
-  const last30Range = { from: last30From, to };
-  const todayRange = { from: `${todayKey}T00:00:00.000Z`, to };
+  const todayKey = todayKeyInAppTz();
+  const last30FromKey = addDaysToDateKey(todayKey, -29);
+  const { from: last30From } = utcRangeForAppDateKey(last30FromKey);
+  const { from: todayFrom, to: todayTo } = utcRangeForAppDateKey(todayKey);
+  const last30Range = { from: last30From.toISOString(), to: new Date().toISOString() };
+  const todayRange = { from: todayFrom.toISOString(), to: todayTo.toISOString() };
 
   return Promise.all(
     branchIds.map(async (branchId) => {

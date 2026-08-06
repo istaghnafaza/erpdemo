@@ -52,4 +52,6 @@ export const queryKeys = {
   suppliersWithProducts: (tenantId: string) =>
     ["suppliers-with-products", tenantId] as const,
   products: (tenantId: string) => ["products", tenantId] as const,
+  branchPaymentSettings: (tenantId: string, branchId: string) =>
+    ["branch-payment-settings", tenantId, branchId] as const,
 };

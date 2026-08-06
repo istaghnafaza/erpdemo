@@ -4,6 +4,7 @@
 
 import {
   boolean,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -75,6 +76,10 @@ export const branches = pgTable(
     phone: text("phone"),
     managerId: uuid("manager_id"),
     isActive: boolean("is_active").notNull().default(true),
+    paymentSettings: jsonb("payment_settings")
+      .$type<import("@/types/payment-settings").BranchPaymentSettings>()
+      .notNull()
+      .default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique().on(t.tenantId, t.code)],
