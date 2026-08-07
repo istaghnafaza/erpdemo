@@ -55,7 +55,7 @@ export default defineConfig({
             },
           ],
         },
-        devOptions: { enabled: true },
+        devOptions: { enabled: process.env.NODE_ENV !== "production" },
       }),
     ],
   },

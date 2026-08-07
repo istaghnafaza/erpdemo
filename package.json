@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "node scripts/patch-nf3-nft.mjs && vite build",
+    "build": "node scripts/patch-nf3-nft.mjs && vite build && node scripts/copy-pwa-sw.mjs",
     "start": "node .output/server/index.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

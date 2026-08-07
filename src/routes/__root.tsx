@@ -130,7 +130,7 @@ function RootComponent() {
     initOfflineListeners();
     initOfflineCache();
 
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && import.meta.env.PROD) {
       void import("virtual:pwa-register").then(({ registerSW }) => {
         registerSW({ immediate: true });
       }).catch(() => undefined);
