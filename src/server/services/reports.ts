@@ -701,6 +701,8 @@ export async function getReportsBundleReport(
 
   const dateRange = reportPeriodToDateRange(periodDays);
   const cashierAudit = await getCashierAuditReport(tenantId, branchIds, dateRange);
+  const { getOpnameVarianceReport } = await import("@/server/services/transfers");
+  const opnameVariance = await getOpnameVarianceReport(tenantId, branchIds, dateRange);
   const dayMap = new Map<string, (typeof empty.salesReport.chart)[number]>();
   for (const row of buildEmptyReportChart(periodDays)) {
     dayMap.set(row.date, { ...row });
@@ -797,5 +799,6 @@ export async function getReportsBundleReport(
       grossMarginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
     },
     cashierAudit,
+    opnameVariance,
   };
 }

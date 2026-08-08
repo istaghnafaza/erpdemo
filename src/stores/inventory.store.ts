@@ -284,6 +284,7 @@ export const useInventoryStore = create<InventoryState>()(
         mockStockAdjustments: state.mockStockAdjustments,
         mockProductOverrides: state.mockProductOverrides,
         mockDeactivatedIds: state.mockDeactivatedIds,
+        mockMovements: state.mockMovements,
       }),
     },
   ),

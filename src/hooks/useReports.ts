@@ -18,9 +18,10 @@ import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import { filterFinanceByBranches, getFinanceScopeLabel } from "@/lib/finance-scope";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
+import { useInventoryStore } from "@/stores/inventory.store";
 import {
   computeCashierAudit,
-  computeOpnameVarianceReport,
+  computeOpnameVarianceFromMovements,
   computePaymentMethodBreakdown,
   computeProfitLossReport,
   computeSalesReport,
@@ -44,6 +45,8 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
   const mockArPayments = useReceivablesStore((s) => s.mockPayments);
   const mockPayables = usePayablesStore((s) => s.mockPayables);
   const mockApPayments = usePayablesStore((s) => s.mockPayments);
+  const mockMovements = useInventoryStore((s) => s.mockMovements);
+  const mockProductOverrides = useInventoryStore((s) => s.mockProductOverrides);
 
   const isMockTenant = isMockTenantId(tenantId);
   const useNeonData = isNeonBackend() && !isMockTenant;
@@ -136,8 +139,13 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
     [branchIds, consolidated],
   );
   const mockOpnameVariance = useMemo(
-    () => computeOpnameVarianceReport(branchIds, consolidated),
-    [branchIds, consolidated],
+    () =>
+      computeOpnameVarianceFromMovements(
+        mockMovements,
+        branchIds,
+        mockProductOverrides,
+      ),
+    [mockMovements, branchIds, mockProductOverrides],
   );
 
   const emptyNeonSales = useMemo(() => {
@@ -183,7 +191,9 @@ export function useReports(initialPeriod: ReportPeriod = "30") {
   const cashierAudit = useNeonData
     ? (neonReports?.cashierAudit ?? { cashiers: [], transactions: [] })
     : mockCashierAudit;
-  const opnameVariance = useNeonData ? [] : mockOpnameVariance;
+  const opnameVariance = useNeonData
+    ? (neonReports?.opnameVariance ?? [])
+    : mockOpnameVariance;
 
   const totalOpnameLoss = useMemo(
     () => opnameVariance.reduce((s, r) => s + r.estimatedLoss, 0),

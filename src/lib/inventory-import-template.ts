@@ -11,6 +11,22 @@ import type {
   ProductTypeAttribute,
 } from "@/types/product-attributes";
 
+export const LEGACY_SHEET_NAME = "Data Legacy";
+
+export const LEGACY_COLUMNS = [
+  "Kategori",
+  "Nama Produk",
+  "SKU (opsional)",
+  "Barcode",
+  "Satuan",
+  "Harga Beli",
+  "Harga Jual",
+  "Stok Awal",
+  "Reorder Point",
+  "Lokasi Gudang",
+  "Legacy Stock (Y/Tidak)",
+] as const;
+
 export interface ProductCatalogForImport {
   globalAttributes: GlobalAttribute[];
   productTypes: ProductType[];
@@ -267,6 +283,31 @@ function buildGuideSheet(): string[][] {
     ["• CSV (.zip): satu file CSV per kategori — untuk edit di Notepad / sistem lain"],
     [""],
     ["Setelah mengisi, gunakan tombol Import Excel di halaman Master Barang."],
+    [""],
+    ["Data lama / format berbeda"],
+    [`• Gunakan sheet "${LEGACY_SHEET_NAME}" jika data dari buku atau Excel toko lama`],
+    ["• Cukup isi Kategori, Nama Produk, Satuan, Harga Beli/Jual — tanpa attribute detail"],
+  ];
+}
+
+function buildLegacySheetData(): string[][] {
+  return [
+    ["Data dari buku/Excel lama — tanpa attribute. Isi dari baris 3."],
+    [...LEGACY_COLUMNS],
+    [
+      "Semen & Bahan Bangunan",
+      "Semen Tiga Roda 50kg",
+      "",
+      "",
+      "sak",
+      "57000",
+      "65000",
+      "80",
+      "20",
+      "A-01",
+      "Tidak",
+    ],
+    LEGACY_COLUMNS.map(() => ""),
   ];
 }
 
@@ -314,6 +355,11 @@ export function buildImportTemplateWorkbook(catalog: ProductCatalogForImport): X
     wb,
     XLSX.utils.aoa_to_sheet(buildReferenceSheet(catalog)),
     "Referensi Attribute",
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet(buildLegacySheetData()),
+    LEGACY_SHEET_NAME,
   );
 
   for (const category of SEED_PRODUCT_ATTRIBUTE_CATEGORIES) {

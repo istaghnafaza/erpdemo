@@ -15,6 +15,8 @@ import { ProductFilters } from "@/components/inventory/ProductFilters";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { ProductDetailDrawer } from "@/components/inventory/ProductDetailDrawer";
 import { ProductFormModal } from "@/components/inventory/ProductFormModal";
+import { ProductImportDialog } from "@/components/inventory/ProductImportDialog";
+import { InventoryInputGuideCard } from "@/components/inventory/InventoryInputGuideCard";
 import { useInventoryProducts } from "@/hooks/useInventoryProducts";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
 import { toast } from "sonner";
@@ -31,6 +33,9 @@ export const Route = createFileRoute("/$tenantSlug/inventory/products")({
 function ProductsPage() {
   const {
     user,
+    tenantId,
+    activeBranch,
+    productCatalog,
     canSeePurchasePrice,
     canEditProduct,
     isConsolidated,
@@ -46,11 +51,13 @@ function ProductsPage() {
     setBranchFilter,
     categoryNames,
     filteredRows,
+    productCount,
     selectedProduct,
     branchStockForProduct,
     detailMovements,
     movementsLoading,
     formOpen,
+    importOpen,
     editingProductId,
     editingDefaults,
     existingSkus,
@@ -59,11 +66,17 @@ function ProductsPage() {
     openCreateForm,
     openEditForm,
     closeForm,
+    openImportDialog,
+    closeImportDialog,
     downloadTemplateExcel,
     downloadTemplateCsv,
     handleDeactivate,
     handleSaveProduct,
+    invalidateInventory,
   } = useInventoryProducts();
+
+  const importBranchId = activeBranch?.id ?? branchList[0]?.id ?? "";
+  const importBranchName = activeBranch?.name ?? branchList[0]?.name ?? "Cabang";
 
   if (!user) return null;
 
@@ -113,7 +126,8 @@ function ProductsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => toast.info("Import Excel — menyusul setelah template")}
+              onClick={openImportDialog}
+              disabled={!importBranchId}
             >
               <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Import Excel
             </Button>
@@ -125,6 +139,8 @@ function ProductsPage() {
       }
     >
       <InventorySubNav />
+
+      {canEditProduct ? <InventoryInputGuideCard productCount={productCount} /> : null}
 
       <Card className="overflow-hidden">
         <ProductFilters
@@ -179,6 +195,19 @@ function ProductsPage() {
         canEditPurchasePrice={canSeePurchasePrice && ["owner", "manager"].includes(user.role)}
         onSave={handleSaveProduct}
       />
+
+      {canEditProduct && importBranchId ? (
+        <ProductImportDialog
+          open={importOpen}
+          onClose={closeImportDialog}
+          tenantId={tenantId}
+          branchId={importBranchId}
+          branchName={importBranchName}
+          catalog={productCatalog}
+          existingSkus={existingSkus}
+          onImported={invalidateInventory}
+        />
+      ) : null}
     </AppShell>
   );
 }

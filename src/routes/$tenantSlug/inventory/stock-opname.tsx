@@ -30,6 +30,7 @@ function StockOpnamePage() {
     canApprove,
     submitting,
     submitError,
+    catalogLoading,
     pendingOpnameApproval,
     startSession,
     updatePhysicalStock,
@@ -83,7 +84,8 @@ function StockOpnamePage() {
         submitting={submitting}
         submitError={submitError}
         pendingApproval={pendingOpnameApproval}
-        onStart={startSession}
+        catalogLoading={catalogLoading}
+        onStart={() => void startSession()}
         onUpdatePhysical={updatePhysicalStock}
         onGoToReview={goToReview}
         onBack={() => setStep(step === 3 ? 2 : 1)}

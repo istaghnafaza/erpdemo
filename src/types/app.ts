@@ -583,6 +583,19 @@ export interface ReportsBundle {
       status: "completed" | "void";
     }[];
   };
+  opnameVariance?: {
+    id: string;
+    reference: string;
+    branchId: string;
+    productName: string;
+    sku: string;
+    systemQty: number;
+    physicalQty: number;
+    variance: number;
+    unitCost: number;
+    estimatedLoss: number;
+    date: string;
+  }[];
 }
 
 /** Badge sidebar modul operasional (Sprint 3 P1-5). */

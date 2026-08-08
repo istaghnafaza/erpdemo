@@ -24,6 +24,9 @@ export interface OnboardingInventoryItem {
   initialStock: number;
   /** Stok belum diverifikasi — boleh dijual saat legacy mode aktif. */
   markLegacy: boolean;
+  barcode?: string | null;
+  reorderPoint?: number;
+  warehouseLocation?: string;
 }
 
 export function collectOnboardingInventoryItems(input: {
@@ -114,7 +117,9 @@ export function applyOnboardingInventoryToBranchMock(
       categoryName: item.categoryName,
       sellingPrice: item.sellPrice,
       purchasePrice: item.purchasePrice,
-      reorderPoint: 5,
+      reorderPoint: item.reorderPoint ?? 5,
+      warehouseLocation: item.warehouseLocation ?? "",
+      barcode: item.barcode ?? null,
       initialStock: item.initialStock,
       legacyStock: item.markLegacy ? 1 : 0,
       isActive: true,

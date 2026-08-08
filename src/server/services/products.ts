@@ -394,6 +394,7 @@ export async function ensureBranchProductRow(
     stock: number;
     legacyStock: number;
     reorderPoint?: number;
+    warehouseLocation?: string | null;
   },
 ): Promise<BranchProduct> {
   const db = getDb();
@@ -407,6 +408,7 @@ export async function ensureBranchProductRow(
       stock: data.stock,
       legacyStock: data.legacyStock,
       reorderPoint: data.reorderPoint ?? 5,
+      warehouseLocation: data.warehouseLocation?.trim() || null,
     })
     .onConflictDoUpdate({
       target: [branchProducts.branchId, branchProducts.productId],
@@ -414,6 +416,8 @@ export async function ensureBranchProductRow(
         sellingPrice: data.sellingPrice,
         stock: data.stock,
         legacyStock: data.legacyStock,
+        reorderPoint: data.reorderPoint ?? 5,
+        warehouseLocation: data.warehouseLocation?.trim() || null,
       },
     })
     .returning();

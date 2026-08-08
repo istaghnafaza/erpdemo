@@ -2,8 +2,9 @@
 // Transfers & opname service — inventory Phase 5
 // =============================================================================
 
-import { and, desc, eq, gte, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, or } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { invalidateBranchProducts } from "@/server/cache/invalidate";
 import {
   toStockMovement,
   toStockTransfer,
@@ -12,6 +13,7 @@ import {
 import {
   branchProducts,
   branches,
+  products,
   stockMovements,
   stockTransferItems,
   stockTransfers,
@@ -79,7 +81,74 @@ export async function submitOpnameRecord(
     }
   });
 
+  await invalidateBranchProducts(tenantId, branchId);
   return results;
+}
+
+export interface OpnameVarianceReportRow {
+  id: string;
+  reference: string;
+  branchId: string;
+  productName: string;
+  sku: string;
+  systemQty: number;
+  physicalQty: number;
+  variance: number;
+  unitCost: number;
+  estimatedLoss: number;
+  date: string;
+}
+
+export async function getOpnameVarianceReport(
+  tenantId: string,
+  branchIds: string[],
+  dateRange: DateRangeFilter,
+): Promise<OpnameVarianceReportRow[]> {
+  if (branchIds.length === 0) return [];
+
+  const db = getDb();
+  const conditions = [
+    eq(stockMovements.tenantId, tenantId),
+    eq(stockMovements.type, "opname"),
+    inArray(stockMovements.branchId, branchIds),
+  ];
+  if (dateRange.from) {
+    conditions.push(gte(stockMovements.createdAt, new Date(dateRange.from)));
+  }
+  if (dateRange.to) {
+    conditions.push(lte(stockMovements.createdAt, new Date(dateRange.to)));
+  }
+
+  const rows = await db
+    .select({
+      movement: stockMovements,
+      sku: products.sku,
+      productName: products.name,
+      purchasePrice: products.purchasePrice,
+    })
+    .from(stockMovements)
+    .innerJoin(products, eq(stockMovements.productId, products.id))
+    .where(and(...conditions))
+    .orderBy(desc(stockMovements.createdAt));
+
+  return rows.map(({ movement, sku, productName, purchasePrice }) => {
+    const variance = movement.qtyAfter - movement.qtyBefore;
+    const unitCost = purchasePrice ?? 0;
+    const estimatedLoss = variance < 0 ? Math.abs(variance) * unitCost : 0;
+    return {
+      id: movement.id,
+      reference: movement.reference ?? "",
+      branchId: movement.branchId,
+      productName,
+      sku,
+      systemQty: movement.qtyBefore,
+      physicalQty: movement.qtyAfter,
+      variance,
+      unitCost,
+      estimatedLoss,
+      date: movement.createdAt.toISOString(),
+    };
+  });
 }
 
 export async function listStockTransfers(

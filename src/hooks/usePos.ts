@@ -249,8 +249,7 @@ export function usePos() {
     }
 
     return rawCatalog.map((bp) => {
-      const delta = mockStockDelta[bp.product_id] ?? 0;
-      const stock = Math.max(0, bp.stock + delta);
+      const stock = Math.max(0, bp.stock);
       return {
         branchProductId: bp.id,
         productId: bp.product_id,

@@ -10,7 +10,9 @@ import {
   USERS,
   PRODUCTS,
 } from "@/lib/mock-data";
-import type { CashTransaction } from "@/types/database";
+import { productId } from "@/lib/mock-pos-catalog";
+import type { CashTransaction, StockMovement } from "@/types/database";
+import type { MockProductOverride } from "@/stores/inventory.store";
 
 export type ReportPeriod = "7" | "14" | "30";
 
@@ -247,6 +249,45 @@ export function computeOpnameVarianceReport(
 
   if (isConsolidated) return rows;
   return rows.filter((r) => branchIds.includes(r.branchId));
+}
+
+/** Selisih opname dari pergerakan stok aktual (mock / sinkron dengan sesi opname). */
+export function computeOpnameVarianceFromMovements(
+  movements: StockMovement[],
+  branchIds: string[],
+  productOverrides: Record<string, MockProductOverride>,
+): OpnameVarianceRow[] {
+  const resolveMeta = (pid: string) => {
+    const override = productOverrides[pid];
+    const seedIdx = PRODUCTS.findIndex((_, i) => productId(i) === pid);
+    const seed = seedIdx >= 0 ? PRODUCTS[seedIdx] : undefined;
+    return {
+      sku: override?.sku ?? seed?.sku ?? pid.slice(0, 8),
+      name: override?.name ?? seed?.name ?? "Produk",
+      purchasePrice: override?.purchasePrice ?? seed?.purchasePrice ?? 0,
+    };
+  };
+
+  return movements
+    .filter((m) => m.type === "opname" && branchIds.includes(m.branch_id))
+    .map((m) => {
+      const meta = resolveMeta(m.product_id);
+      const variance = m.qty_after - m.qty_before;
+      return {
+        id: m.id,
+        reference: m.reference ?? "",
+        branchId: m.branch_id,
+        productName: meta.name,
+        sku: meta.sku,
+        systemQty: m.qty_before,
+        physicalQty: m.qty_after,
+        variance,
+        unitCost: meta.purchasePrice,
+        estimatedLoss: variance < 0 ? Math.abs(variance) * meta.purchasePrice : 0,
+        date: m.created_at,
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export function getMonthDateRange(): { from: string; to: string } {

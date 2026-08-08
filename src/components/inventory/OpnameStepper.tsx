@@ -35,6 +35,7 @@ interface OpnameStepperProps {
   submitting: boolean;
   submitError: string | null;
   pendingApproval: boolean;
+  catalogLoading?: boolean;
   onStart: () => void;
   onUpdatePhysical: (productId: string, value: number | "") => void;
   onGoToReview: () => void;
@@ -63,6 +64,7 @@ export function OpnameStepper({
   submitting,
   submitError,
   pendingApproval,
+  catalogLoading = false,
   onStart,
   onUpdatePhysical,
   onGoToReview,
@@ -125,8 +127,12 @@ export function OpnameStepper({
               </SelectContent>
             </Select>
           </div>
-          <Button className="w-full bg-cyan-600 hover:bg-cyan-700" onClick={onStart}>
-            Mulai Opname
+          <Button
+            className="w-full bg-cyan-600 hover:bg-cyan-700"
+            onClick={onStart}
+            disabled={catalogLoading}
+          >
+            {catalogLoading ? "Memuat data barang..." : "Mulai Opname"}
           </Button>
         </Card>
       )}

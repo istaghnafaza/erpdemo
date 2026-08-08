@@ -102,6 +102,7 @@ export function useInventoryProducts() {
   const queryClient = useQueryClient();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [detailMovements, setDetailMovements] = useState<StockMovement[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
@@ -380,6 +381,9 @@ export function useInventoryProducts() {
     setEditingProductId(null);
   }, []);
 
+  const openImportDialog = useCallback(() => setImportOpen(true), []);
+  const closeImportDialog = useCallback(() => setImportOpen(false), []);
+
   const downloadTemplateExcel = useCallback(() => {
     downloadImportTemplateExcel(productCatalog);
   }, [productCatalog]);
@@ -515,6 +519,9 @@ export function useInventoryProducts() {
   return {
     user,
     role,
+    tenantId,
+    activeBranch,
+    productCatalog,
     canSeePurchasePrice,
     canEditProduct,
     isConsolidated,
@@ -530,11 +537,13 @@ export function useInventoryProducts() {
     setBranchFilter,
     categoryNames,
     filteredRows,
+    productCount: rawRows.length,
     selectedProduct,
     branchStockForProduct,
     detailMovements,
     movementsLoading,
     formOpen,
+    importOpen,
     editingProductId,
     editingDefaults,
     existingSkus,
@@ -543,10 +552,13 @@ export function useInventoryProducts() {
     openCreateForm,
     openEditForm,
     closeForm,
+    openImportDialog,
+    closeImportDialog,
     downloadTemplateExcel,
     downloadTemplateCsv,
     handleDeactivate,
     handleSaveProduct,
+    invalidateInventory,
     loadMovements,
   };
 }

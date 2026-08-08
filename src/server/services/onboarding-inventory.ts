@@ -34,7 +34,7 @@ export async function applyOnboardingItemsToBranch(
       const cat = await ensureCategory(tenantId, item.categoryName || "Lainnya");
       product = await createProduct(tenantId, {
         sku,
-        barcode: null,
+        barcode: item.barcode?.trim() || null,
         name: item.name.trim(),
         category_id: cat.id,
         unit: item.unit || "pcs",
@@ -46,6 +46,7 @@ export async function applyOnboardingItemsToBranch(
         name: item.name.trim(),
         purchase_price: item.purchasePrice,
         unit: item.unit || product.unit,
+        barcode: item.barcode?.trim() || product.barcode,
       });
     }
 
@@ -56,7 +57,8 @@ export async function applyOnboardingItemsToBranch(
       sellingPrice: item.sellPrice,
       stock: verifiedStock,
       legacyStock,
-      reorderPoint: 5,
+      reorderPoint: item.reorderPoint ?? 5,
+      warehouseLocation: item.warehouseLocation?.trim() || null,
     });
 
     applied += 1;

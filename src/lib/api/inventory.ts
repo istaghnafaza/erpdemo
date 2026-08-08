@@ -4,6 +4,7 @@
 
 import { db as supabase, ok, fail, queryMany, isNeonBackend } from "./client";
 import { neonCall } from "./backend";
+import { invalidateResponseCache } from "./response-cache";
 import {
   neonAdjustStock,
   neonGetStockMovements,
@@ -183,6 +184,7 @@ export async function submitOpname(
       neonSubmitOpname({ data: { tenantId, branchId, userId, reference, items } }),
     );
     if (result.error) return fail(result.error);
+    invalidateResponseCache(`branch-products:${tenantId}:${branchId}`);
     return ok(result.data ?? []);
   }
   try {
