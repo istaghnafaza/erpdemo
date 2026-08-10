@@ -203,7 +203,10 @@ export async function getProductByBarcode(
 
 export async function createProduct(
   tenantId: string,
-  payload: Omit<ProductInsert, "tenant_id">
+  payload: Omit<ProductInsert, "tenant_id"> & {
+    stock_unit?: string | null;
+    sell_units?: import("@/lib/product-sell-units").SellUnitInput[];
+  },
 ): Promise<ApiResponse<Product>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>
@@ -230,7 +233,10 @@ export async function createProduct(
 export async function updateProduct(
   tenantId: string,
   productId: string,
-  updates: ProductUpdate
+  updates: ProductUpdate & {
+    stock_unit?: string | null;
+    sell_units?: import("@/lib/product-sell-units").SellUnitInput[];
+  },
 ): Promise<ApiResponse<Product>> {
   if (isNeonBackend()) {
     const result = await neonCall(() =>

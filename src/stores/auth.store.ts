@@ -138,6 +138,7 @@ const MOCK_TENANT: Tenant = {
   phone: "021-5551234",
   plan: "pro",
   trial_ends_at: null,
+  plan_renews_at: null,
   is_active: true,
   onboarding_complete: true,
   legacy_mode_active: false,

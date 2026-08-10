@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SmartProductNameBuilder } from "@/components/inventory/SmartProductNameBuilder";
+import {
+  SellUnitsEditor,
+  StockUnitField,
+  type SellUnitsEditorHandle,
+} from "@/components/inventory/SellUnitsEditor";
 import { ensureUniqueSku } from "@/lib/product-name-builder";
+import { isBulkMaterialCategory } from "@/lib/category-attribute-map";
 import { useProductAttributesStore } from "@/stores/product-attributes.store";
+import type { SellUnitInput } from "@/lib/product-sell-units";
 import type { ProductAttributeSelections } from "@/types/product-attributes";
 import type { MockProductOverride } from "@/stores/inventory.store";
 
@@ -55,6 +62,8 @@ export function ProductFormModal({
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [unit, setUnit] = useState("pcs");
+  const [stockUnit, setStockUnit] = useState("pcs");
+  const [sellUnits, setSellUnits] = useState<SellUnitInput[]>([]);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [initialStock, setInitialStock] = useState("");
@@ -66,6 +75,7 @@ export function ProductFormModal({
   const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sellUnitsRef = useRef<SellUnitsEditorHandle>(null);
 
   const hasAttributeBuilder = useMemo(
     () => !editing && listProductTypesForCategory(category).length > 0,
@@ -79,6 +89,8 @@ export function ProductFormModal({
     setName(defaults?.name ?? "");
     setCategory(defaults?.categoryName ?? categoryNames[0] ?? "");
     setUnit(defaults?.unit ?? "pcs");
+    setStockUnit(defaults?.stockUnit ?? defaults?.unit ?? "pcs");
+    setSellUnits(defaults?.sellUnits ? defaults.sellUnits.map((u) => ({ ...u })) : []);
     setPurchasePrice(String(defaults?.purchasePrice ?? ""));
     setSellingPrice(String(defaults?.sellingPrice ?? ""));
     setInitialStock(String(defaults?.initialStock ?? ""));
@@ -114,6 +126,7 @@ export function ProductFormModal({
       setError("Harga jual harus lebih besar dari harga beli");
       return;
     }
+    const flushedUnits = sellUnitsRef.current?.flush() ?? sellUnits.filter((u) => u.label.trim());
     setSaving(true);
     setError(null);
     const result = await onSave({
@@ -121,7 +134,9 @@ export function ProductFormModal({
       barcode: barcode.trim() || null,
       name: finalName,
       categoryName: category,
-      unit,
+      unit: stockUnit.trim() || unit,
+      stockUnit: stockUnit.trim() || unit,
+      sellUnits: flushedUnits.filter((u) => u.label.trim()),
       purchasePrice: purchase,
       sellingPrice: selling,
       initialStock: Number(initialStock) || 0,
@@ -161,11 +176,22 @@ export function ProductFormModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Satuan</Label>
-              <Input value={unit} onChange={(e) => setUnit(e.target.value)} />
-            </div>
+            <StockUnitField
+              value={stockUnit}
+              onChange={(next) => {
+                setStockUnit(next);
+                setUnit(next);
+              }}
+            />
           </div>
+
+          <SellUnitsEditor
+            ref={sellUnitsRef}
+            stockUnit={stockUnit || unit}
+            units={sellUnits}
+            onChange={setSellUnits}
+            showPasirTemplate={isBulkMaterialCategory(category)}
+          />
 
           {hasAttributeBuilder ? (
             <SmartProductNameBuilder

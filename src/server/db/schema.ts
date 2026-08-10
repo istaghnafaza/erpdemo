@@ -43,10 +43,59 @@ export const tenants = pgTable("tenants", {
   phone: text("phone"),
   plan: tenantPlanEnum("plan").notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  planRenewsAt: timestamp("plan_renews_at", { withTimezone: true }),
   isActive: boolean("is_active").notNull().default(true),
   onboardingComplete: boolean("onboarding_complete").notNull().default(false),
   legacyModeActive: boolean("legacy_mode_active").notNull().default(false),
   logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "trialing",
+  "active",
+  "past_due",
+  "canceled",
+]);
+
+export const planInvoiceStatusEnum = pgEnum("plan_invoice_status", [
+  "pending",
+  "paid",
+  "failed",
+  "expired",
+]);
+
+export const billingCycleEnum = pgEnum("billing_cycle", ["monthly", "yearly"]);
+
+export const tenantSubscriptions = pgTable("tenant_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .unique(),
+  plan: tenantPlanEnum("plan").notNull(),
+  status: subscriptionStatusEnum("status").notNull().default("trialing"),
+  billingCycle: billingCycleEnum("billing_cycle").notNull().default("monthly"),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  midtransOrderId: text("midtrans_order_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const planInvoices = pgTable("plan_invoices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  plan: tenantPlanEnum("plan").notNull(),
+  billingCycle: billingCycleEnum("billing_cycle").notNull().default("monthly"),
+  status: planInvoiceStatusEnum("status").notNull().default("pending"),
+  midtransOrderId: text("midtrans_order_id").notNull().unique(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  rawPayload: jsonb("raw_payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -165,6 +214,8 @@ export const products = pgTable(
       onDelete: "set null",
     }),
     unit: text("unit").notNull().default("pcs"),
+    /** Satuan dasar stok (m³ / kg / pcs). Default = unit. */
+    stockUnit: text("stock_unit"),
     purchasePrice: bigint("purchase_price", { mode: "number" }).notNull().default(0),
     isReturnable: boolean("is_returnable").notNull().default(true),
     returnBlockLabel: text("return_block_label"),
@@ -173,6 +224,31 @@ export const products = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique().on(t.tenantId, t.sku)],
+);
+
+/** Satuan jual alternatif — konversi ke satuan dasar stok (Model A curah). */
+export const productSellUnits = pgTable(
+  "product_sell_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    factorToBase: numeric("factor_to_base", { precision: 18, scale: 6 }).notNull().default("1"),
+    sellingPrice: bigint("selling_price", { mode: "number" }),
+    purchasePrice: bigint("purchase_price", { mode: "number" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    allowFraction: boolean("allow_fraction").notNull().default(false),
+    presetQty: jsonb("preset_qty").$type<number[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.productId, t.label)],
 );
 
 export const branchProducts = pgTable(
@@ -189,8 +265,8 @@ export const branchProducts = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     sellingPrice: bigint("selling_price", { mode: "number" }).notNull().default(0),
-    stock: integer("stock").notNull().default(0),
-    legacyStock: integer("legacy_stock").notNull().default(0),
+    stock: numeric("stock", { precision: 18, scale: 4 }).notNull().default("0"),
+    legacyStock: numeric("legacy_stock", { precision: 18, scale: 4 }).notNull().default("0"),
     reorderPoint: integer("reorder_point").notNull().default(0),
     warehouseLocation: text("warehouse_location"),
   },
@@ -225,9 +301,9 @@ export const stockMovements = pgTable("stock_movements", {
     .references(() => products.id, { onDelete: "cascade" }),
   type: movementTypeEnum("type").notNull(),
   stockSource: stockSourceEnum("stock_source").notNull().default("verified"),
-  qty: integer("qty").notNull(),
-  qtyBefore: integer("qty_before").notNull(),
-  qtyAfter: integer("qty_after").notNull(),
+  qty: numeric("qty", { precision: 18, scale: 4 }).notNull(),
+  qtyBefore: numeric("qty_before", { precision: 18, scale: 4 }).notNull(),
+  qtyAfter: numeric("qty_after", { precision: 18, scale: 4 }).notNull(),
   reference: text("reference"),
   notes: text("notes"),
   userId: uuid("user_id").references(() => profiles.id, { onDelete: "set null" }),
@@ -381,7 +457,7 @@ export const salesItems = pgTable("sales_items", {
   productName: text("product_name").notNull(),
   sku: text("sku").notNull(),
   unit: text("unit").notNull(),
-  qty: integer("qty").notNull(),
+  qty: numeric("qty", { precision: 18, scale: 4 }).notNull(),
   purchasePrice: bigint("purchase_price", { mode: "number" }).notNull().default(0),
   sellingPrice: bigint("selling_price", { mode: "number" }).notNull().default(0),
   discount: bigint("discount", { mode: "number" }).notNull().default(0),
@@ -390,6 +466,10 @@ export const salesItems = pgTable("sales_items", {
   /** Baris indent/SO — tidak mengurangi stok cabang saat checkout POS */
   isSoLine: boolean("is_so_line").notNull().default(false),
   qtyReturned: integer("qty_returned").notNull().default(0),
+  sellUnitId: uuid("sell_unit_id"),
+  sellUnitLabel: text("sell_unit_label"),
+  qtyBase: numeric("qty_base", { precision: 18, scale: 4 }),
+  factorToBase: numeric("factor_to_base", { precision: 18, scale: 6 }),
 });
 
 export const returnSettings = pgTable("return_settings", {

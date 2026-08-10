@@ -85,6 +85,30 @@ export const Route = createFileRoute("/$tenantSlug")({
   // This is where we do auth checks and tenant validation.
   // -------------------------------------------------------------------------
   beforeLoad: async ({ params, location }) => {
+    // Jangan tangkap path publik sebagai slug toko (mis. /landing → login)
+    const reserved = new Set([
+      "landing",
+      "login",
+      "register",
+      "pricing",
+      "platform",
+      "health",
+      "onboarding",
+      "api",
+      "auth",
+    ]);
+    const slug = params.tenantSlug.toLowerCase();
+    if (reserved.has(slug)) {
+      if (slug === "landing") throw redirect({ to: "/landing" });
+      if (slug === "login") throw redirect({ to: "/login" });
+      if (slug === "register") throw redirect({ to: "/register" });
+      if (slug === "pricing") throw redirect({ to: "/pricing" });
+      if (slug === "platform") throw redirect({ to: "/platform/dashboard" });
+      if (slug === "health") throw redirect({ to: "/health" });
+      if (slug === "onboarding") throw redirect({ to: "/onboarding" });
+      throw redirect({ to: "/landing" });
+    }
+
     const isPortalRoute = location.pathname.includes(`/${params.tenantSlug}/shop`);
 
     if (isPortalRoute) {

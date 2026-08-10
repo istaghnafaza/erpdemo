@@ -22,6 +22,7 @@ import {
   updateProduct,
   createProduct,
   upsertBranchProduct,
+  createCategory,
 } from "@/lib/api/products";
 import { queryKeys } from "@/lib/query-keys";
 import { getStockMovements } from "@/lib/api/inventory";
@@ -55,6 +56,8 @@ export interface InventoryProductRow {
   category: string;
   categoryId: string | null;
   unit: string;
+  stockUnit?: string;
+  sellUnits?: import("@/lib/product-sell-units").SellUnitInput[];
   stock: number;
   reorderPoint: number;
   purchasePrice: number;
@@ -183,6 +186,8 @@ export function useInventoryProducts() {
           category: override?.categoryName ?? MOCK_SKU_CATEGORY[bp.product.sku] ?? "Lainnya",
           categoryId: bp.product.category_id,
           unit: override?.unit ?? bp.product.unit,
+          stockUnit: override?.stockUnit ?? override?.unit ?? bp.product.unit,
+          sellUnits: override?.sellUnits,
           stock,
           reorderPoint,
           purchasePrice: override?.purchasePrice ?? bp.product.purchase_price,
@@ -210,6 +215,8 @@ export function useInventoryProducts() {
           category: override.categoryName ?? "Lainnya",
           categoryId: null,
           unit: override.unit ?? "pcs",
+          stockUnit: override.stockUnit ?? override.unit ?? "pcs",
+          sellUnits: override.sellUnits,
           stock,
           reorderPoint: override.reorderPoint ?? 5,
           purchasePrice: override.purchasePrice ?? 0,
@@ -272,6 +279,18 @@ export function useInventoryProducts() {
           category: cat,
           categoryId: bp.product.category_id,
           unit: bp.product.unit,
+          stockUnit: bp.product.stock_unit ?? bp.product.unit,
+          sellUnits: (bp.product.sell_units ?? []).map((u) => ({
+            id: u.id,
+            label: u.label,
+            factor_to_base: u.factor_to_base,
+            selling_price: u.selling_price,
+            purchase_price: u.purchase_price,
+            sort_order: u.sort_order,
+            is_active: u.is_active,
+            allow_fraction: u.allow_fraction,
+            preset_qty: u.preset_qty,
+          })),
           stock: bp.stock,
           reorderPoint: bp.reorder_point,
           purchasePrice: bp.product.purchase_price,
@@ -433,12 +452,28 @@ export function useInventoryProducts() {
       }
 
       if (editingProductId) {
+        let categoryId: string | null | undefined;
+        if (data.categoryName?.trim()) {
+          const existing = categories.find((c) => c.name === data.categoryName);
+          if (existing) {
+            categoryId = existing.id;
+          } else {
+            const createdCat = await createCategory(tenantId, {
+              name: data.categoryName.trim(),
+              icon: null,
+            });
+            categoryId = createdCat.data?.id ?? null;
+          }
+        }
         await updateProduct(tenantId, editingProductId, {
           sku: uniqueSku,
           barcode: data.barcode ?? null,
           name: data.name,
           unit: data.unit ?? "pcs",
+          stock_unit: data.stockUnit ?? data.unit ?? "pcs",
           purchase_price: data.purchasePrice ?? 0,
+          sell_units: data.sellUnits ?? [],
+          ...(categoryId !== undefined ? { category_id: categoryId } : {}),
         });
         await upsertBranchProduct(tenantId, branchId, editingProductId, {
           selling_price: data.sellingPrice ?? 0,
@@ -446,7 +481,25 @@ export function useInventoryProducts() {
           warehouse_location: data.warehouseLocation ?? "",
         });
       } else {
-        const cat = categories.find((c) => c.name === data.categoryName);
+        let categoryId: string | null = null;
+        if (data.categoryName?.trim()) {
+          const existing = categories.find((c) => c.name === data.categoryName);
+          if (existing) {
+            categoryId = existing.id;
+          } else {
+            const createdCat = await createCategory(tenantId, {
+              name: data.categoryName.trim(),
+              icon: null,
+            });
+            if (createdCat.error || !createdCat.data) {
+              return {
+                success: false,
+                error: createdCat.error ?? "Gagal membuat kategori produk",
+              };
+            }
+            categoryId = createdCat.data.id;
+          }
+        }
         const initialStock = data.initialStock ?? 0;
         const legacyQty = data.legacyStock ?? 0;
         const isLegacy = legacyQty > 0;
@@ -454,20 +507,23 @@ export function useInventoryProducts() {
           sku: uniqueSku,
           barcode: data.barcode ?? null,
           name: data.name,
-          category_id: cat?.id ?? null,
+          category_id: categoryId,
           unit: data.unit ?? "pcs",
+          stock_unit: data.stockUnit ?? data.unit ?? "pcs",
           purchase_price: data.purchasePrice ?? 0,
           is_active: true,
+          sell_units: data.sellUnits ?? [],
         });
-        if (created.data) {
-          await upsertBranchProduct(tenantId, branchId, created.data.id, {
-            selling_price: data.sellingPrice ?? 0,
-            reorder_point: data.reorderPoint ?? 5,
-            warehouse_location: data.warehouseLocation ?? "",
-            stock: isLegacy ? 0 : initialStock,
-            legacy_stock: isLegacy ? legacyQty : 0,
-          });
+        if (created.error || !created.data) {
+          return { success: false, error: created.error ?? "Gagal membuat produk" };
         }
+        await upsertBranchProduct(tenantId, branchId, created.data.id, {
+          selling_price: data.sellingPrice ?? 0,
+          reorder_point: data.reorderPoint ?? 5,
+          warehouse_location: data.warehouseLocation ?? "",
+          stock: isLegacy ? 0 : initialStock,
+          legacy_stock: isLegacy ? legacyQty : 0,
+        });
       }
       invalidateInventory();
       return { success: true };
@@ -497,6 +553,8 @@ export function useInventoryProducts() {
         name: row.name,
         categoryName: row.category,
         unit: row.unit,
+        stockUnit: row.stockUnit ?? row.unit,
+        sellUnits: row.sellUnits,
         purchasePrice: row.purchasePrice,
         sellingPrice: row.sellingPrice,
         reorderPoint: row.reorderPoint,

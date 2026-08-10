@@ -293,3 +293,28 @@ export function computeOpnameVarianceFromMovements(
 export function getMonthDateRange(): { from: string; to: string } {
   return financeMonthRange();
 }
+
+/** KPI ringan: agregasi penjualan multi-unit (qty jual vs qty dasar). */
+export function summarizeMultiUnitSales(
+  items: Array<{
+    sell_unit_label?: string | null;
+    qty: number;
+    qty_base?: number | null;
+    subtotal: number;
+    unit?: string;
+  }>,
+): Array<{ unitLabel: string; qtySell: number; qtyBase: number; revenue: number }> {
+  const map = new Map<string, { qtySell: number; qtyBase: number; revenue: number }>();
+  for (const item of items) {
+    const label = item.sell_unit_label || item.unit || "Satuan";
+    const cur = map.get(label) ?? { qtySell: 0, qtyBase: 0, revenue: 0 };
+    cur.qtySell += item.qty;
+    cur.qtyBase += item.qty_base ?? item.qty;
+    cur.revenue += item.subtotal;
+    map.set(label, cur);
+  }
+  return Array.from(map.entries())
+    .map(([unitLabel, v]) => ({ unitLabel, ...v }))
+    .sort((a, b) => b.revenue - a.revenue);
+}
+

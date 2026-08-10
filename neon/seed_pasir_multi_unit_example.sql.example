@@ -1,0 +1,14 @@
+-- Contoh manual (jangan dijalankan otomatis oleh neon:migrate).
+-- Ganti :tenant_id / :product_id / :branch_id sebelum apply.
+--
+-- INSERT INTO products (tenant_id, sku, name, unit, stock_unit, purchase_price, is_active)
+-- VALUES (:tenant_id, 'PSR-LMJ-HITAM', 'Pasir Hitam Lumajang', 'm³', 'm³', 350000, true)
+-- RETURNING id;
+--
+-- INSERT INTO product_sell_units (tenant_id, product_id, label, factor_to_base, selling_price, sort_order, allow_fraction, preset_qty)
+-- VALUES
+--   (:tenant_id, :product_id, 'Truk', 7, 2800000, 1, false, '[1]'::jsonb),
+--   (:tenant_id, :product_id, 'Pikap', 2.5, 1100000, 2, true, '[0.25,0.5,0.75,1]'::jsonb),
+--   (:tenant_id, :product_id, 'Sak', 0.025, 15000, 3, false, '[1,5,10]'::jsonb);
+--
+-- Atau di UI: Master Barang → kategori Pasir & Material Curah → tombol "Template pasir".

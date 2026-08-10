@@ -5,7 +5,7 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { invalidateBranchProducts } from "@/server/cache/invalidate";
-import { toBranchProduct, toStockMovement } from "@/server/db/mappers";
+import { toBranchProduct, toStockMovement, num, stockStr } from "@/server/db/mappers";
 import { branchProducts, stockMovements } from "@/server/db/schema";
 import type { BranchProduct, StockMovement, StockMovementInsert } from "@/types/database";
 import type { DateRangeFilter } from "@/types/app";
@@ -55,9 +55,9 @@ export async function insertStockMovement(
       productId: movement.product_id,
       type: movement.type,
       stockSource: movement.stock_source,
-      qty: movement.qty,
-      qtyBefore: movement.qty_before,
-      qtyAfter: movement.qty_after,
+      qty: stockStr(movement.qty),
+      qtyBefore: stockStr(movement.qty_before),
+      qtyAfter: stockStr(movement.qty_after),
       reference: movement.reference,
       notes: movement.notes,
       userId: movement.user_id,
@@ -92,12 +92,16 @@ export async function adjustStock(
 
     const source = options?.stockSource ?? "verified";
     const isLegacy = source === "legacy";
-    const currentQty = isLegacy ? bp.legacyStock : bp.stock;
+    const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
     const newQty = Math.max(0, currentQty + delta);
 
     const [updated] = await tx
       .update(branchProducts)
-      .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+      .set(
+        isLegacy
+          ? { legacyStock: stockStr(newQty) }
+          : { stock: stockStr(newQty) },
+      )
       .where(eq(branchProducts.id, bp.id))
       .returning();
 
@@ -107,9 +111,9 @@ export async function adjustStock(
       productId,
       type,
       stockSource: source,
-      qty: Math.abs(delta),
-      qtyBefore: currentQty,
-      qtyAfter: newQty,
+      qty: stockStr(Math.abs(delta)),
+      qtyBefore: stockStr(currentQty),
+      qtyAfter: stockStr(newQty),
       reference: options?.reference ?? null,
       notes: options?.notes ?? null,
       userId: options?.userId ?? null,

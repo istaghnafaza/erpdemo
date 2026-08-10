@@ -45,6 +45,7 @@ export interface Tenant {
   phone: string | null;
   plan: DbTenantPlan;
   trial_ends_at: string | null;
+  plan_renews_at: string | null;
   is_active: boolean;
   onboarding_complete: boolean;
   legacy_mode_active: boolean;
@@ -135,12 +136,16 @@ export interface Product {
   name: string;
   category_id: string | null;
   unit: string;
+  /** Satuan dasar stok; default = unit bila null. */
+  stock_unit?: string | null;
   purchase_price: number;   // integer — IDR rupiah
   is_returnable: boolean;
   return_block_label: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Diisi saat join / load catalog multi-unit. */
+  sell_units?: import("@/lib/product-sell-units").ProductSellUnit[];
 }
 
 export type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at'> & { id?: string };
@@ -246,7 +251,7 @@ export interface CartItem {
   discount: number;         // per-item discount in rupiah
   subtotal: number;
   stock_source: DbStockSource;
-  available_stock: number;  // for real-time validation
+  available_stock: number;  // for real-time validation (satuan dasar)
   /** Barang di-fulfill via Sales Order (indent) — tidak kurangi stok saat checkout POS */
   is_so_line?: boolean;
   /** Harga cabang sebelum diskon tier */
@@ -260,6 +265,15 @@ export interface CartItem {
   /** Diskon tier dibatasi margin min barang ini (anti rugi). */
   pricing_margin_limited?: boolean;
   price_override?: { unit_price: number; reason: string } | null;
+  /** Multi-unit: satuan jual terpilih */
+  sell_unit_id?: string | null;
+  sell_unit_label?: string | null;
+  factor_to_base?: number;
+  /** qty × factor — potongan stok dasar */
+  qty_base?: number;
+  allow_fraction?: boolean;
+  preset_qty?: number[];
+  stock_unit?: string;
 }
 
 
@@ -343,6 +357,10 @@ export interface SalesItem {
   /** Baris indent/SO — tidak kurangi stok toko saat checkout POS */
   is_so_line?: boolean;
   qty_returned: number;
+  sell_unit_id?: string | null;
+  sell_unit_label?: string | null;
+  qty_base?: number | null;
+  factor_to_base?: number | null;
 }
 
 export type SalesItemInsert = Omit<SalesItem, 'id' | 'transaction_id'> & { id?: string; transaction_id?: string };

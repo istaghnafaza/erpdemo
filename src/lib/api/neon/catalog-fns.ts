@@ -98,7 +98,13 @@ export const neonGetProductByBarcode = createServerFn({ method: "POST" })
 
 export const neonCreateProduct = createServerFn({ method: "POST" })
   .validator(
-    (data: { tenantId: string; payload: Omit<ProductInsert, "tenant_id"> }) => data,
+    (data: {
+      tenantId: string;
+      payload: Omit<ProductInsert, "tenant_id"> & {
+        stock_unit?: string | null;
+        sell_units?: import("@/lib/product-sell-units").SellUnitInput[];
+      };
+    }) => data,
   )
   .handler(async ({ data }) => {
     await requireTenant(data.tenantId);
@@ -108,7 +114,14 @@ export const neonCreateProduct = createServerFn({ method: "POST" })
 
 export const neonUpdateProduct = createServerFn({ method: "POST" })
   .validator(
-    (data: { tenantId: string; productId: string; updates: ProductUpdate }) => data,
+    (data: {
+      tenantId: string;
+      productId: string;
+      updates: ProductUpdate & {
+        stock_unit?: string | null;
+        sell_units?: import("@/lib/product-sell-units").SellUnitInput[];
+      };
+    }) => data,
   )
   .handler(async ({ data }) => {
     await requireTenant(data.tenantId);

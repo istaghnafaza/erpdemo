@@ -50,6 +50,7 @@ export interface CartPanelProps {
   heldCartCount: number;
   onUpdateQty: (itemIndex: number, qty: number) => void;
   onRemoveItem: (itemIndex: number) => void;
+  onChangeSellUnit?: (itemIndex: number, sellUnitId: string) => void;
   onSetDiscount: (percent: number) => void;
   onSetCustomer: (customer: Customer | null) => void;
   onAddCustomer: () => void;
@@ -79,6 +80,7 @@ export function CartPanel({
   heldCartCount,
   onUpdateQty,
   onRemoveItem,
+  onChangeSellUnit,
   onSetDiscount,
   onSetCustomer,
   onAddCustomer,
@@ -224,9 +226,17 @@ export function CartPanel({
                     )}
                   </div>
                   <PosLinePricingBreakdown item={item} variant="cart" className="mt-1" />
+                  {item.sell_unit_label && (
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Satuan jual: {item.sell_unit_label}
+                      {item.qty_base != null && item.stock_unit
+                        ? ` · potong stok ${item.qty_base} ${item.stock_unit}`
+                        : ""}
+                    </div>
+                  )}
                   {item.is_so_line && (
                     <div className="text-[10px] text-muted-foreground mt-0.5">
-                      indent / fulfillment gudang
+                      Kirim langsung / indent — stok toko tidak dipotong
                     </div>
                   )}
                 </div>
@@ -258,46 +268,104 @@ export function CartPanel({
                 </div>
               </div>
               <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    onClick={() => onUpdateQty(i, item.qty - 1)}
-                  >
-                    <Minus className="h-3 w-3" />
-                  </Button>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={item.is_so_line ? undefined : item.available_stock}
-                    value={item.qty}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === "") return;
-                      const v = Number(raw);
-                      if (Number.isFinite(v)) onUpdateQty(i, v);
-                    }}
-                    onBlur={(e) => {
-                      const v = Number(e.target.value);
-                      if (!Number.isFinite(v) || v < 1) onUpdateQty(i, 1);
-                      else if (!item.is_so_line && v > item.available_stock)
-                        onUpdateQty(i, item.available_stock);
-                      else onUpdateQty(i, Math.floor(v));
-                    }}
-                    className="h-7 w-14 px-1 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    aria-label={`Qty ${item.name}`}
-                  />
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    disabled={!item.is_so_line && item.qty >= item.available_stock}
-                    onClick={() => onUpdateQty(i, item.qty + 1)}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
+                <div className="flex flex-col gap-1">
+                  {(item.preset_qty?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {item.preset_qty!.map((p) => (
+                        <Button
+                          key={`${item.product_id}-preset-${p}`}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-1.5 text-[10px]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onUpdateQty(i, p);
+                          }}
+                        >
+                          {p} {item.unit}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-7 w-7"
+                      onClick={() =>
+                        onUpdateQty(
+                          i,
+                          item.allow_fraction || item.sell_unit_id
+                            ? Math.max(0.25, Math.round((item.qty - 0.25) * 100) / 100)
+                            : item.qty - 1,
+                        )
+                      }
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={item.allow_fraction || item.sell_unit_id ? 0.01 : 1}
+                      step={item.allow_fraction || item.sell_unit_id ? "0.25" : "1"}
+                      max={
+                        item.is_so_line
+                          ? undefined
+                          : item.factor_to_base && item.factor_to_base > 0
+                            ? item.available_stock / item.factor_to_base
+                            : item.available_stock
+                      }
+                      value={item.qty}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") return;
+                        const v = Number(raw);
+                        if (!Number.isFinite(v) || v <= 0) return;
+                        onUpdateQty(i, v);
+                      }}
+                      onBlur={(e) => {
+                        const v = Number(e.target.value);
+                        const allowFrac = Boolean(item.allow_fraction || item.sell_unit_id);
+                        const maxSell =
+                          item.factor_to_base && item.factor_to_base > 0
+                            ? item.available_stock / item.factor_to_base
+                            : item.available_stock;
+                        if (!Number.isFinite(v) || v <= 0) {
+                          onUpdateQty(i, allowFrac ? 0.25 : 1);
+                        } else if (!item.is_so_line && v > maxSell) {
+                          onUpdateQty(i, maxSell);
+                        } else {
+                          onUpdateQty(i, v);
+                        }
+                      }}
+                      className="h-7 w-14 px-1 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      aria-label={`Qty ${item.name}`}
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-7 w-7"
+                      disabled={
+                        !item.is_so_line &&
+                        (item.factor_to_base && item.factor_to_base > 0
+                          ? item.qty_base ?? item.qty * item.factor_to_base
+                          : item.qty) >= item.available_stock
+                      }
+                      onClick={() =>
+                        onUpdateQty(
+                          i,
+                          item.allow_fraction || item.sell_unit_id
+                            ? Math.round((item.qty + 0.25) * 100) / 100
+                            : item.qty + 1,
+                        )
+                      }
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground ml-1">{item.unit}</span>
+                  </div>
                 </div>
                 <div className="text-sm font-semibold">{rupiah(item.subtotal)}</div>
               </div>

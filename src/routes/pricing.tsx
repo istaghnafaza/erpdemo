@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Check,
@@ -11,16 +11,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UpgradePlanSheet } from "@/components/subscription/UpgradePlanSheet";
 import { APP_TAGLINE } from "@/lib/app-branding";
 import {
   formatPlanPrice,
   PLAN_LIMITS,
   PLAN_PRICING,
   TRIAL_DAYS,
+  type PaidTenantPlan,
 } from "@/lib/plan-config";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth.store";
 
 export const Route = createFileRoute("/pricing")({
+  validateSearch: (search: Record<string, unknown>): { plan?: PaidTenantPlan } => {
+    const plan = search.plan;
+    if (plan === "basic" || plan === "pro" || plan === "enterprise") {
+      return { plan };
+    }
+    return {};
+  },
   head: () => ({
     meta: [
       { title: "Harga & Paket — SEPS" },
@@ -45,7 +55,23 @@ const FEATURES = [
 ];
 
 function PricingPage() {
+  const { plan: planFromAd } = Route.useSearch();
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<PaidTenantPlan>(planFromAd ?? "pro");
+  const isOwner = useAuthStore((s) => s.currentUser?.isOwner ?? false);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  useEffect(() => {
+    if (!planFromAd) return;
+    setCheckoutPlan(planFromAd);
+    if (isOwner) setUpgradeOpen(true);
+  }, [planFromAd, isOwner]);
+
+  const openCheckout = (plan: PaidTenantPlan) => {
+    setCheckoutPlan(plan);
+    setUpgradeOpen(true);
+  };
 
   const plans = [
     {
@@ -75,7 +101,7 @@ function PricingPage() {
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "Toko tunggal — operasional harian rapi",
       limits: PLAN_LIMITS.basic,
-      cta: "Mulai Basic",
+      cta: isOwner ? "Bayar Basic" : "Mulai Basic",
       ctaTo: "/register" as const,
       features: [
         `${PLAN_LIMITS.basic.maxBranches} cabang`,
@@ -94,7 +120,7 @@ function PricingPage() {
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "Multi-cabang kecil — paling populer",
       limits: PLAN_LIMITS.pro,
-      cta: "Pilih Pro",
+      cta: isOwner ? "Bayar Pro" : "Pilih Pro",
       ctaTo: "/register" as const,
       features: [
         `${PLAN_LIMITS.pro.maxBranches} cabang`,
@@ -115,7 +141,7 @@ function PricingPage() {
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "3+ cabang atau skala besar",
       limits: PLAN_LIMITS.enterprise,
-      cta: "Hubungi Sales",
+      cta: isOwner ? "Bayar Enterprise" : "Hubungi Sales",
       ctaTo: "/register" as const,
       features: [
         "Cabang & user tanpa batas praktis",
@@ -140,12 +166,20 @@ function PricingPage() {
             </div>
           </Link>
           <div className="flex gap-2">
-            <Button asChild variant="ghost" className="text-white hover:bg-white/10">
-              <Link to="/login">Masuk</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/register">Daftar Trial</Link>
-            </Button>
+            {isAuthenticated ? (
+              <Button asChild variant="ghost" className="text-white hover:bg-white/10">
+                <Link to="/">Ke aplikasi</Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="ghost" className="text-white hover:bg-white/10">
+                  <Link to="/login">Masuk</Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/register">Daftar Trial</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -195,6 +229,7 @@ function PricingPage() {
               className={cn(
                 "p-6 flex flex-col shadow-card relative",
                 plan.highlight && "border-primary ring-2 ring-primary/20 scale-[1.02]",
+                planFromAd === plan.id && "border-primary ring-2 ring-primary/30",
               )}
             >
               {plan.highlight && (
@@ -217,9 +252,19 @@ function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Button asChild variant={plan.highlight ? "default" : "outline"} className="w-full">
-                <Link to={plan.ctaTo}>{plan.cta}</Link>
-              </Button>
+              {plan.id === "trial" || !isOwner ? (
+                <Button asChild variant={plan.highlight ? "default" : "outline"} className="w-full">
+                  <Link to={plan.ctaTo}>{plan.cta}</Link>
+                </Button>
+              ) : (
+                <Button
+                  variant={plan.highlight ? "default" : "outline"}
+                  className="w-full"
+                  onClick={() => openCheckout(plan.id)}
+                >
+                  {plan.cta}
+                </Button>
+              )}
             </Card>
           ))}
         </div>
@@ -267,11 +312,20 @@ function PricingPage() {
         </section>
 
         <p className="text-center text-xs text-muted-foreground mt-12">
-          Harga belum termasuk PPN. Pembayaran via transfer/invoice — integrasi gateway segera hadir.
+          Harga belum termasuk PPN. Pembayaran otomatis via Midtrans Snap (QRIS/VA/e-wallet).
           <br />
           Pertanyaan? WhatsApp tim SEPS atau daftar trial dulu — kami bantu onboarding.
         </p>
       </main>
+
+      {isOwner ? (
+        <UpgradePlanSheet
+          open={upgradeOpen}
+          onOpenChange={setUpgradeOpen}
+          initialPlan={checkoutPlan}
+          initialCycle={cycle}
+        />
+      ) : null}
     </div>
   );
 }

@@ -59,5 +59,23 @@ export function repriceCartItems(
   bundle: PricingBundle,
 ): CartItem[] {
   const cartGross = cartGrossSubtotalForPricing(items);
-  return items.map((item) => applyPricingToCartItem(item, customer, bundle, cartGross));
+  return items.map((item) => {
+    // Harga satuan jual (multi-unit) dikunci — jangan diubah engine volume/tier
+    if (item.price_override?.unit_price != null && item.sell_unit_id) {
+      const unit = item.price_override.unit_price;
+      return {
+        ...item,
+        base_selling_price: unit,
+        selling_price: unit,
+        discount: 0,
+        subtotal: unit * item.qty,
+        volume_tier_code: null,
+        volume_discount_percent: 0,
+        customer_discount_percent: 0,
+        pricing_clamped: false,
+        pricing_margin_limited: false,
+      };
+    }
+    return applyPricingToCartItem(item, customer, bundle, cartGross);
+  });
 }

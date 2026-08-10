@@ -236,7 +236,9 @@ function POSPage() {
           catalog={catalog}
           categories={categories}
           isLoading={catalogLoading}
-          onAdd={(item) => addProductToCart(item)}
+          onAdd={(item, sellUnitId, asSoLine) =>
+            addProductToCart(item, 1, sellUnitId, asSoLine)
+          }
           onAdded={handleProductAdded}
         />
 

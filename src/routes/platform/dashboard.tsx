@@ -59,6 +59,8 @@ function PlatformDashboardPage() {
   const user = useAuthStore((s) => s.currentUser);
   const [data, setData] = useState<PlatformDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [manualOrderId, setManualOrderId] = useState("");
+  const [markingPaid, setMarkingPaid] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -134,7 +136,9 @@ function PlatformDashboardPage() {
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Trial Aktif</div>
-              <div className="text-2xl font-bold mt-1">{overview ? angka(overview.trialTenants) : "—"}</div>
+              <div className="text-2xl font-bold mt-1">
+                {overview ? angka(overview.billing?.activeTrials ?? overview.trialTenants) : "—"}
+              </div>
             </div>
             <CreditCard className="h-5 w-5 text-amber-500" />
           </div>
@@ -162,6 +166,69 @@ function PlatformDashboardPage() {
           </div>
         </Card>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+        <Card className="p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">MRR Paket</div>
+          <div className="text-2xl font-bold mt-1">
+            {overview?.billing ? rupiah(overview.billing.mrr, { compact: true }) : "—"}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Langganan active (tahunan /12)</p>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Konversi 7h</div>
+          <div className="text-2xl font-bold mt-1">
+            {overview?.billing ? `${overview.billing.trialToPaidConversion7dPct}%` : "—"}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Trial → paid ≤7 hari (kohort 30h)</p>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Past Due</div>
+          <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">
+            {overview?.billing ? angka(overview.billing.pastDueCount) : "—"}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Sub past_due / invoice failed 7h</p>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Jatuh Tempo ≤7h</div>
+          <div className="text-2xl font-bold mt-1">
+            {overview?.billing ? angka(overview.billing.renewingWithin7d) : "—"}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Perlu follow-up perpanjang</p>
+        </Card>
+      </div>
+
+      <Card className="p-4 mb-6 flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-xs font-medium text-muted-foreground">Tandai lunas manual (order Midtrans)</label>
+          <input
+            className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
+            placeholder="seps-...-order-id"
+            value={manualOrderId}
+            onChange={(e) => setManualOrderId(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={markingPaid || !manualOrderId.trim()}
+          onClick={async () => {
+            setMarkingPaid(true);
+            const { markPlanInvoicePaidManual } = await import("@/lib/api/plan-billing");
+            const result = await markPlanInvoicePaidManual(manualOrderId.trim());
+            setMarkingPaid(false);
+            if (result.error) {
+              toast.error(result.error);
+              return;
+            }
+            toast.success(`Plan ${result.data?.plan} diaktifkan`);
+            setManualOrderId("");
+            void load();
+          }}
+        >
+          Tandai lunas
+        </Button>
+      </Card>
 
       <Card className="overflow-hidden">
         <div className="p-5 border-b flex items-center justify-between gap-3">

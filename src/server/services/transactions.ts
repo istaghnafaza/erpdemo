@@ -5,6 +5,7 @@
 import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { ensurePosSchema } from "@/server/db/ensure-pos-schema";
+import { ensureSellUnitsSchema } from "@/server/db/ensure-sell-units-schema";
 import { formatDbError, nullIfEmptyUuid } from "@/server/lib/format-db-error";
 import {
   invalidateBranchProducts,
@@ -15,7 +16,10 @@ import {
   toPosCart,
   toSalesItem,
   toSalesTransaction,
+  num,
+  stockStr,
 } from "@/server/db/mappers";
+import { toBaseQty, roundQty } from "@/lib/product-sell-units";
 import {
   branchProducts,
   branches,
@@ -108,7 +112,7 @@ async function deductStockInTx(
   tenantId: string,
   branchId: string,
   productId: string,
-  qty: number,
+  qtyBase: number,
   stockSource: SalesItem["stock_source"],
   reference: string,
   userId: string | null,
@@ -123,13 +127,17 @@ async function deductStockInTx(
   if (!bp) throw new Error(`STOCK_DEFICIT: produk tidak ditemukan`);
 
   const isLegacy = stockSource === "legacy";
-  const currentQty = isLegacy ? bp.legacyStock : bp.stock;
-  if (currentQty < qty) throw new Error(`STOCK_DEFICIT: ${productId}`);
+  const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
+  if (currentQty + 1e-9 < qtyBase) throw new Error(`STOCK_DEFICIT: ${productId}`);
 
-  const newQty = currentQty - qty;
+  const newQty = roundQty(currentQty - qtyBase);
   await tx
     .update(branchProducts)
-    .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+    .set(
+      isLegacy
+        ? { legacyStock: stockStr(newQty) }
+        : { stock: stockStr(newQty) },
+    )
     .where(eq(branchProducts.id, bp.id));
 
   await tx.insert(stockMovements).values({
@@ -138,12 +146,20 @@ async function deductStockInTx(
     productId,
     type: isLegacy ? "legacy_out" : "out",
     stockSource,
-    qty,
-    qtyBefore: currentQty,
-    qtyAfter: newQty,
+    qty: stockStr(qtyBase),
+    qtyBefore: stockStr(currentQty),
+    qtyAfter: stockStr(newQty),
     reference,
     userId,
   });
+}
+
+function resolveItemQtyBase(item: SalesItemInsert): number {
+  if (item.qty_base != null && Number.isFinite(Number(item.qty_base))) {
+    return roundQty(Number(item.qty_base));
+  }
+  const factor = item.factor_to_base != null ? Number(item.factor_to_base) : 1;
+  return toBaseQty(item.qty, factor > 0 ? factor : 1);
 }
 
 async function restoreStockInTx(
@@ -156,7 +172,11 @@ async function restoreStockInTx(
 ): Promise<void> {
   if (!item.product_id) return;
 
-  const restoreQty = Math.max(0, item.qty - (item.qty_returned ?? 0));
+  const base =
+    item.qty_base != null && Number.isFinite(Number(item.qty_base))
+      ? Number(item.qty_base)
+      : item.qty;
+  const restoreQty = Math.max(0, base - (item.qty_returned ?? 0));
   if (restoreQty <= 0) return;
 
   const bp = await tx.query.branchProducts.findFirst({
@@ -169,12 +189,16 @@ async function restoreStockInTx(
   if (!bp) return;
 
   const isLegacy = item.stock_source === "legacy";
-  const currentQty = isLegacy ? bp.legacyStock : bp.stock;
-  const newQty = currentQty + restoreQty;
+  const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
+  const newQty = roundQty(currentQty + restoreQty);
 
   await tx
     .update(branchProducts)
-    .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+    .set(
+      isLegacy
+        ? { legacyStock: stockStr(newQty) }
+        : { stock: stockStr(newQty) },
+    )
     .where(eq(branchProducts.id, bp.id));
 
   await tx.insert(stockMovements).values({
@@ -183,9 +207,9 @@ async function restoreStockInTx(
     productId: item.product_id,
     type: isLegacy ? "legacy_in" : "in",
     stockSource: item.stock_source,
-    qty: restoreQty,
-    qtyBefore: currentQty,
-    qtyAfter: newQty,
+    qty: stockStr(restoreQty),
+    qtyBefore: stockStr(currentQty),
+    qtyAfter: stockStr(newQty),
     reference,
     notes: "Void transaksi — stok dikembalikan",
     userId,
@@ -704,6 +728,7 @@ export async function createSaleTransaction(
   extras?: PosCheckoutExtras,
 ): Promise<SalesTransaction> {
   await ensurePosSchema();
+  await ensureSellUnitsSchema();
   const db = getDb();
 
   const clientTxId = nullIfEmptyUuid(transaction.client_tx_id ?? null);
@@ -782,8 +807,9 @@ async function createSaleTransactionInner(
       });
       if (!bp) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
       const isLegacy = item.stock_source === "legacy";
-      const currentQty = isLegacy ? bp.legacyStock : bp.stock;
-      if (currentQty < item.qty) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
+      const need = resolveItemQtyBase(item);
+      if (currentQty + 1e-9 < need) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
     }
 
     const [txRow] = await tx
@@ -822,21 +848,32 @@ async function createSaleTransactionInner(
 
     if (items.length > 0) {
       await tx.insert(salesItems).values(
-        items.map((item) => ({
-          transactionId: txRow.id,
-          tenantId,
-          productId: nullIfEmptyUuid(item.product_id),
-          productName: item.product_name,
-          sku: item.sku,
-          unit: item.unit,
-          qty: item.qty,
-          purchasePrice: item.purchase_price,
-          sellingPrice: item.selling_price,
-          discount: item.discount,
-          subtotal: item.subtotal,
-          stockSource: item.stock_source,
-          isSoLine: item.is_so_line === true,
-        })),
+        items.map((item) => {
+          const factor =
+            item.factor_to_base != null && Number(item.factor_to_base) > 0
+              ? Number(item.factor_to_base)
+              : 1;
+          const qtyBase = resolveItemQtyBase(item);
+          return {
+            transactionId: txRow.id,
+            tenantId,
+            productId: nullIfEmptyUuid(item.product_id),
+            productName: item.product_name,
+            sku: item.sku,
+            unit: item.unit,
+            qty: stockStr(item.qty),
+            purchasePrice: item.purchase_price,
+            sellingPrice: item.selling_price,
+            discount: item.discount,
+            subtotal: item.subtotal,
+            stockSource: item.stock_source,
+            isSoLine: item.is_so_line === true,
+            sellUnitId: nullIfEmptyUuid(item.sell_unit_id ?? null),
+            sellUnitLabel: item.sell_unit_label ?? null,
+            qtyBase: stockStr(qtyBase),
+            factorToBase: stockStr(factor),
+          };
+        }),
       );
     }
 
@@ -847,7 +884,7 @@ async function createSaleTransactionInner(
         tenantId,
         transaction.branch_id,
         item.product_id,
-        item.qty,
+        resolveItemQtyBase(item),
         item.stock_source,
         transactionNumber,
         transaction.paid_by,

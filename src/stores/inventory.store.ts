@@ -28,6 +28,7 @@ export interface MockProductOverride {
   name?: string;
   categoryName?: string;
   unit?: string;
+  stockUnit?: string;
   purchasePrice?: number;
   sellingPrice?: number;
   reorderPoint?: number;
@@ -35,6 +36,7 @@ export interface MockProductOverride {
   initialStock?: number;
   legacyStock?: number;
   isActive?: boolean;
+  sellUnits?: import("@/lib/product-sell-units").SellUnitInput[];
 }
 
 interface InventoryState {

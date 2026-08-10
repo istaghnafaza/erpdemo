@@ -48,6 +48,12 @@ import { applyPricingToCartItem } from "@/lib/apply-cart-pricing";
 import type { PricingBundle } from "@/types/pricing";
 import type { BranchProductWithProduct, Customer, CartItem } from "@/types/database";
 import type { PaymentMethod } from "@/types/app";
+import type { ProductSellUnit } from "@/lib/product-sell-units";
+import {
+  resolveSellPrice,
+  roundQty,
+  toBaseQty,
+} from "@/lib/product-sell-units";
 
 export type PosStockStatus = "normal" | "low" | "critical";
 
@@ -57,6 +63,7 @@ export interface PosCatalogItem {
   sku: string;
   name: string;
   unit: string;
+  stockUnit: string;
   category: string;
   categoryId: string | null;
   sellingPrice: number;
@@ -65,7 +72,11 @@ export interface PosCatalogItem {
   reorderPoint: number;
   stockStatus: PosStockStatus;
   stockSource: "verified" | "legacy" | "unverified";
+  /** Bisa ditambah dari stok toko */
   canAddToCart: boolean;
+  /** Stok 0 — masih bisa ditambah sebagai SO/indent */
+  canAddAsSo: boolean;
+  sellUnits: ProductSellUnit[];
 }
 
 export interface PosHeldCart {
@@ -236,6 +247,7 @@ export function usePos() {
         sku: line.sku,
         name: line.name,
         unit: line.unit,
+        stockUnit: line.unit,
         category: line.category,
         categoryId: null,
         sellingPrice: line.sellingPrice,
@@ -245,17 +257,38 @@ export function usePos() {
         stockStatus: stockStatusOf(line.stock, line.reorderPoint),
         stockSource: line.stockSource,
         canAddToCart: line.canAddToCart,
+        canAddAsSo: line.stock <= 0 && !line.canAddToCart,
+        sellUnits: (mockProductOverrides[line.productId]?.sellUnits ?? []).map((u, i) => ({
+          id: u.id ?? `mock-su-${line.productId}-${i}`,
+          tenant_id: tenantId,
+          product_id: line.productId,
+          label: u.label,
+          factor_to_base: u.factor_to_base,
+          selling_price: u.selling_price ?? null,
+          purchase_price: u.purchase_price ?? null,
+          sort_order: u.sort_order ?? i + 1,
+          is_active: u.is_active !== false,
+          allow_fraction: Boolean(u.allow_fraction),
+          preset_qty: u.preset_qty ?? [],
+          created_at: "",
+          updated_at: "",
+        })),
       }));
     }
 
-    return rawCatalog.map((bp) => {
-      const stock = Math.max(0, bp.stock);
+    return rawCatalog
+      .filter((bp) => bp.product.is_active !== false)
+      .map((bp) => {
+      const stock = Math.max(0, Number(bp.stock) || 0);
+      const sellUnits = bp.product.sell_units ?? [];
+      const canAddToCart = stock > 0;
       return {
         branchProductId: bp.id,
         productId: bp.product_id,
         sku: bp.product.sku,
         name: bp.product.name,
         unit: bp.product.unit,
+        stockUnit: bp.product.stock_unit ?? bp.product.unit,
         category: bp.product.category_id
           ? ((bp.product as unknown as { category?: { name: string } }).category?.name ?? "Lainnya")
           : (MOCK_SKU_CATEGORY[bp.product.sku] ?? "Lainnya"),
@@ -266,12 +299,15 @@ export function usePos() {
         reorderPoint: bp.reorder_point,
         stockStatus: stockStatusOf(stock, bp.reorder_point),
         stockSource: "verified" as const,
-        canAddToCart: stock > 0,
+        canAddToCart,
+        canAddAsSo: !canAddToCart,
+        sellUnits,
       };
     });
   }, [
     isMockTenant,
     branchId,
+    tenantId,
     legacyModeActive,
     mockStockDelta,
     mockStockAdjustments,
@@ -397,31 +433,61 @@ export function usePos() {
   // Cart item helpers
   // -------------------------------------------------------------------------
   const addProductToCart = useCallback(
-    (item: PosCatalogItem, qty = 1) => {
+    (item: PosCatalogItem, qty = 1, sellUnitId?: string | null, asSoLine = false) => {
       const availableStock =
         item.stock > 0 ? item.stock : legacyModeActive ? 9999 : 0;
+      const forceSo = asSoLine || (availableStock <= 0 && !legacyModeActive);
+      const units = item.sellUnits ?? [];
+      const selected =
+        (sellUnitId
+          ? units.find((u) => u.id === sellUnitId)
+          : units[0]) ?? null;
+      const factor = selected?.factor_to_base && selected.factor_to_base > 0
+        ? selected.factor_to_base
+        : 1;
+      const unitLabel = selected?.label ?? item.unit;
+      const hasFixedSellPrice =
+        selected?.selling_price != null &&
+        Number.isFinite(Number(selected.selling_price)) &&
+        Number(selected.selling_price) > 0;
+      const unitPrice = resolveSellPrice(selected, item.sellingPrice);
+      // Multi-unit: izinkan pecahan (0.5 pikap, dll.) — jangan floor ke integer
+      const sellQty = selected ? qty : Math.max(1, Math.round(qty));
+      const qtyBase = selected ? toBaseQty(sellQty, factor) : sellQty;
+
       let cartItem: CartItem = {
         product_id: item.productId,
         branch_product_id: item.branchProductId,
         sku: item.sku,
         name: item.name,
-        unit: item.unit,
-        qty,
-        selling_price: item.sellingPrice,
-        purchase_price: item.purchasePrice,
+        unit: unitLabel,
+        qty: sellQty,
+        selling_price: unitPrice,
+        purchase_price: selected?.purchase_price ?? item.purchasePrice,
         discount: 0,
-        subtotal: item.sellingPrice * qty,
+        subtotal: unitPrice * sellQty,
         stock_source: item.stockSource,
-        available_stock: availableStock,
-        is_so_line: false,
-        base_selling_price: item.sellingPrice,
+        available_stock: forceSo ? 9999 : availableStock,
+        is_so_line: forceSo,
+        base_selling_price: unitPrice,
         category_id: item.categoryId,
+        sell_unit_id: selected?.id ?? null,
+        sell_unit_label: selected?.label ?? null,
+        factor_to_base: factor,
+        qty_base: qtyBase,
+        allow_fraction: Boolean(selected),
+        preset_qty: selected?.preset_qty ?? [],
+        stock_unit: item.stockUnit,
+        // Kunci harga satuan jual agar engine pricing tidak mengubah (mis. 1.5jt → 1.650.001)
+        price_override: hasFixedSellPrice
+          ? { unit_price: unitPrice, reason: "Harga satuan jual" }
+          : null,
       };
-      if (pricingBundle) {
+      if (pricingBundle && !hasFixedSellPrice) {
         cartItem = applyPricingToCartItem(cartItem, activeCart.customer, pricingBundle);
       }
       addItemToCartFn(activeCartIndex, cartItem);
-      if (pricingBundle) {
+      if (pricingBundle && !hasFixedSellPrice) {
         repriceCartFn(activeCartIndex, pricingBundle);
       }
     },
@@ -435,6 +501,67 @@ export function usePos() {
     ],
   );
 
+  const updateActiveItemQty = useCallback(
+    (itemIndex: number, qty: number) => {
+      updateItemQtyFn(activeCartIndex, itemIndex, qty);
+      usePosStore.setState((s) => {
+        const item = s.carts[activeCartIndex]?.items[itemIndex];
+        if (!item) return;
+        const factor = item.factor_to_base && item.factor_to_base > 0 ? item.factor_to_base : 1;
+        item.qty_base = roundQty(item.qty * factor);
+        // Pertahankan harga satuan jual yang dikunci
+        if (item.price_override?.unit_price) {
+          item.selling_price = item.price_override.unit_price;
+          item.base_selling_price = item.price_override.unit_price;
+          item.discount = 0;
+          item.subtotal = item.price_override.unit_price * item.qty;
+        }
+      });
+      const line = usePosStore.getState().carts[activeCartIndex]?.items[itemIndex];
+      if (pricingBundle && !line?.price_override) {
+        repriceCartFn(activeCartIndex, pricingBundle);
+      }
+    },
+    [activeCartIndex, updateItemQtyFn, pricingBundle, repriceCartFn],
+  );
+
+  const changeCartItemSellUnit = useCallback(
+    (itemIndex: number, sellUnitId: string, catalogItem: PosCatalogItem) => {
+      const unit = catalogItem.sellUnits.find((u) => u.id === sellUnitId);
+      if (!unit) return;
+      usePosStore.setState((s) => {
+        const item = s.carts[activeCartIndex]?.items[itemIndex];
+        if (!item) return;
+        const hasFixed =
+          unit.selling_price != null &&
+          Number.isFinite(Number(unit.selling_price)) &&
+          Number(unit.selling_price) > 0;
+        const price = resolveSellPrice(unit, catalogItem.sellingPrice);
+        const qty = item.qty > 0 ? item.qty : 1;
+        item.qty = qty;
+        item.sell_unit_id = unit.id;
+        item.sell_unit_label = unit.label;
+        item.unit = unit.label;
+        item.factor_to_base = unit.factor_to_base;
+        item.qty_base = toBaseQty(qty, unit.factor_to_base);
+        item.allow_fraction = true;
+        item.preset_qty = unit.preset_qty;
+        item.selling_price = price;
+        item.base_selling_price = price;
+        item.discount = 0;
+        item.subtotal = price * qty;
+        item.price_override = hasFixed
+          ? { unit_price: price, reason: "Harga satuan jual" }
+          : null;
+      });
+      const line = usePosStore.getState().carts[activeCartIndex]?.items[itemIndex];
+      if (pricingBundle && !line?.price_override) {
+        repriceCartFn(activeCartIndex, pricingBundle);
+      }
+    },
+    [activeCartIndex, pricingBundle, repriceCartFn],
+  );
+
   useEffect(() => {
     if (!pricingBundle) return;
     repriceCartFn(activeCartIndex, pricingBundle);
@@ -445,16 +572,6 @@ export function usePos() {
     activeCartIndex,
     repriceCartFn,
   ]);
-
-  const updateActiveItemQty = useCallback(
-    (itemIndex: number, qty: number) => {
-      updateItemQtyFn(activeCartIndex, itemIndex, qty);
-      if (pricingBundle) {
-        repriceCartFn(activeCartIndex, pricingBundle);
-      }
-    },
-    [activeCartIndex, updateItemQtyFn, pricingBundle, repriceCartFn],
-  );
 
   const removeActiveItem = useCallback(
     (itemIndex: number) => removeItemFn(activeCartIndex, itemIndex),
@@ -685,6 +802,7 @@ export function usePos() {
 
     // Items
     addProductToCart,
+    changeCartItemSellUnit,
     updateActiveItemQty,
     removeActiveItem,
     setActiveDiscount,

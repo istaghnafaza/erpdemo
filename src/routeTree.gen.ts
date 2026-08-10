@@ -13,6 +13,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LandingRouteImport } from './routes/landing'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,6 +38,7 @@ import { Route as TenantSlugFinanceIndexRouteImport } from './routes/$tenantSlug
 import { Route as TenantSlugDeliveriesIndexRouteImport } from './routes/$tenantSlug/deliveries/index'
 import { Route as TenantSlugCustomersIndexRouteImport } from './routes/$tenantSlug/customers/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
+import { Route as ApiMidtransNotificationRouteImport } from './routes/api/midtrans/notification'
 import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
 import { Route as TenantSlugSettingsPricingRouteImport } from './routes/$tenantSlug/settings/pricing'
 import { Route as TenantSlugSalesTransactionsRouteImport } from './routes/$tenantSlug/sales/transactions'
@@ -73,6 +75,11 @@ const PlatformRoute = PlatformRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LandingRoute = LandingRouteImport.update({
+  id: '/landing',
+  path: '/landing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -200,6 +207,11 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   path: '/auth/google/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMidtransNotificationRoute = ApiMidtransNotificationRouteImport.update({
+  id: '/api/midtrans/notification',
+  path: '/api/midtrans/notification',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TenantSlugShopOrdersRoute = TenantSlugShopOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -304,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
@@ -333,6 +346,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
@@ -351,6 +365,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
@@ -379,6 +394,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries': typeof TenantSlugDeliveriesIndexRoute
@@ -398,6 +414,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
   '/health': typeof HealthRoute
+  '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
@@ -427,6 +444,7 @@ export interface FileRoutesById {
   '/$tenantSlug/sales/transactions': typeof TenantSlugSalesTransactionsRoute
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
+  '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
@@ -447,6 +465,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$tenantSlug'
     | '/health'
+    | '/landing'
     | '/login'
     | '/platform'
     | '/pricing'
@@ -476,6 +495,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
+    | '/api/midtrans/notification'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
     | '/$tenantSlug/deliveries/'
@@ -494,6 +514,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$tenantSlug'
     | '/health'
+    | '/landing'
     | '/login'
     | '/platform'
     | '/pricing'
@@ -522,6 +543,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
+    | '/api/midtrans/notification'
     | '/auth/google/callback'
     | '/$tenantSlug/customers'
     | '/$tenantSlug/deliveries'
@@ -540,6 +562,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$tenantSlug'
     | '/health'
+    | '/landing'
     | '/login'
     | '/platform'
     | '/pricing'
@@ -569,6 +592,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/sales/transactions'
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
+    | '/api/midtrans/notification'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
     | '/$tenantSlug/deliveries/'
@@ -588,11 +612,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TenantSlugRoute: typeof TenantSlugRouteWithChildren
   HealthRoute: typeof HealthRoute
+  LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
   PlatformRoute: typeof PlatformRouteWithChildren
   PricingRoute: typeof PricingRoute
   RegisterRoute: typeof RegisterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
+  ApiMidtransNotificationRoute: typeof ApiMidtransNotificationRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
 
@@ -624,6 +650,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/landing': {
+      id: '/landing'
+      path: '/landing'
+      fullPath: '/landing'
+      preLoaderRoute: typeof LandingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -792,6 +825,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/google/callback'
       fullPath: '/auth/google/callback'
       preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/midtrans/notification': {
+      id: '/api/midtrans/notification'
+      path: '/api/midtrans/notification'
+      fullPath: '/api/midtrans/notification'
+      preLoaderRoute: typeof ApiMidtransNotificationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$tenantSlug/shop/orders': {
@@ -1025,11 +1065,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TenantSlugRoute: TenantSlugRouteWithChildren,
   HealthRoute: HealthRoute,
+  LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
   PlatformRoute: PlatformRouteWithChildren,
   PricingRoute: PricingRoute,
   RegisterRoute: RegisterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
+  ApiMidtransNotificationRoute: ApiMidtransNotificationRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }
 export const routeTree = rootRouteImport

@@ -36,6 +36,7 @@
     "neon:diagnose:pos": "npx tsx scripts/diagnose-pos-checkout.ts",
     "neon:staging:branch": "node scripts/setup-neon-staging-branch.mjs",
     "neon:housekeeping:sessions": "node scripts/close-orphan-cashier-sessions.mjs",
+    "neon:plan:renew-check": "npx tsx scripts/plan-renew-check.ts",
     "railway:env": "node scripts/print-railway-env.mjs",
     "railway:env:staging": "node scripts/print-railway-staging-env.mjs"
   },

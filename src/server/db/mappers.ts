@@ -45,6 +45,7 @@ import type {
   posCarts,
   productCategories,
   products,
+  productSellUnits,
   profiles,
   salesItems,
   salesTransactions,
@@ -96,6 +97,18 @@ type SalesOrderItemRow = typeof salesOrderItems.$inferSelect;
 type SoFulfillmentRow = typeof soFulfillments.$inferSelect;
 type StockTransferRow = typeof stockTransfers.$inferSelect;
 type StockTransferItemRow = typeof stockTransferItems.$inferSelect;
+type ProductSellUnitRow = typeof productSellUnits.$inferSelect;
+
+/** Coerce Drizzle numeric (string | number) → number. */
+export function num(value: string | number | null | undefined, fallback = 0): number {
+  if (value == null || value === "") return fallback;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function stockStr(value: number): string {
+  return String(Number.isFinite(value) ? value : 0);
+}
 
 export function toTenant(row: TenantRow): Tenant {
   return {
@@ -106,6 +119,7 @@ export function toTenant(row: TenantRow): Tenant {
     phone: row.phone,
     plan: row.plan,
     trial_ends_at: row.trialEndsAt?.toISOString() ?? null,
+    plan_renews_at: row.planRenewsAt?.toISOString() ?? null,
     is_active: row.isActive,
     onboarding_complete: row.onboardingComplete,
     legacy_mode_active: row.legacyModeActive,
@@ -168,10 +182,30 @@ export function toProduct(row: ProductRow): Product {
     name: row.name,
     category_id: row.categoryId,
     unit: row.unit,
+    stock_unit: row.stockUnit ?? row.unit,
     purchase_price: row.purchasePrice,
     is_returnable: row.isReturnable,
     return_block_label: row.returnBlockLabel,
     is_active: row.isActive,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+export function toProductSellUnit(row: ProductSellUnitRow): import("@/lib/product-sell-units").ProductSellUnit {
+  const preset = Array.isArray(row.presetQty) ? row.presetQty.map((v) => num(v as never)) : [];
+  return {
+    id: row.id,
+    tenant_id: row.tenantId,
+    product_id: row.productId,
+    label: row.label,
+    factor_to_base: num(row.factorToBase, 1),
+    selling_price: row.sellingPrice ?? null,
+    purchase_price: row.purchasePrice ?? null,
+    sort_order: row.sortOrder,
+    is_active: row.isActive,
+    allow_fraction: row.allowFraction,
+    preset_qty: preset,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -184,8 +218,8 @@ export function toBranchProduct(row: BranchProductRow): BranchProduct {
     branch_id: row.branchId,
     product_id: row.productId,
     selling_price: row.sellingPrice,
-    stock: row.stock,
-    legacy_stock: row.legacyStock,
+    stock: num(row.stock),
+    legacy_stock: num(row.legacyStock),
     reorder_point: row.reorderPoint,
     warehouse_location: row.warehouseLocation,
   };
@@ -233,9 +267,9 @@ export function toStockMovement(row: StockMovementRow): StockMovement {
     product_id: row.productId,
     type: row.type,
     stock_source: row.stockSource,
-    qty: row.qty,
-    qty_before: row.qtyBefore,
-    qty_after: row.qtyAfter,
+    qty: num(row.qty),
+    qty_before: num(row.qtyBefore),
+    qty_after: num(row.qtyAfter),
     reference: row.reference,
     notes: row.notes,
     user_id: row.userId,
@@ -330,7 +364,7 @@ export function toSalesItem(row: SalesItemRow): SalesItem {
     product_name: row.productName,
     sku: row.sku,
     unit: row.unit,
-    qty: row.qty,
+    qty: num(row.qty),
     purchase_price: row.purchasePrice,
     selling_price: row.sellingPrice,
     discount: row.discount,
@@ -338,6 +372,10 @@ export function toSalesItem(row: SalesItemRow): SalesItem {
     stock_source: row.stockSource,
     is_so_line: row.isSoLine,
     qty_returned: row.qtyReturned,
+    sell_unit_id: row.sellUnitId ?? null,
+    sell_unit_label: row.sellUnitLabel ?? null,
+    qty_base: row.qtyBase != null ? num(row.qtyBase) : num(row.qty),
+    factor_to_base: row.factorToBase != null ? num(row.factorToBase, 1) : 1,
   };
 }
 

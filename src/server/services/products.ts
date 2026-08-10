@@ -4,6 +4,7 @@
 
 import { and, asc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { ensureSellUnitsSchema } from "@/server/db/ensure-sell-units-schema";
 import {
   branchProductsKey,
   branchProductsMultiKey,
@@ -25,6 +26,9 @@ import {
   toProductCategory,
 } from "@/server/db/mappers";
 import { branchProducts, productCategories, products } from "@/server/db/schema";
+import { listSellUnitsForProducts, replaceProductSellUnits } from "@/server/services/sell-units";
+import { stockStr } from "@/server/db/mappers";
+import type { SellUnitInput } from "@/lib/product-sell-units";
 import type {
   BranchProduct,
   BranchProductUpdate,
@@ -52,6 +56,14 @@ export async function createCategory(
   payload: Omit<ProductCategoryInsert, "tenant_id">,
 ): Promise<ProductCategory> {
   const db = getDb();
+  const existing = await db.query.productCategories.findFirst({
+    where: and(
+      eq(productCategories.tenantId, tenantId),
+      eq(productCategories.name, payload.name),
+    ),
+  });
+  if (existing) return toProductCategory(existing);
+
   const [row] = await db
     .insert(productCategories)
     .values({
@@ -60,7 +72,20 @@ export async function createCategory(
       name: payload.name,
       icon: payload.icon,
     })
+    .onConflictDoNothing({ target: [productCategories.tenantId, productCategories.name] })
     .returning();
+
+  if (!row) {
+    const again = await db.query.productCategories.findFirst({
+      where: and(
+        eq(productCategories.tenantId, tenantId),
+        eq(productCategories.name, payload.name),
+      ),
+    });
+    if (again) return toProductCategory(again);
+    throw new Error("Gagal membuat kategori");
+  }
+
   await invalidateCategories(tenantId);
   return toProductCategory(row);
 }
@@ -111,9 +136,14 @@ export async function getProductByBarcode(
 
 export async function createProduct(
   tenantId: string,
-  payload: Omit<ProductInsert, "tenant_id">,
+  payload: Omit<ProductInsert, "tenant_id"> & {
+    stock_unit?: string | null;
+    sell_units?: SellUnitInput[];
+  },
 ): Promise<Product> {
+  await ensureSellUnitsSchema();
   const db = getDb();
+  const stockUnit = payload.stock_unit?.trim() || payload.unit;
   const [row] = await db
     .insert(products)
     .values({
@@ -124,21 +154,32 @@ export async function createProduct(
       name: payload.name,
       categoryId: payload.category_id,
       unit: payload.unit,
+      stockUnit,
       purchasePrice: payload.purchase_price,
       isReturnable: payload.is_returnable ?? true,
       returnBlockLabel: payload.return_block_label ?? null,
       isActive: payload.is_active ?? true,
     })
     .returning();
+  const product = toProduct(row);
+  if (payload.sell_units?.length) {
+    product.sell_units = await replaceProductSellUnits(tenantId, product.id, payload.sell_units);
+  } else {
+    product.sell_units = [];
+  }
   await invalidateBranchProducts(tenantId);
-  return toProduct(row);
+  return product;
 }
 
 export async function updateProduct(
   tenantId: string,
   productId: string,
-  updates: ProductUpdate,
+  updates: ProductUpdate & {
+    stock_unit?: string | null;
+    sell_units?: SellUnitInput[];
+  },
 ): Promise<Product | null> {
+  await ensureSellUnitsSchema();
   const db = getDb();
   const patch: Partial<typeof products.$inferInsert> = {};
   if (updates.sku !== undefined) patch.sku = updates.sku;
@@ -146,24 +187,40 @@ export async function updateProduct(
   if (updates.name !== undefined) patch.name = updates.name;
   if (updates.category_id !== undefined) patch.categoryId = updates.category_id;
   if (updates.unit !== undefined) patch.unit = updates.unit;
+  if (updates.stock_unit !== undefined) {
+    patch.stockUnit = updates.stock_unit?.trim() || null;
+  } else if (updates.unit !== undefined) {
+    patch.stockUnit = updates.unit;
+  }
   if (updates.purchase_price !== undefined) patch.purchasePrice = updates.purchase_price;
   if (updates.is_returnable !== undefined) patch.isReturnable = updates.is_returnable;
   if (updates.return_block_label !== undefined) patch.returnBlockLabel = updates.return_block_label;
   if (updates.is_active !== undefined) patch.isActive = updates.is_active;
+  patch.updatedAt = new Date();
 
   const [row] = await db
     .update(products)
     .set(patch)
     .where(and(eq(products.tenantId, tenantId), eq(products.id, productId)))
     .returning();
-  if (row) await invalidateBranchProducts(tenantId);
-  return row ? toProduct(row) : null;
+  if (!row) return null;
+
+  const product = toProduct(row);
+  if (updates.sell_units !== undefined) {
+    product.sell_units = await replaceProductSellUnits(tenantId, productId, updates.sell_units);
+  } else {
+    const map = await listSellUnitsForProducts(tenantId, [productId]);
+    product.sell_units = map.get(productId) ?? [];
+  }
+  await invalidateBranchProducts(tenantId);
+  return product;
 }
 
 async function fetchBranchProductsFromDb(
   tenantId: string,
   branchIds: string[],
 ): Promise<Record<string, BranchProductWithProduct[]>> {
+  await ensureSellUnitsSchema();
   const db = getDb();
   const byBranch = Object.fromEntries(branchIds.map((id) => [id, [] as BranchProductWithProduct[]]));
   if (branchIds.length === 0) return byBranch;
@@ -184,6 +241,16 @@ async function fetchBranchProductsFromDb(
   for (const { bp, product, category } of rows) {
     byBranch[bp.branchId]?.push(toBranchProductWithProduct(bp, product, category));
   }
+
+  const productIds = Array.from(new Set(rows.map((r) => r.product.id)));
+  const sellUnitsMap = await listSellUnitsForProducts(tenantId, productIds);
+  for (const branchId of Object.keys(byBranch)) {
+    for (const item of byBranch[branchId] ?? []) {
+      item.product.sell_units = sellUnitsMap.get(item.product_id) ?? [];
+      if (!item.product.stock_unit) item.product.stock_unit = item.product.unit;
+    }
+  }
+
   return byBranch;
 }
 
@@ -281,8 +348,8 @@ export async function upsertBranchProduct(
       sellingPrice: payload.selling_price,
       reorderPoint: payload.reorder_point,
       warehouseLocation: payload.warehouse_location,
-      stock,
-      legacyStock,
+      stock: stockStr(stock),
+      legacyStock: stockStr(legacyStock),
     })
     .onConflictDoUpdate({
       target: [branchProducts.branchId, branchProducts.productId],
@@ -290,8 +357,10 @@ export async function upsertBranchProduct(
         sellingPrice: payload.selling_price,
         reorderPoint: payload.reorder_point,
         warehouseLocation: payload.warehouse_location,
-        ...(payload.stock !== undefined ? { stock: payload.stock } : {}),
-        ...(payload.legacy_stock !== undefined ? { legacyStock: payload.legacy_stock } : {}),
+        ...(payload.stock !== undefined ? { stock: stockStr(payload.stock) } : {}),
+        ...(payload.legacy_stock !== undefined
+          ? { legacyStock: stockStr(payload.legacy_stock) }
+          : {}),
       },
     })
     .returning();
@@ -307,8 +376,8 @@ export async function updateBranchProductById(
   const db = getDb();
   const patch: Partial<typeof branchProducts.$inferInsert> = {};
   if (updates.selling_price !== undefined) patch.sellingPrice = updates.selling_price;
-  if (updates.stock !== undefined) patch.stock = updates.stock;
-  if (updates.legacy_stock !== undefined) patch.legacyStock = updates.legacy_stock;
+  if (updates.stock !== undefined) patch.stock = stockStr(updates.stock);
+  if (updates.legacy_stock !== undefined) patch.legacyStock = stockStr(updates.legacy_stock);
   if (updates.reorder_point !== undefined) patch.reorderPoint = updates.reorder_point;
   if (updates.warehouse_location !== undefined) patch.warehouseLocation = updates.warehouse_location;
 

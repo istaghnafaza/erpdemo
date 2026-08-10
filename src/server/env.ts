@@ -66,6 +66,12 @@ const SERVER_ENV_KEYS = [
   "PLATFORM_ADMIN_PASSWORD",
   "PLATFORM_ADMIN_EMAIL",
   "PLATFORM_ADMIN_NAME",
+  "MIDTRANS_SERVER_KEY",
+  "MIDTRANS_CLIENT_KEY",
+  "MIDTRANS_IS_PRODUCTION",
+  "MIDTRANS_NOTIFICATION_URL",
+  "PLAN_OPS_TELEGRAM_BOT_TOKEN",
+  "PLAN_OPS_TELEGRAM_CHAT_ID",
 ] as const;
 
 /** Which expected keys exist in process.env (helps debug Railway misconfiguration). */

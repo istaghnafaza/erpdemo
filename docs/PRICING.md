@@ -77,13 +77,26 @@ Termasuk: prioritas onboarding, SLA, account manager.
 
 ## Cara Order
 
-1. **Self-service:** Daftar trial → uji 7 hari → hubungi tim SEPS untuk upgrade & invoice.
-2. **Sales call:** Booking demo 15 menit → pilih paket → transfer → aktivasi plan di sistem.
+1. **Self-service (otomatis):** Daftar trial → uji 7 hari → di app / `/pricing` pilih paket → bayar Midtrans Snap (QRIS/VA/GoPay) → webhook aktifkan plan.
+2. **Exception:** gagal bayar berulang, dispute, atau transfer di luar Snap → platform admin **Tandai lunas manual** (order id).
 
 **Kontak:** Tim SEPS / Faza Group · WhatsApp sales
 
-*Harga belum termasuk PPN. Pembayaran transfer/invoice; gateway otomatis coming soon.*
+*Harga belum termasuk PPN.*
+
+### Midtrans (ops)
+
+```
+MIDTRANS_SERVER_KEY=
+MIDTRANS_CLIENT_KEY=
+MIDTRANS_IS_PRODUCTION=false
+MIDTRANS_NOTIFICATION_URL=https://staging.seps.fazagroup.id/api/midtrans/notification
+PLAN_OPS_TELEGRAM_BOT_TOKEN=   # opsional alert past_due / jatuh tempo
+PLAN_OPS_TELEGRAM_CHAT_ID=
+```
+
+Cron harian (reminder + `past_due`): `npm run neon:plan:renew-check`
 
 ---
 
-**URL pricing live:** `/pricing` · **Registrasi:** `/register`
+**URL pricing live:** `/pricing` · **Registrasi:** `/register` · **Webhook:** `POST /api/midtrans/notification`

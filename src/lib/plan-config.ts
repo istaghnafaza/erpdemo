@@ -33,6 +33,31 @@ export const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
   enterprise: { maxBranches: 999, maxUsers: 999, label: "Enterprise" },
 };
 
+export type PaidTenantPlan = Exclude<TenantPlan, "trial">;
+
+export function isPaidPlan(plan: string): plan is PaidTenantPlan {
+  return plan === "basic" || plan === "pro" || plan === "enterprise";
+}
+
+/** Gross amount (IDR) for Midtrans / invoice.
+ * `PLAN_PRICING.*.yearly` = harga /bulan saat bayar tahunan (hemat ~17%);
+ * tagihan tahunan = yearly × 12.
+ */
+export function getPlanCheckoutAmount(plan: PaidTenantPlan, cycle: BillingCycle): number {
+  const pricing = PLAN_PRICING[plan];
+  return cycle === "yearly" ? pricing.yearly * 12 : pricing.monthly;
+}
+
+/** MRR contribution for an active paid subscription (yearly sticker = monthly equiv). */
+export function getPlanMrrContribution(plan: PaidTenantPlan, cycle: BillingCycle): number {
+  const pricing = PLAN_PRICING[plan];
+  return cycle === "yearly" ? pricing.yearly : pricing.monthly;
+}
+
+export function getPlanPeriodDays(cycle: BillingCycle): number {
+  return cycle === "yearly" ? 365 : 30;
+}
+
 export function formatPlanPrice(amount: number): string {
   if (amount >= 1_000_000) {
     const jt = amount / 1_000_000;

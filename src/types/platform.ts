@@ -20,6 +20,14 @@ export interface PlatformTenantRow {
   txCount30d: number;
 }
 
+export interface PlatformBillingKpis {
+  activeTrials: number;
+  trialToPaidConversion7dPct: number;
+  mrr: number;
+  pastDueCount: number;
+  renewingWithin7d: number;
+}
+
 export interface PlatformOverview {
   totalTenants: number;
   activeTenants: number;
@@ -27,6 +35,7 @@ export interface PlatformOverview {
   onboardingPending: number;
   totalRevenue30d: number;
   totalTx30d: number;
+  billing: PlatformBillingKpis;
 }
 
 export interface PlatformDashboardData {

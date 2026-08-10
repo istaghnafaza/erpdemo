@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { Crown, Settings, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +11,7 @@ import { initials, roleLabel } from "@/types/app";
 import type { AuthUser } from "@/types/app";
 import type { Tenant } from "@/types/database";
 import { AccountProfileDialog } from "@/components/account/AccountProfileDialog";
+import { UpgradePlanSheet } from "@/components/subscription/UpgradePlanSheet";
 
 const PLAN_BADGE: Record<string, string> = {
   trial: "bg-amber-500/20 text-amber-100",
@@ -27,6 +27,7 @@ interface SidebarAccountPlanProps {
 
 export function SidebarAccountPlan({ tenant, user }: SidebarAccountPlanProps) {
   const [profileOpen, setProfileOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   if (!tenant || !user) return null;
 
@@ -34,6 +35,7 @@ export function SidebarAccountPlan({ tenant, user }: SidebarAccountPlanProps) {
   const trialExpired = tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at);
   const trialDaysLeft = trialDaysRemaining(tenant.trial_ends_at);
   const showUpgrade = tenant.plan !== "enterprise";
+  const canCheckout = user.isOwner;
 
   return (
     <>
@@ -82,18 +84,25 @@ export function SidebarAccountPlan({ tenant, user }: SidebarAccountPlanProps) {
         </div>
 
         <Button
-          asChild
           size="sm"
           className="w-full h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+          onClick={() => {
+            if (canCheckout && showUpgrade) {
+              setUpgradeOpen(true);
+              return;
+            }
+            window.location.href = "/pricing";
+          }}
         >
-          <Link to="/pricing">
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            {showUpgrade ? "Upgrade Paket" : "Detail Paket"}
-          </Link>
+          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+          {showUpgrade ? "Upgrade Paket" : "Detail Paket"}
         </Button>
       </div>
 
       <AccountProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
+      {canCheckout ? (
+        <UpgradePlanSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+      ) : null}
     </>
   );
 }

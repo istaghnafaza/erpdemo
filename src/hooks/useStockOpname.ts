@@ -11,11 +11,19 @@ import { usePosStore } from "@/stores/pos.store";
 import { useInventoryStore } from "@/stores/inventory.store";
 import { submitOpname } from "@/lib/api/inventory";
 import { getBranchProducts, getCategories } from "@/lib/api/products";
+import { resolveCategoryForAttributes } from "@/lib/category-attribute-map";
 import { getMockPosCatalog, MOCK_CATEGORIES, MOCK_SKU_CATEGORY } from "@/lib/mock-pos-catalog";
 import { getNextMockOpnameReference } from "@/lib/mock-inventory";
+import { SEED_PRODUCT_ATTRIBUTE_CATEGORIES } from "@/lib/mock-product-attributes";
 import { invalidateResponseCache } from "@/lib/api/response-cache";
 import { canApprove as rbacCanApprove } from "@/lib/rbac";
 import type { OpnameItem } from "@/types/database";
+
+function matchesCategoryScope(productCategory: string, categoryScope: string): boolean {
+  if (categoryScope === "all") return true;
+  if (productCategory === categoryScope) return true;
+  return resolveCategoryForAttributes(productCategory) === categoryScope;
+}
 
 export type OpnameStep = 1 | 2 | 3;
 
@@ -63,7 +71,17 @@ export function useStockOpname() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [neonCategories, setNeonCategories] = useState<string[]>([]);
 
-  const categories = isMockTenant ? MOCK_CATEGORIES : neonCategories;
+  /** Samakan dengan filter Master Barang: API/mock + kategori seed canonical. */
+  const categories = useMemo(() => {
+    if (isMockTenant) {
+      return Array.from(
+        new Set([...MOCK_CATEGORIES, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES]),
+      ).sort();
+    }
+    return Array.from(
+      new Set([...neonCategories, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES]),
+    ).sort();
+  }, [isMockTenant, neonCategories]);
 
   useEffect(() => {
     if (isMockTenant || !tenantId) return;
@@ -104,10 +122,9 @@ export function useStockOpname() {
 
       if (isMockTenant) {
         const catalog = getMockPosCatalog(branchId);
-        const scoped =
-          categoryScope === "all"
-            ? catalog
-            : catalog.filter((bp) => (MOCK_SKU_CATEGORY[bp.product.sku] ?? "") === categoryScope);
+        const scoped = catalog.filter((bp) =>
+          matchesCategoryScope(MOCK_SKU_CATEGORY[bp.product.sku] ?? "", categoryScope),
+        );
 
         items = scoped.map((bp) => ({
           productId: bp.product_id,
@@ -134,12 +151,9 @@ export function useStockOpname() {
         setNeonCategories(categoryNames);
 
         const catalog = (catalogResult.data ?? []).filter((bp) => bp.product.is_active);
-        const scoped =
-          categoryScope === "all"
-            ? catalog
-            : catalog.filter(
-                (bp) => productCategoryName(bp.product as never) === categoryScope,
-              );
+        const scoped = catalog.filter((bp) =>
+          matchesCategoryScope(productCategoryName(bp.product as never), categoryScope),
+        );
 
         items = scoped.map((bp) => ({
           productId: bp.product_id,

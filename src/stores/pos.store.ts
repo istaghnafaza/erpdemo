@@ -674,16 +674,37 @@ export const usePosStore = create<PosState>()(
           (i: CartItem) =>
             i.product_id === item.product_id &&
             i.stock_source === item.stock_source &&
-            !!i.is_so_line === !!item.is_so_line,
+            !!i.is_so_line === !!item.is_so_line &&
+            (i.sell_unit_id ?? null) === (item.sell_unit_id ?? null),
         );
 
         if (existing !== -1) {
           const cur = cart.items[existing];
+          const allowFraction = Boolean(cur.allow_fraction || cur.sell_unit_id);
           const newQty = cur.qty + item.qty;
-          cur.qty = newQty;
-          cur.subtotal = (cur.selling_price - cur.discount) * newQty;
+          const factor = cur.factor_to_base && cur.factor_to_base > 0 ? cur.factor_to_base : 1;
+          const newBase = newQty * factor;
+          if (!cur.is_so_line && newBase > cur.available_stock + 1e-9) {
+            const maxSell = cur.available_stock / factor;
+            const clamped = allowFraction
+              ? Math.floor(maxSell * 10000) / 10000
+              : Math.floor(maxSell);
+            if (clamped > 0) {
+              cur.qty = clamped;
+              cur.qty_base = cur.qty * factor;
+              cur.subtotal = (cur.selling_price - cur.discount) * cur.qty;
+            }
+          } else {
+            cur.qty = newQty;
+            cur.qty_base = newBase;
+            cur.subtotal = (cur.selling_price - cur.discount) * newQty;
+          }
         } else {
-          cart.items.push({ ...item, is_so_line: item.is_so_line ?? false });
+          cart.items.push({
+            ...item,
+            is_so_line: item.is_so_line ?? false,
+            allow_fraction: Boolean(item.allow_fraction || item.sell_unit_id),
+          });
         }
         applyPartialShipSync(cart);
       });
@@ -697,18 +718,40 @@ export const usePosStore = create<PosState>()(
         const cart = s.carts[cartIndex];
         const item = cart.items[itemIndex];
         if (!item) return;
-        if (qty <= 0) {
+
+        const allowFraction = Boolean(item.allow_fraction || item.sell_unit_id);
+        const factor = item.factor_to_base && item.factor_to_base > 0 ? item.factor_to_base : 1;
+
+        let safeQty = Number(qty);
+        if (!Number.isFinite(safeQty)) return;
+        if (!allowFraction) safeQty = Math.floor(safeQty);
+        else safeQty = Math.round(safeQty * 10000) / 10000;
+
+        // Hapus hanya jika user set 0 / negatif (bukan karena floor 0.5 → 0)
+        if (safeQty <= 0) {
           cart.items.splice(itemIndex, 1);
           cart.partialShip.splice(itemIndex, 1);
           applyPartialShipSync(cart);
           return;
         }
-        item.qty = qty;
-        item.subtotal = (item.selling_price - item.discount) * qty;
-        if (!item.is_so_line && qty > item.available_stock) {
-          item.qty = item.available_stock;
-          item.subtotal = (item.selling_price - item.discount) * item.available_stock;
+
+        if (!item.is_so_line) {
+          const needBase = safeQty * factor;
+          if (needBase > item.available_stock + 1e-9) {
+            const maxSell = item.available_stock / factor;
+            safeQty = allowFraction
+              ? Math.floor(maxSell * 10000) / 10000
+              : Math.floor(maxSell);
+            if (safeQty <= 0) {
+              // Stok tidak cukup — jangan hapus diam-diam; kembalikan ke qty lama
+              return;
+            }
+          }
         }
+
+        item.qty = safeQty;
+        item.qty_base = safeQty * factor;
+        item.subtotal = (item.selling_price - item.discount) * safeQty;
         applyPartialShipSync(cart);
       });
     },
@@ -971,7 +1014,8 @@ export const usePosStore = create<PosState>()(
       const applyMockDeltas = () => {
         set((s) => {
           for (const item of cartStockLines(cart.items)) {
-            s.mockStockDelta[item.product_id] = (s.mockStockDelta[item.product_id] ?? 0) - item.qty;
+            const base = item.qty_base ?? item.qty;
+            s.mockStockDelta[item.product_id] = (s.mockStockDelta[item.product_id] ?? 0) - base;
           }
           if (paymentMethod === "credit" && cart.customer) {
             const creditDebt = grandTotal - amountPaid;
@@ -1241,6 +1285,10 @@ export const usePosStore = create<PosState>()(
             subtotal: item.subtotal,
             stock_source: item.stock_source,
             is_so_line: item.is_so_line === true,
+            sell_unit_id: item.sell_unit_id ?? null,
+            sell_unit_label: item.sell_unit_label ?? null,
+            qty_base: item.qty_base ?? item.qty,
+            factor_to_base: item.factor_to_base ?? 1,
           })),
         });
 
@@ -1328,6 +1376,10 @@ export const usePosStore = create<PosState>()(
             subtotal: item.subtotal,
             stock_source: item.stock_source,
             is_so_line: item.is_so_line === true,
+            sell_unit_id: item.sell_unit_id ?? null,
+            sell_unit_label: item.sell_unit_label ?? null,
+            qty_base: item.qty_base ?? item.qty,
+            factor_to_base: item.factor_to_base ?? 1,
           })),
           checkoutExtras,
         );
@@ -1345,7 +1397,7 @@ export const usePosStore = create<PosState>()(
           // Deduct stock for each item (Supabase non-atomic path)
           for (const item of cartStockLines(cart.items)) {
             const src = item.stock_source === "legacy" ? "legacy" : "verified";
-            await adjustStock(tenantId, branchId, item.product_id, -item.qty, "out", {
+            await adjustStock(tenantId, branchId, item.product_id, -(item.qty_base ?? item.qty), "out", {
               stockSource: src,
               reference: savedTxNumber,
               userId: cashierId,
