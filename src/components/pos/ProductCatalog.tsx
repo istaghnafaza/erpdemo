@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Package2, Plus, Check, Info, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,13 @@ export function ProductCatalog({
     asSo: boolean;
   } | null>(null);
   const [infoItem, setInfoItem] = useState<PosCatalogItem | null>(null);
+
+  // Drop stale category selection when inventory no longer has that category.
+  useEffect(() => {
+    if (category !== "Semua" && !categories.includes(category)) {
+      setCategory("Semua");
+    }
+  }, [categories, category]);
 
   const filtered = useMemo(() => {
     return catalog.filter((p) => {

@@ -35,7 +35,7 @@ interface ProductCatalogState {
 
   seedIfEmpty: () => void;
   setCatalogReadOnly: (readOnly: boolean) => void;
-  loadFromPayload: (payload: PlatformCatalogPayload) => void;
+  loadFromPayload: (payload: PlatformCatalogPayload, options?: { readOnly?: boolean }) => void;
   getPayload: () => PlatformCatalogPayload;
   applySeedFromDeveloper: () => void;
 
@@ -214,7 +214,7 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
 
       setCatalogReadOnly: (readOnly) => set({ catalogReadOnly: readOnly }),
 
-      loadFromPayload: (payload) => {
+      loadFromPayload: (payload, options) => {
         const normalized = normalizePlatformCatalogPayload(payload);
         set({
           catalogCategories: normalized.catalogCategories,
@@ -224,7 +224,7 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
           seeded: true,
           seedVersion: normalized.version,
           publishedVersion: normalized.version,
-          catalogReadOnly: true,
+          catalogReadOnly: options?.readOnly ?? true,
         });
       },
 
@@ -247,6 +247,7 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
           seeded: true,
           seedVersion: payload.version,
           publishedVersion: payload.version,
+          catalogReadOnly: false,
         });
       },
 
@@ -268,9 +269,13 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
       listProductTypesForCategory: (categoryName, includeInactive = false) => {
         const canonical = resolveCategoryForAttributes(categoryName);
         return get()
-          .productTypes.filter(
-            (pt) => pt.categoryName === canonical && (includeInactive || pt.isActive),
-          )
+          .productTypes.filter((pt) => {
+            const sameCategory =
+              pt.categoryName === categoryName ||
+              pt.categoryName === canonical ||
+              resolveCategoryForAttributes(pt.categoryName) === canonical;
+            return sameCategory && (includeInactive || pt.isActive);
+          })
           .sort((a, b) => a.sortOrder - b.sortOrder);
       },
 
@@ -329,13 +334,18 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
             (c) => c.id !== id && c.name.toLowerCase() === newName.toLowerCase() && c.isActive,
           );
           if (dup) return { ok: false, error: "Nama kategori sudah dipakai" };
+          const oldCanonical = resolveCategoryForAttributes(cat.name);
           set((s) => ({
             catalogCategories: s.catalogCategories.map((c) =>
               c.id === id ? { ...c, ...patch, name: newName } : c,
             ),
-            productTypes: s.productTypes.map((pt) =>
-              pt.categoryName === cat.name ? { ...pt, categoryName: newName } : pt,
-            ),
+            productTypes: s.productTypes.map((pt) => {
+              const same =
+                pt.categoryName === cat.name ||
+                pt.categoryName === oldCanonical ||
+                resolveCategoryForAttributes(pt.categoryName) === oldCanonical;
+              return same ? { ...pt, categoryName: newName } : pt;
+            }),
           }));
           return { ok: true };
         }
@@ -400,12 +410,15 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
       addProductType: (categoryName, name, abbreviation) => {
         const g = guardEdit(get);
         if (!g.ok) return g;
-        const canonical = resolveCategoryForAttributes(categoryName);
+        const cat = get().getCategoryByName(categoryName);
+        const storedCategoryName = cat?.name ?? categoryName.trim();
         const trimmed = name.trim();
         if (!trimmed) return { ok: false, error: "Nama jenis barang wajib diisi" };
         const exists = get().productTypes.some(
           (pt) =>
-            pt.categoryName === canonical &&
+            (pt.categoryName === storedCategoryName ||
+              resolveCategoryForAttributes(pt.categoryName) ===
+                resolveCategoryForAttributes(storedCategoryName)) &&
             pt.name.toLowerCase() === trimmed.toLowerCase() &&
             pt.isActive,
         );
@@ -413,14 +426,19 @@ export const useProductAttributesStore = create<ProductCatalogState>()(
         const id = nextPtId();
         const abbr = (abbreviation?.trim() || suggestAbbreviation(trimmed)).toUpperCase();
         const maxOrder = get()
-          .productTypes.filter((pt) => pt.categoryName === canonical)
+          .productTypes.filter(
+            (pt) =>
+              pt.categoryName === storedCategoryName ||
+              resolveCategoryForAttributes(pt.categoryName) ===
+                resolveCategoryForAttributes(storedCategoryName),
+          )
           .reduce((m, pt) => Math.max(m, pt.sortOrder), 0);
         set((s) => ({
           productTypes: [
             ...s.productTypes,
             {
               id,
-              categoryName: canonical,
+              categoryName: storedCategoryName,
               name: trimmed,
               abbreviation: abbr,
               sortOrder: maxOrder + 1,

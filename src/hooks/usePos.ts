@@ -36,7 +36,6 @@ import { queryKeys } from "@/lib/query-keys";
 import { useInventoryStore } from "@/stores/inventory.store";
 import {
   getMockPosCatalog,
-  MOCK_CATEGORIES,
   MOCK_SKU_CATEGORY,
 } from "@/lib/mock-pos-catalog";
 import { buildMockBranchCatalog } from "@/lib/mock-branch-catalog";
@@ -317,9 +316,11 @@ export function usePos() {
   ]);
 
   const categories = useMemo<string[]>(() => {
-    if (isMockTenant) return MOCK_CATEGORIES;
-    return Array.from(new Set(catalog.map((c) => c.category))).sort();
-  }, [catalog, isMockTenant]);
+    // Only categories that currently have products in this branch catalog.
+    return Array.from(
+      new Set(catalog.map((c) => c.category).filter((name) => Boolean(name?.trim()))),
+    ).sort((a, b) => a.localeCompare(b, "id"));
+  }, [catalog]);
 
   // -------------------------------------------------------------------------
   // Customers

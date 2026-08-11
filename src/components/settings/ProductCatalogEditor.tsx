@@ -146,23 +146,35 @@ export function ProductCatalogEditor(props: ProductCatalogEditorProps) {
               <Input
                 className="h-8 text-sm"
                 value={selectedCategoryEntity.name}
-                onChange={(e) => updateCategory(selectedCategoryEntity.id, { name: e.target.value })}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const r = updateCategory(selectedCategoryEntity.id, { name: next });
+                  if (!r.ok) {
+                    toast.error(r.error);
+                    return;
+                  }
+                  setSelectedCategory(next.trim() || selectedCategoryEntity.name);
+                }}
               />
               <Input
                 className="h-8 text-xs"
                 placeholder="Deskripsi kategori"
                 value={selectedCategoryEntity.description ?? ""}
-                onChange={(e) =>
-                  updateCategory(selectedCategoryEntity.id, { description: e.target.value })
-                }
+                onChange={(e) => {
+                  const r = updateCategory(selectedCategoryEntity.id, {
+                    description: e.target.value,
+                  });
+                  if (!r.ok) toast.error(r.error);
+                }}
               />
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Aktif</span>
                 <Switch
                   checked={selectedCategoryEntity.isActive}
-                  onCheckedChange={(on) =>
-                    updateCategory(selectedCategoryEntity.id, { isActive: on })
-                  }
+                  onCheckedChange={(on) => {
+                    const r = updateCategory(selectedCategoryEntity.id, { isActive: on });
+                    if (!r.ok) toast.error(r.error);
+                  }}
                 />
               </div>
             </div>
@@ -259,22 +271,29 @@ export function ProductCatalogEditor(props: ProductCatalogEditorProps) {
               <Input
                 className="h-8 text-sm"
                 value={selectedProductType.name}
-                onChange={(e) => updateProductType(selectedProductType.id, { name: e.target.value })}
+                onChange={(e) => {
+                  const r = updateProductType(selectedProductType.id, { name: e.target.value });
+                  if (!r.ok) toast.error(r.error);
+                }}
               />
               <Input
                 className="h-8 text-xs font-mono"
                 value={selectedProductType.abbreviation}
-                onChange={(e) =>
-                  updateProductType(selectedProductType.id, { abbreviation: e.target.value })
-                }
+                onChange={(e) => {
+                  const r = updateProductType(selectedProductType.id, {
+                    abbreviation: e.target.value,
+                  });
+                  if (!r.ok) toast.error(r.error);
+                }}
               />
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Aktif</span>
                 <Switch
                   checked={selectedProductType.isActive}
-                  onCheckedChange={(on) =>
-                    updateProductType(selectedProductType.id, { isActive: on })
-                  }
+                  onCheckedChange={(on) => {
+                    const r = updateProductType(selectedProductType.id, { isActive: on });
+                    if (!r.ok) toast.error(r.error);
+                  }}
                 />
               </div>
             </div>

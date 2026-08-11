@@ -18,7 +18,6 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
   const seedIfEmpty = useProductAttributesStore((s) => s.seedIfEmpty);
   const setCatalogReadOnly = useProductAttributesStore((s) => s.setCatalogReadOnly);
   const loadFromPayload = useProductAttributesStore((s) => s.loadFromPayload);
-  const publishedVersion = useProductAttributesStore((s) => s.publishedVersion);
   const catalogReadOnly = useProductAttributesStore((s) => s.catalogReadOnly);
   const catalogCategories = useProductAttributesStore((s) => s.catalogCategories);
   const productTypes = useProductAttributesStore((s) => s.productTypes);
@@ -57,19 +56,39 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
     setCatalogReadOnly(!canEditCatalog);
   }, [seedIfEmpty, setCatalogReadOnly, canEditCatalog]);
 
+  // Platform developer: load published catalog once then keep editable.
+  // Tenant settings: pull newer published version (stays read-only).
   useEffect(() => {
-    if (developerMode) return;
+    let cancelled = false;
     void (async () => {
       try {
         const r = await fetchPublishedCatalog();
-        if (r.data && r.data.version > publishedVersion) {
-          loadFromPayload(r.data);
+        if (cancelled || !r.data) return;
+        if (developerMode) {
+          loadFromPayload(r.data, { readOnly: false });
+          return;
+        }
+        const currentVersion = useProductAttributesStore.getState().publishedVersion;
+        if (r.data.version > currentVersion) {
+          loadFromPayload(r.data, { readOnly: true });
         }
       } catch {
         /* fallback: local seed */
       }
     })();
-  }, [developerMode, loadFromPayload, publishedVersion]);
+    return () => {
+      cancelled = true;
+    };
+    // Only re-run when mode/user context changes — not when publishedVersion updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/mode sync
+  }, [developerMode, loadFromPayload]);
+
+  // Keep developer mode unlocked even if persist/migrate re-locks.
+  useEffect(() => {
+    if (canEditCatalog && catalogReadOnly) {
+      setCatalogReadOnly(false);
+    }
+  }, [canEditCatalog, catalogReadOnly, setCatalogReadOnly]);
 
   const categories = useMemo(
     () => listCategories(true),
@@ -80,6 +99,13 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
     if (!selectedCategory && categories.length > 0) {
       setSelectedCategory(categories[0]);
     }
+  }, [categories, selectedCategory]);
+
+  // If selected category was renamed/removed, keep selection on a valid name.
+  useEffect(() => {
+    if (!selectedCategory) return;
+    if (categories.includes(selectedCategory)) return;
+    if (categories.length > 0) setSelectedCategory(categories[0]);
   }, [categories, selectedCategory]);
 
   const categoryEntities = useMemo(
@@ -125,6 +151,13 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
     setSelectedProductTypeId("");
   }, []);
 
+  const handleLoadFromPayload = useCallback(
+    (payload: Parameters<typeof loadFromPayload>[0]) => {
+      loadFromPayload(payload, { readOnly: !canEditCatalog });
+    },
+    [loadFromPayload, canEditCatalog],
+  );
+
   return {
     user,
     isPlatformAdmin,
@@ -143,7 +176,7 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
     availableGlobalAttributes,
     getPayload,
     applySeedFromDeveloper,
-    loadFromPayload,
+    loadFromPayload: handleLoadFromPayload,
     addCategory,
     updateCategory,
     reorderCategory,
