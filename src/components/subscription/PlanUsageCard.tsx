@@ -3,11 +3,11 @@ import { Building2, Crown, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { usePlanPricing } from "@/hooks/usePlanPricing";
 import {
   formatPlanPrice,
   getPlanLimits,
   isTrialExpired,
-  PLAN_PRICING,
   trialDaysRemaining,
 } from "@/lib/plan-config";
 import type { Tenant } from "@/types/database";
@@ -19,6 +19,7 @@ interface PlanUsageCardProps {
 }
 
 export function PlanUsageCard({ tenant, activeBranches, activeUsers }: PlanUsageCardProps) {
+  const { pricing } = usePlanPricing();
   if (!tenant) return null;
 
   const limits = getPlanLimits(tenant.plan);
@@ -27,8 +28,7 @@ export function PlanUsageCard({ tenant, activeBranches, activeUsers }: PlanUsage
   const trialExpired = tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at);
   const daysLeft = trialDaysRemaining(tenant.trial_ends_at);
 
-  const paidPricing =
-    tenant.plan !== "trial" ? PLAN_PRICING[tenant.plan] : null;
+  const paidPricing = tenant.plan !== "trial" ? pricing[tenant.plan] : null;
 
   return (
     <Card className="p-5 shadow-card border-primary/10">
@@ -47,7 +47,10 @@ export function PlanUsageCard({ tenant, activeBranches, activeUsers }: PlanUsage
               </p>
             ) : paidPricing ? (
               <p className="text-sm text-muted-foreground">
-                Basic Rp 499–599 rb · Pro Rp 749–849 rb · Enterprise Rp 1,999–2,499 rb
+                Paket aktif {formatPlanPrice(paidPricing.monthly)}/bulan
+                {paidPricing.yearly !== paidPricing.monthly
+                  ? ` · tahunan ${formatPlanPrice(paidPricing.yearly)}/bln`
+                  : ""}
               </p>
             ) : null}
           </div>
@@ -85,8 +88,8 @@ export function PlanUsageCard({ tenant, activeBranches, activeUsers }: PlanUsage
       {tenant.plan === "pro" && activeBranches >= 2 && (
         <p className="text-xs text-muted-foreground mt-4 border-t pt-3">
           Butuh cabang ke-3? Upgrade ke{" "}
-          <strong>Enterprise</strong> ({formatPlanPrice(PLAN_PRICING.enterprise.yearly)}/tahun atau{" "}
-          {formatPlanPrice(PLAN_PRICING.enterprise.monthly)}/bulan).
+          <strong>Enterprise</strong> ({formatPlanPrice(pricing.enterprise.yearly)}/bln tahunan atau{" "}
+          {formatPlanPrice(pricing.enterprise.monthly)}/bulan).
         </p>
       )}
     </Card>

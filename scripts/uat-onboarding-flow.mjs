@@ -138,15 +138,25 @@ try {
     throw err;
   }
 
-  // --- 2. Login lookup (mirror auth.ts findAuthUserByLoginId) ---
+  // --- 2. Login lookup (mirror auth.ts — username case-sensitive exact) ---
   const loginRes = await client.query(
-    `SELECT id FROM auth_users WHERE lower(username) = $1 OR lower(split_part(email, '@', 1)) = $1 LIMIT 1`,
-    [username.toLowerCase()],
+    `SELECT id FROM auth_users WHERE username = $1 LIMIT 1`,
+    [username],
   );
   if (loginRes.rows[0]?.id !== userId) {
     fail("login-lookup", "username lookup failed");
   } else {
     pass("login-lookup", username);
+  }
+
+  const loginWrongCase = await client.query(
+    `SELECT id FROM auth_users WHERE username = $1 LIMIT 1`,
+    [username.toUpperCase()],
+  );
+  if (loginWrongCase.rows.length > 0 && username !== username.toUpperCase()) {
+    fail("login-case", "username must be case-sensitive");
+  } else {
+    pass("login-case", "wrong case rejected");
   }
 
   const hashRes = await client.query(`SELECT password_hash FROM auth_users WHERE id = $1`, [userId]);

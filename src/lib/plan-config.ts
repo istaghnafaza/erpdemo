@@ -40,17 +40,25 @@ export function isPaidPlan(plan: string): plan is PaidTenantPlan {
 }
 
 /** Gross amount (IDR) for Midtrans / invoice.
- * `PLAN_PRICING.*.yearly` = harga /bulan saat bayar tahunan (hemat ~17%);
+ * `yearly` = harga /bulan saat bayar tahunan (hemat ~17%);
  * tagihan tahunan = yearly × 12.
  */
-export function getPlanCheckoutAmount(plan: PaidTenantPlan, cycle: BillingCycle): number {
-  const pricing = PLAN_PRICING[plan];
+export function getPlanCheckoutAmount(
+  plan: PaidTenantPlan,
+  cycle: BillingCycle,
+  pricingMap: Record<PaidTenantPlan, PlanPricing> = PLAN_PRICING,
+): number {
+  const pricing = pricingMap[plan] ?? PLAN_PRICING[plan];
   return cycle === "yearly" ? pricing.yearly * 12 : pricing.monthly;
 }
 
 /** MRR contribution for an active paid subscription (yearly sticker = monthly equiv). */
-export function getPlanMrrContribution(plan: PaidTenantPlan, cycle: BillingCycle): number {
-  const pricing = PLAN_PRICING[plan];
+export function getPlanMrrContribution(
+  plan: PaidTenantPlan,
+  cycle: BillingCycle,
+  pricingMap: Record<PaidTenantPlan, PlanPricing> = PLAN_PRICING,
+): number {
+  const pricing = pricingMap[plan] ?? PLAN_PRICING[plan];
   return cycle === "yearly" ? pricing.yearly : pricing.monthly;
 }
 

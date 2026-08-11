@@ -14,10 +14,10 @@ import {
   formatPlanPrice,
   getPlanCheckoutAmount,
   PLAN_LIMITS,
-  PLAN_PRICING,
   type BillingCycle,
   type PaidTenantPlan,
 } from "@/lib/plan-config";
+import { usePlanPricing } from "@/hooks/usePlanPricing";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -40,6 +40,7 @@ export function UpgradePlanSheet({
   const tenantId = useAuthStore((s) => s.currentUser?.tenantId);
   const tenant = useAuthStore((s) => s.currentTenant);
   const refreshUser = useAuthStore((s) => s.refreshUser);
+  const { pricing } = usePlanPricing();
   const [cycle, setCycle] = useState<BillingCycle>(initialCycle);
   const [selected, setSelected] = useState<PaidTenantPlan>(initialPlan);
   const [busy, setBusy] = useState(false);
@@ -141,8 +142,8 @@ export function UpgradePlanSheet({
           <div className="space-y-2">
             {UPGRADE_PLANS.map((plan) => {
               const sticker =
-                cycle === "yearly" ? PLAN_PRICING[plan].yearly : PLAN_PRICING[plan].monthly;
-              const charge = getPlanCheckoutAmount(plan, cycle);
+                cycle === "yearly" ? pricing[plan].yearly : pricing[plan].monthly;
+              const charge = getPlanCheckoutAmount(plan, cycle, pricing);
               const active = selected === plan;
               return (
                 <button

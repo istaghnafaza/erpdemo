@@ -2,7 +2,7 @@
 // Auth service — Neon/Drizzle
 // =============================================================================
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toProfile } from "@/server/db/mappers";
 import { authUsers, profiles, userBranches } from "@/server/db/schema";
@@ -90,26 +90,24 @@ async function getBranchIdsForUser(userId: string): Promise<string[]> {
 
 async function findAuthUserByLoginId(loginId: string) {
   const db = getDb();
-  const trimmed = loginId.trim().toLowerCase();
+  const trimmed = loginId.trim();
   if (!trimmed) return null;
 
+  // Email: bandingkan bentuk tersimpan (selalu lowercase saat register)
   if (trimmed.includes("@")) {
     return (
       (await db.query.authUsers.findFirst({
-        where: eq(authUsers.email, trimmed),
+        where: eq(authUsers.email, trimmed.toLowerCase()),
       })) ?? null
     );
   }
 
-  const byUsername = await db.query.authUsers.findFirst({
-    where: sql`lower(${authUsers.username}) = ${trimmed}`,
-  });
-  if (byUsername) return byUsername;
-
-  const byEmailLocal = await db.query.authUsers.findFirst({
-    where: sql`lower(split_part(${authUsers.email}, '@', 1)) = ${trimmed}`,
-  });
-  return byEmailLocal ?? null;
+  // Username: wajib sama persis dengan DB (case-sensitive). FAZA ≠ faza.
+  return (
+    (await db.query.authUsers.findFirst({
+      where: eq(authUsers.username, trimmed),
+    })) ?? null
+  );
 }
 
 export async function signInWithPassword(

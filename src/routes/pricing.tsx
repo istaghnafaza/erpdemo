@@ -16,10 +16,10 @@ import { APP_TAGLINE } from "@/lib/app-branding";
 import {
   formatPlanPrice,
   PLAN_LIMITS,
-  PLAN_PRICING,
   TRIAL_DAYS,
   type PaidTenantPlan,
 } from "@/lib/plan-config";
+import { usePlanPricing } from "@/hooks/usePlanPricing";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -61,6 +61,7 @@ function PricingPage() {
   const [checkoutPlan, setCheckoutPlan] = useState<PaidTenantPlan>(planFromAd ?? "pro");
   const isOwner = useAuthStore((s) => s.currentUser?.isOwner ?? false);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { pricing } = usePlanPricing();
 
   useEffect(() => {
     if (!planFromAd) return;
@@ -96,7 +97,7 @@ function PricingPage() {
       name: "Basic",
       highlight: false,
       price: formatPlanPrice(
-        cycle === "yearly" ? PLAN_PRICING.basic.yearly : PLAN_PRICING.basic.monthly,
+        cycle === "yearly" ? pricing.basic.yearly : pricing.basic.monthly,
       ),
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "Toko tunggal — operasional harian rapi",
@@ -115,7 +116,7 @@ function PricingPage() {
       name: "Pro",
       highlight: true,
       price: formatPlanPrice(
-        cycle === "yearly" ? PLAN_PRICING.pro.yearly : PLAN_PRICING.pro.monthly,
+        cycle === "yearly" ? pricing.pro.yearly : pricing.pro.monthly,
       ),
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "Multi-cabang kecil — paling populer",
@@ -134,9 +135,7 @@ function PricingPage() {
       name: "Enterprise",
       highlight: false,
       price: formatPlanPrice(
-        cycle === "yearly"
-          ? PLAN_PRICING.enterprise.yearly
-          : PLAN_PRICING.enterprise.monthly,
+        cycle === "yearly" ? pricing.enterprise.yearly : pricing.enterprise.monthly,
       ),
       period: cycle === "yearly" ? "/ tahun" : "/ bulan",
       desc: "3+ cabang atau skala besar",

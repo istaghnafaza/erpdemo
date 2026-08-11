@@ -1132,3 +1132,42 @@ export const pricingOverrideLogs = pgTable("pricing_override_logs", {
     .references(() => profiles.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Platform SaaS finance — singleton settings (HPP + pricing targets). */
+export const platformFinanceSettings = pgTable("platform_finance_settings", {
+  id: integer("id").primaryKey().default(1),
+  monthlyHpp: bigint("monthly_hpp", { mode: "number" }).notNull().default(0),
+  targetMarginPct: integer("target_margin_pct").notNull().default(40),
+  expectedPayingTenants: integer("expected_paying_tenants").notNull().default(10),
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+});
+
+export const platformHppEntries = pgTable("platform_hpp_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  yearMonth: text("year_month").notNull().unique(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const platformPlanPricing = pgTable("platform_plan_pricing", {
+  plan: text("plan").primaryKey(),
+  monthlyAmount: bigint("monthly_amount", { mode: "number" }).notNull(),
+  yearlyAmount: bigint("yearly_amount", { mode: "number" }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+});
+
+export const platformHppExpenseItems = pgTable("platform_hpp_expense_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  yearMonth: text("year_month").notNull(),
+  label: text("label").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

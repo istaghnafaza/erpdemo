@@ -15,9 +15,9 @@ import { APP_NAME, APP_TAGLINE } from "@/lib/app-branding";
 import {
   formatPlanPrice,
   PLAN_LIMITS,
-  PLAN_PRICING,
   TRIAL_DAYS,
 } from "@/lib/plan-config";
+import { usePlanPricing } from "@/hooks/usePlanPricing";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/landing")({
@@ -333,6 +333,7 @@ function SolutionSection() {
 
 function PricingSection() {
   const { ref, visible } = useReveal();
+  const { pricing } = usePlanPricing();
   const plans = [
     {
       id: "basic" as const,
@@ -398,7 +399,7 @@ function PricingSection() {
               </p>
               <p className="mt-5">
                 <span className="lp-display text-3xl font-bold">
-                  {formatPlanPrice(PLAN_PRICING[plan.id].monthly)}
+                  {formatPlanPrice(pricing[plan.id].monthly)}
                 </span>
                 <span className={cn("text-sm", plan.highlight ? "text-white/55" : "text-[var(--lp-muted)]")}>
                   {" "}

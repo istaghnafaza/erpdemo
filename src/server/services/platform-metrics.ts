@@ -187,6 +187,9 @@ export async function getPlatformBillingKpis(): Promise<PlatformBillingKpis> {
   const trialToPaidConversion7dPct =
     cohort > 0 ? Math.round((converted / cohort) * 1000) / 10 : 0;
 
+  const { getEffectivePlanPricing } = await import("@/server/services/platform-finance");
+  const pricingMap = await getEffectivePlanPricing();
+
   const subsResult = await db.execute<{
     plan: string;
     billing_cycle: string;
@@ -199,7 +202,7 @@ export async function getPlatformBillingKpis(): Promise<PlatformBillingKpis> {
   for (const row of rowsOf<{ plan: string; billing_cycle: string }>(subsResult)) {
     if (!isPaidPlan(row.plan)) continue;
     const cycle = (row.billing_cycle === "yearly" ? "yearly" : "monthly") as BillingCycle;
-    mrr += getPlanMrrContribution(row.plan, cycle);
+    mrr += getPlanMrrContribution(row.plan, cycle, pricingMap);
   }
 
   const pastDueResult = await db.execute<{ count: number }>(sql`

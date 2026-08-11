@@ -39,18 +39,6 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function emailLocalPart(email: string): string {
-  const at = email.indexOf("@");
-  return at >= 0 ? email.slice(0, at).toLowerCase() : email.toLowerCase();
-}
-
-function matchesLoginId(userEmail: string, loginId: string): boolean {
-  const id = loginId.trim().toLowerCase();
-  const normalized = normalizeEmail(userEmail);
-  if (id.includes("@")) return normalized === id;
-  return emailLocalPart(normalized) === id;
-}
-
 function newCustomUserId(): string {
   const suffix = Date.now().toString(16).padStart(12, "0").slice(-12);
   return `33339999-0000-0000-0000-${suffix}`;
@@ -105,13 +93,13 @@ export const useUsersStore = create<UsersState>()(
 
       findByLoginIdAndPin: (tenantId, loginId, pin) => {
         const trimmedPin = pin.trim();
-        const id = loginId.trim().toLowerCase();
+        const id = loginId.trim();
         return (
           get().users.find(
             (u) =>
               u.tenantId === tenantId &&
-              (u.username.toLowerCase() === id ||
-                matchesLoginId(u.email, loginId)) &&
+              (u.username === id ||
+                (id.includes("@") && normalizeEmail(u.email) === id.toLowerCase())) &&
               u.pin === trimmedPin &&
               u.isActive,
           ) ?? null

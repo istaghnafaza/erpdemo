@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
 import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
-import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
+import { isMockBackend, isNeonBackend } from "@/lib/api/backend";
 import { AUTH_UI } from "@/lib/auth-features";
 import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 import { validateLoginForm } from "@/lib/validation/login-form";
@@ -151,11 +151,6 @@ function LoginPage() {
             aria-invalid={Boolean(fieldErrors.username)}
             aria-describedby={fieldErrors.username ? "username-error" : undefined}
           />
-          {AUTH_UI.loginWithUsername ? (
-            <p className="text-xs text-muted-foreground">
-              Masukkan username. Akun lama masih bisa pakai email penuh.
-            </p>
-          ) : null}
           {fieldErrors.username ? (
             <p id="username-error" className="text-xs text-destructive">
               {fieldErrors.username}
@@ -195,12 +190,6 @@ function LoginPage() {
           {isLoading ? "Memproses..." : "Masuk"}
         </Button>
       </form>
-
-      {showNeonLogin ? (
-        <p className="mt-4 text-xs text-muted-foreground text-center">
-          Contoh: <strong>owner</strong> / <strong>111111</strong>
-        </p>
-      ) : null}
     </AuthShell>
   );
 }

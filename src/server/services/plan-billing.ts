@@ -60,7 +60,9 @@ export async function createPlanCheckout(input: {
   }
   const plan = input.plan;
   const billingCycle: BillingCycle = input.billingCycle === "yearly" ? "yearly" : "monthly";
-  const amount = getPlanCheckoutAmount(plan, billingCycle);
+  const { getEffectivePlanPricing } = await import("@/server/services/platform-finance");
+  const pricingMap = await getEffectivePlanPricing();
+  const amount = getPlanCheckoutAmount(plan, billingCycle, pricingMap);
 
   const db = getWriteDb();
   const tenant = await db.query.tenants.findFirst({

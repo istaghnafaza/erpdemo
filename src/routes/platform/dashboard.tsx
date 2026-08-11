@@ -87,6 +87,12 @@ function PlatformDashboardPage() {
       actions={
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild>
+            <Link to="/platform/finance">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Keuangan & Pricing
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
             <Link to="/platform/catalog">
               <Database className="h-4 w-4 mr-2" />
               Master Data Katalog
