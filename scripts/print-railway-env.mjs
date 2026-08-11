@@ -69,6 +69,17 @@ if (googleClientId && googleSecret) {
   );
 }
 
+const midtransServer = env.get("MIDTRANS_SERVER_KEY")?.trim();
+const midtransClient = env.get("MIDTRANS_CLIENT_KEY")?.trim();
+if (midtransServer && midtransClient) {
+  lines.push(
+    `MIDTRANS_SERVER_KEY=${midtransServer}`,
+    `MIDTRANS_CLIENT_KEY=${midtransClient}`,
+    `MIDTRANS_IS_PRODUCTION=${env.get("MIDTRANS_IS_PRODUCTION")?.trim() || "true"}`,
+    "MIDTRANS_NOTIFICATION_URL=https://seps.fazagroup.id/api/midtrans/notification",
+  );
+}
+
 writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
 
 console.log(`[railway:env] OK — salin SEMUA baris ke Railway Variables (Raw Editor):`);

@@ -72,6 +72,17 @@ if (googleClientId && googleSecret) {
   );
 }
 
+const midtransServer = map.get("MIDTRANS_SERVER_KEY")?.trim();
+const midtransClient = map.get("MIDTRANS_CLIENT_KEY")?.trim();
+if (midtransServer && midtransClient) {
+  lines.push(
+    `MIDTRANS_SERVER_KEY=${midtransServer}`,
+    `MIDTRANS_CLIENT_KEY=${midtransClient}`,
+    `MIDTRANS_IS_PRODUCTION=${map.get("MIDTRANS_IS_PRODUCTION")?.trim() || "true"}`,
+    "MIDTRANS_NOTIFICATION_URL=https://staging.seps.fazagroup.id/api/midtrans/notification",
+  );
+}
+
 writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
 console.log(`[staging:env] OK → ${outPath}`);
 console.log("Paste ke Railway staging service → Variables → Raw Editor → Deploy");
