@@ -69,7 +69,7 @@ export function useProductAttributesPage(options?: { developerMode?: boolean }) 
           return;
         }
         const currentVersion = useProductAttributesStore.getState().publishedVersion;
-        if (r.data.version > currentVersion) {
+        if (r.data.version !== currentVersion) {
           loadFromPayload(r.data, { readOnly: true });
         }
       } catch {

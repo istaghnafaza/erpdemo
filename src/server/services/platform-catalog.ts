@@ -41,15 +41,127 @@ export async function getOrSeedPublishedCatalog(): Promise<PlatformCatalogPayloa
 export async function publishPlatformCatalog(
   payload: PlatformCatalogPayload,
   publishedBy: string | null,
-): Promise<PlatformCatalogPayload> {
+): Promise<PlatformCatalogPayload & { syncedTenants: number; syncedCategories: number }> {
   await ensurePlatformCatalogTables();
   const db = getWriteDb();
   const version = payload.version;
+  const normalized = normalizePlatformCatalogPayload(payload);
   await db.execute(
     sql`INSERT INTO platform_product_catalog (version, payload, published_by)
-        VALUES (${version}, ${JSON.stringify(payload)}::jsonb, ${publishedBy})`,
+        VALUES (${version}, ${JSON.stringify(normalized)}::jsonb, ${publishedBy})`,
   );
-  return { ...payload, publishedAt: new Date().toISOString() };
+
+  const sync = await syncPublishedCategoriesToAllTenants(normalized);
+
+  return {
+    ...normalized,
+    publishedAt: new Date().toISOString(),
+    syncedTenants: sync.tenants,
+    syncedCategories: sync.categoriesTouched,
+  };
+}
+
+/**
+ * Push active platform category names into every tenant's product_categories.
+ * Renames alias/old names to the published label when safe; otherwise ensures the new name exists.
+ */
+export async function syncPublishedCategoriesToAllTenants(
+  payload: PlatformCatalogPayload,
+): Promise<{ tenants: number; categoriesTouched: number }> {
+  const { resolveCategoryForAttributes } = await import("@/lib/category-attribute-map");
+  const { productCategories, products, tenants } = await import("@/server/db/schema");
+  const { eq, and } = await import("drizzle-orm");
+  const { invalidateCategories } = await import("@/server/cache/invalidate");
+
+  const activeNames = (payload.catalogCategories ?? [])
+    .filter((c) => c.isActive !== false)
+    .map((c) => c.name.trim())
+    .filter(Boolean);
+
+  if (activeNames.length === 0) return { tenants: 0, categoriesTouched: 0 };
+
+  const targetByCanonical = new Map<string, string>();
+  for (const name of activeNames) {
+    targetByCanonical.set(resolveCategoryForAttributes(name), name);
+  }
+
+  const db = getWriteDb();
+  const tenantRows = await db.query.tenants.findMany({
+    columns: { id: true },
+    where: eq(tenants.isActive, true),
+  });
+
+  let categoriesTouched = 0;
+
+  for (const tenant of tenantRows) {
+    const existing = await db.query.productCategories.findMany({
+      where: eq(productCategories.tenantId, tenant.id),
+    });
+    const byName = new Map(existing.map((c) => [c.name, c]));
+    let touched = false;
+
+    for (const targetName of activeNames) {
+      if (byName.has(targetName)) continue;
+
+      // Prefer renaming an alias row that maps to the same canonical category.
+      const canonical = resolveCategoryForAttributes(targetName);
+      const aliasRow = existing.find((c) => {
+        if (c.name === targetName) return false;
+        return resolveCategoryForAttributes(c.name) === canonical;
+      });
+
+      if (aliasRow && !byName.has(targetName)) {
+        await db
+          .update(productCategories)
+          .set({ name: targetName })
+          .where(eq(productCategories.id, aliasRow.id));
+        byName.delete(aliasRow.name);
+        byName.set(targetName, { ...aliasRow, name: targetName });
+        touched = true;
+        categoriesTouched += 1;
+        continue;
+      }
+
+      const [inserted] = await db
+        .insert(productCategories)
+        .values({ tenantId: tenant.id, name: targetName, icon: null })
+        .onConflictDoNothing({
+          target: [productCategories.tenantId, productCategories.name],
+        })
+        .returning();
+      if (inserted) {
+        byName.set(targetName, inserted);
+        touched = true;
+        categoriesTouched += 1;
+      }
+    }
+
+    // Second pass: rename leftover aliases when target already exists — re-point products then drop alias.
+    for (const row of existing) {
+      const canonical = resolveCategoryForAttributes(row.name);
+      const targetName = targetByCanonical.get(canonical);
+      if (!targetName || row.name === targetName) continue;
+      const target = byName.get(targetName);
+      if (!target || target.id === row.id) continue;
+
+      await db
+        .update(products)
+        .set({ categoryId: target.id })
+        .where(
+          and(eq(products.tenantId, tenant.id), eq(products.categoryId, row.id)),
+        );
+      await db.delete(productCategories).where(eq(productCategories.id, row.id));
+      byName.delete(row.name);
+      touched = true;
+      categoriesTouched += 1;
+    }
+
+    if (touched) {
+      await invalidateCategories(tenant.id);
+    }
+  }
+
+  return { tenants: tenantRows.length, categoriesTouched };
 }
 
 export async function listCatalogRequests(status?: string): Promise<CatalogRequest[]> {

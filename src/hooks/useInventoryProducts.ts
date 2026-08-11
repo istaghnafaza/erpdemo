@@ -15,6 +15,7 @@ import {
   type MockProductOverride,
 } from "@/stores/inventory.store";
 import { useProductAttributesStore } from "@/stores/product-attributes.store";
+import { fetchPublishedCatalog } from "@/lib/api/platform-catalog";
 import {
   getBranchProductsMulti,
   getCategories,
@@ -144,6 +145,27 @@ export function useInventoryProducts() {
   useEffect(() => {
     seedAttributes();
   }, [seedAttributes]);
+
+  // Pull latest published platform catalog so Master Barang category list matches developer publish.
+  useEffect(() => {
+    if (isMockTenant) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetchPublishedCatalog();
+        if (cancelled || !r.data) return;
+        const current = useProductAttributesStore.getState().publishedVersion;
+        if (r.data.version !== current) {
+          useProductAttributesStore.getState().loadFromPayload(r.data, { readOnly: true });
+        }
+      } catch {
+        /* keep local seed */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMockTenant, tenantId]);
 
   const inventoryQuery = useQuery({
     queryKey: queryKeys.inventoryCatalog(tenantId, effectiveBranchIds),
@@ -314,15 +336,20 @@ export function useInventoryProducts() {
     void queryClient.invalidateQueries({ queryKey: ["pos-catalog", tenantId] });
   }, [queryClient, tenantId, effectiveBranchIds]);
 
+  const catalogCategoryNames = useProductAttributesStore((s) =>
+    s.listCatalogCategories(false).map((c) => c.name),
+  );
+
   const categoryNames = useMemo(() => {
     if (isMockTenant) {
       return Array.from(
-        new Set([...MOCK_CATEGORIES, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES]),
+        new Set([...MOCK_CATEGORIES, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES, ...catalogCategoryNames]),
       ).sort();
     }
     const fromApi = categories.map((c) => c.name);
-    return Array.from(new Set([...fromApi, ...SEED_PRODUCT_ATTRIBUTE_CATEGORIES])).sort();
-  }, [categories, isMockTenant]);
+    // Prefer published platform catalog names over hardcoded seed so developer publish is visible.
+    return Array.from(new Set([...fromApi, ...catalogCategoryNames])).sort();
+  }, [categories, isMockTenant, catalogCategoryNames]);
 
   const existingSkus = useMemo(
     () => rawRows.map((r) => r.sku),

@@ -73,7 +73,11 @@ function PlatformCatalogPage() {
       return;
     }
     if (r.data) catalog.loadFromPayload(r.data);
-    toast.success(`Master data v${payload.version} diterbitkan ke semua toko`);
+    const synced =
+      r.data && "syncedTenants" in r.data
+        ? ` · sync ${String((r.data as { syncedTenants?: number }).syncedTenants ?? 0)} toko`
+        : "";
+    toast.success(`Master data v${payload.version} diterbitkan ke semua toko${synced}`);
   };
 
   const handleApplySeed = () => {
@@ -131,7 +135,7 @@ function PlatformCatalogPage() {
         <p className="text-xs text-muted-foreground mt-1">
           Edit kategori, jenis barang, dan atribut di bawah. Klik{" "}
           <strong>Terbitkan Master Data</strong> agar semua toko mendapat versi yang sama
-          (penamaan & SKU konsisten).
+          (penamaan & SKU konsisten) dan kategori inventori toko ikut diselaraskan.
         </p>
       </Card>
 
