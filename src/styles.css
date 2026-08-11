@@ -252,3 +252,10 @@
   background-clip: text;
   color: transparent;
 }
+
+/* Midtrans Snap must sit above Radix Sheet/Dialog (z-50) */
+iframe#snap-midtrans,
+#snap-midtrans {
+  z-index: 2147483646 !important;
+  pointer-events: auto !important;
+}

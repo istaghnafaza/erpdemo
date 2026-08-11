@@ -68,6 +68,10 @@ export function UpgradePlanSheet({
         return;
       }
 
+      // Close sheet first — Radix overlay + focus trap blocks Snap clicks/scroll.
+      onOpenChange(false);
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+
       const outcome = await openPlanSnapCheckout(result.data);
       if (outcome === "success" || outcome === "pending") {
         toast.success(
