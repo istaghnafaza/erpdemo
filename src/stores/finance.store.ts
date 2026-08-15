@@ -113,6 +113,8 @@ export const useFinanceStore = create<FinanceState>()(
           reference: draft.reference,
           description: draft.description,
           user_id: draft.user_id,
+          counterpart_account_id: null,
+          pair_id: null,
           created_at: new Date().toISOString(),
           account: { name: account.name, type: account.type },
         };
@@ -147,6 +149,8 @@ export const useFinanceStore = create<FinanceState>()(
           reference: draft.reference,
           description: draft.description,
           user_id: draft.user_id,
+          counterpart_account_id: null,
+          pair_id: null,
           created_at: new Date().toISOString(),
           account: { name: account.name, type: account.type },
         };
@@ -177,6 +181,8 @@ export const useFinanceStore = create<FinanceState>()(
           reference: draft.reference,
           description: draft.description,
           user_id: draft.user_id,
+          counterpart_account_id: null,
+          pair_id: null,
           created_at: new Date().toISOString(),
         };
 
@@ -287,6 +293,8 @@ export const useFinanceStore = create<FinanceState>()(
             reference: ref,
             description: `Pelunasan piutang ${receivable.invoice}`,
             user_id: "33331111-0000-0000-0000-000000000001",
+            counterpart_account_id: null,
+            pair_id: null,
             created_at: payment.paymentDate,
             account: { name: account.name, type: account.type },
           };
@@ -326,6 +334,8 @@ export const useFinanceStore = create<FinanceState>()(
             reference: ref,
             description: `Bayar hutang ${payable.invoice}`,
             user_id: "33331111-0000-0000-0000-000000000001",
+            counterpart_account_id: null,
+            pair_id: null,
             created_at: payment.paymentDate,
             account: { name: account.name, type: account.type },
           };

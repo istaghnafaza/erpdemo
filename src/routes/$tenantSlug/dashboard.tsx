@@ -46,6 +46,8 @@ import {
   CheckCircle2,
   Layers,
   PiggyBank,
+  Scale,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { requireAuth } from "@/routes/$tenantSlug";
@@ -118,6 +120,7 @@ function DashboardPage() {
     topProducts,
     topProfitableToday,
     financeSummary,
+    cashflowKpis,
     recentNotifications,
     branches,
     branchSummaries,
@@ -272,6 +275,72 @@ function DashboardPage() {
         />
       ),
     },
+    {
+      id: "cash_vs_profit",
+      node: (
+        <KpiCard
+          key="cash_vs_profit"
+          label="Kas vs Laba"
+          value={<CurrencyDisplay value={cashflowKpis?.kasRiil ?? totalCashBalance} compact />}
+          sub={`Laba ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.labaNet ?? periodProfit.netProfit)} · Piutang ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.openArTotal ?? 0)}`}
+          icon={Scale}
+          gradient="info"
+          cta={{ label: "Keuangan", to: "/$tenantSlug/finance", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("cash_vs_profit")}
+        />
+      ),
+    },
+    {
+      id: "cash_forecast",
+      node: (
+        <KpiCard
+          key="cash_forecast"
+          label="Proyeksi Kas 30 Hari"
+          value={<CurrencyDisplay value={cashflowKpis?.forecastEnd30 ?? totalCashBalance} compact />}
+          sub={
+            cashflowKpis?.forecastGoesNegative
+              ? `Peringatan: saldo negatif ${cashflowKpis.firstNegativeDate ?? ""}`
+              : "Tidak ada peringatan saldo negatif"
+          }
+          icon={TrendingDown}
+          gradient={cashflowKpis?.forecastGoesNegative ? "danger" : "success"}
+          alert={Boolean(cashflowKpis?.forecastGoesNegative)}
+          cta={{ label: "Forecast", to: "/$tenantSlug/finance/forecast", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("cash_forecast")}
+        />
+      ),
+    },
+    {
+      id: "cash_lock_stock",
+      node: (
+        <KpiCard
+          key="cash_lock_stock"
+          label="Stok Lambat / Mati"
+          value={<CurrencyDisplay value={(cashflowKpis?.deadStockValue ?? 0) + (cashflowKpis?.slowStockValue ?? 0)} compact />}
+          sub={`Mati ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.deadStockValue ?? 0)} · Lambat ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.slowStockValue ?? 0)}`}
+          icon={Package}
+          gradient="warning"
+          alert={(cashflowKpis?.deadStockValue ?? 0) > 0}
+          cta={{ label: "Cash lock", to: "/$tenantSlug/finance/cash-lock", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("cash_lock_stock")}
+        />
+      ),
+    },
+    {
+      id: "ar_ap_due",
+      node: (
+        <KpiCard
+          key="ar_ap_due"
+          label="AR vs AP 30 Hari"
+          value={<CurrencyDisplay value={cashflowKpis?.arDue30 ?? overdueTotal} compact />}
+          sub={`Piutang vs hutang jatuh tempo 30 hari: ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.apDue30 ?? 0)} AP`}
+          icon={Receipt}
+          gradient="warning"
+          cta={{ label: "Piutang", to: "/$tenantSlug/receivables", params: { tenantSlug } }}
+          onClick={() => openKpiDetail("ar_ap_due")}
+        />
+      ),
+    },
   ];
 
   const visibleKpiCards = kpiCards.filter((k) => isOwner ? isKpiVisible(k.id) : true);
@@ -308,6 +377,23 @@ function DashboardPage() {
         </div>
       }
     >
+      {cashflowKpis?.forecastGoesNegative && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex items-start gap-2 min-w-0">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <p className="text-sm">
+              Proyeksi kas 30 hari menyentuh saldo negatif mulai{" "}
+              <strong>{cashflowKpis.firstNegativeDate}</strong>.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/$tenantSlug/finance/forecast" params={{ tenantSlug }}>
+              Lihat forecast
+            </Link>
+          </Button>
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {isLoading ? (

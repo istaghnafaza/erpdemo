@@ -27,6 +27,7 @@ export type DbFulfillmentSrc   = 'stock' | 'indent';
 export type DbFulfillmentStatus= 'planned' | 'in_progress' | 'delivered';
 export type DbAccountType      = 'cash' | 'bank';
 export type DbCashTxType       = 'income' | 'expense' | 'transfer';
+export type DbOwnerCapitalKind = 'prive_keluar' | 'setoran_owner';
 export type DbArStatus         = 'unpaid' | 'partial' | 'paid' | 'overdue';
 export type DbApStatus         = 'unpaid' | 'partial' | 'paid' | 'overdue';
 export type DbSyncStatus       = 'pending' | 'syncing' | 'synced' | 'failed';
@@ -635,6 +636,7 @@ export interface SoFulfillment {
   supplier_id: string | null;
   purchase_price_at_time: number;
   status: DbFulfillmentStatus;
+  created_at: string;
 }
 
 export type SoFulfillmentInsert = Omit<SoFulfillment, 'id'> & { id?: string };
@@ -653,9 +655,10 @@ export interface CashAccount {
   account_number: string | null;
   balance: number;
   is_active: boolean;
+  is_default: boolean;
 }
 
-export type CashAccountInsert = Omit<CashAccount, 'id'> & { id?: string };
+export type CashAccountInsert = Omit<CashAccount, 'id' | 'is_default'> & { id?: string; is_default?: boolean };
 export type CashAccountUpdate = Partial<Omit<CashAccountInsert, 'tenant_id' | 'branch_id'>>;
 
 
@@ -673,10 +676,42 @@ export interface CashTransaction {
   reference: string | null;
   description: string | null;
   user_id: string | null;
+  counterpart_account_id: string | null;
+  pair_id: string | null;
   created_at: string;
 }
 
-export type CashTransactionInsert = Omit<CashTransaction, 'id'> & { id?: string };
+export type CashTransactionInsert = Omit<
+  CashTransaction,
+  'id' | 'created_at' | 'counterpart_account_id' | 'pair_id'
+> & {
+  id?: string;
+  created_at?: string;
+  counterpart_account_id?: string | null;
+  pair_id?: string | null;
+};
+
+
+// ---------------------------------------------------------------------------
+// 25b. OwnerCapitalTransaction
+// ---------------------------------------------------------------------------
+export interface OwnerCapitalTransaction {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  cash_account_id: string;
+  kind: DbOwnerCapitalKind;
+  amount: number;
+  occurred_at: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type OwnerCapitalTransactionInsert = Omit<OwnerCapitalTransaction, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
 
 
 // ---------------------------------------------------------------------------

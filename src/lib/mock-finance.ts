@@ -127,6 +127,7 @@ export function getSeedMockCashAccounts(): CashAccount[] {
           template.type === "bank" ? template.name.split(" - ")[1] ?? null : null,
         balance: EMPTY_FINANCE_BRANCH_IDS.has(branchId) ? 0 : template.balance,
         is_active: true,
+        is_default: role === "kasir" || role === "bca",
       });
     }
   }
@@ -163,6 +164,7 @@ export function ensureMockCashAccounts(
           template.type === "bank" ? template.name.split(" - ")[1] ?? null : null,
         balance: persisted?.balance ?? seedBalance,
         is_active: persisted?.is_active ?? true,
+        is_default: persisted?.is_default ?? (role === "kasir" || role === "bca"),
       });
     }
   }
@@ -195,6 +197,8 @@ export function getSeedMockCashTransactions(
       reference: null,
       description: entry.description,
       user_id: MOCK_USER_OWNER,
+      counterpart_account_id: null,
+      pair_id: null,
       created_at: createdAt.toISOString(),
       account: account
         ? { name: account.name, type: account.type }

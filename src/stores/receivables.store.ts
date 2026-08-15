@@ -16,6 +16,7 @@ export interface RecordArPaymentDraft {
   cash_account_id: string;
   amount: number;
   user_id: string;
+  payment_method?: "cash" | "transfer";
 }
 
 export interface RecordCreditSaleDraft {

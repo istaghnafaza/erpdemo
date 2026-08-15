@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Building2, Layers } from "lucide-react";
+import { Plus, Building2, Layers, ArrowLeftRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
 import { FinanceSubNav } from "@/components/finance/FinanceSubNav";
 import { CashBookList } from "@/components/finance/CashBookList";
 import { ExpenseFormDialog } from "@/components/finance/ExpenseFormDialog";
+import { TransferCashDialog } from "@/components/finance/TransferCashDialog";
 import { useCashBook } from "@/hooks/useCashBook";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
 import { toast } from "sonner";
@@ -47,8 +48,11 @@ function CashBookPage() {
     setTypeFilter,
     formOpen,
     setFormOpen,
+    transferOpen,
+    setTransferOpen,
     actionLoading,
     recordExpense,
+    transferCash,
     isConsolidated,
     scopeLabel,
     branchNameById,
@@ -66,19 +70,29 @@ function CashBookPage() {
       title="Buku Kas"
       subtitle={subtitle}
       actions={
-        <Button
-          size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700"
-          disabled={!canRecordExpense}
-          title={
-            canRecordExpense
-              ? undefined
-              : "Pilih cabang spesifik untuk mencatat pengeluaran"
-          }
-          onClick={() => setFormOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Catat Pengeluaran
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canRecordExpense}
+            onClick={() => setTransferOpen(true)}
+          >
+            <ArrowLeftRight className="h-4 w-4 mr-1.5" /> Pindah Kas
+          </Button>
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700"
+            disabled={!canRecordExpense}
+            title={
+              canRecordExpense
+                ? undefined
+                : "Pilih cabang spesifik untuk mencatat pengeluaran"
+            }
+            onClick={() => setFormOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Catat Pengeluaran
+          </Button>
+        </div>
       }
     >
       <FinanceSubNav />
@@ -175,6 +189,18 @@ function CashBookPage() {
         onSubmit={async (data) => {
           const result = await recordExpense(data);
           if (result.success) toast.success("Pengeluaran dicatat");
+          else toast.error(result.error ?? "Gagal");
+          return result;
+        }}
+      />
+      <TransferCashDialog
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        accounts={accounts}
+        loading={actionLoading}
+        onSubmit={async (data) => {
+          const result = await transferCash(data);
+          if (result.success) toast.success("Kas dipindahkan");
           else toast.error(result.error ?? "Gagal");
           return result;
         }}

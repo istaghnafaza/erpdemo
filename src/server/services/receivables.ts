@@ -6,7 +6,9 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toAccountReceivable, toArPayment } from "@/server/db/mappers";
 import { accountsReceivable, arPayments } from "@/server/db/schema";
-import { insertCashTransactionInTx } from "@/server/services/finance";
+import { insertCashTransactionInTx, resolveDefaultCashAccountInTx } from "@/server/services/finance";
+import { AR_COLLECTION_CATEGORY } from "@/lib/cashflow-constants";
+import { ensureCashflowSchema } from "@/server/db/ensure-cashflow-schema";
 import type {
   AccountReceivable,
   AccountReceivableInsert,
@@ -99,6 +101,7 @@ export async function recordArPayment(
   payment: Omit<ArPaymentInsert, "tenant_id" | "ar_id">,
   options?: { cashAccountId?: string; branchId?: string },
 ): Promise<ArPayment> {
+  await ensureCashflowSchema();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -111,8 +114,7 @@ export async function recordArPayment(
     if (payment.amount > remaining) throw new Error("Nominal melebihi sisa tagihan");
 
     const newPaid = ar.paidAmount + payment.amount;
-    const dueStr =
-      typeof ar.dueDate === "string" ? ar.dueDate.slice(0, 10) : ar.dueDate.toString();
+    const dueStr = String(ar.dueDate).slice(0, 10);
     const newStatus = deriveArStatus(ar.totalAmount, newPaid, dueStr);
 
     const [paymentRow] = await tx
@@ -133,20 +135,20 @@ export async function recordArPayment(
       .set({ paidAmount: newPaid, status: newStatus })
       .where(eq(accountsReceivable.id, arId));
 
-    if (
-      options?.cashAccountId &&
-      options.branchId &&
-      payment.payment_method === "cash"
-    ) {
-      await insertCashTransactionInTx(tx, tenantId, options.branchId, options.cashAccountId, {
-        type: "income",
-        category: "Penagihan Piutang",
-        amount: payment.amount,
-        reference: `ar:${paymentRow.id}`,
-        description: `Pelunasan piutang ${ar.invoiceNumber}`,
-        user_id: payment.user_id,
-      });
-    }
+    const branchId = options?.branchId ?? ar.branchId;
+    const accountType = payment.payment_method === "transfer" ? "bank" : "cash";
+    const cashAccountId =
+      options?.cashAccountId ??
+      (await resolveDefaultCashAccountInTx(tx, tenantId, branchId, accountType));
+
+    await insertCashTransactionInTx(tx, tenantId, branchId, cashAccountId, {
+      type: "income",
+      category: AR_COLLECTION_CATEGORY,
+      amount: payment.amount,
+      reference: `ar:${paymentRow.id}`,
+      description: `Pelunasan piutang ${ar.invoiceNumber}`,
+      user_id: payment.user_id,
+    });
 
     return toArPayment(paymentRow);
   });

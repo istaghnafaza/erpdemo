@@ -20,6 +20,9 @@ export async function invalidatePosAfterCheckout(
       qc.invalidateQueries({ queryKey: queryKeys.salesOrders(tenantId, branchId) }),
       qc.invalidateQueries({ queryKey: queryKeys.moduleNavCounts(tenantId, branchId) }),
       qc.invalidateQueries({ queryKey: ["finance", tenantId, branchId] }),
+      qc.invalidateQueries({ queryKey: ["finance-overview", tenantId] }),
+      qc.invalidateQueries({ queryKey: ["cashflow-vs-accrual"] }),
+      qc.invalidateQueries({ queryKey: ["cashflow-kpis"] }),
     ]);
     if (options?.hadSalesOrder) {
       await qc.refetchQueries({ queryKey: queryKeys.moduleNavCounts(tenantId, branchId) });

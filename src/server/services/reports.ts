@@ -5,9 +5,14 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getReadDb } from "@/server/db";
 import {
-  computeItemMargin,
   effectiveItemSubtotal,
+  toQtyNumber,
 } from "@/lib/sales-margin";
+import {
+  getUnifiedProfitLoss,
+  loadPnlSource,
+  summarizePnlSource,
+} from "@/server/services/pnl";
 import type {
   CashierAuditRow,
   CashierTransactionRow,
@@ -15,7 +20,6 @@ import type {
 import {
   branchProducts,
   branches,
-  cashTransactions,
   dailyBranchSales,
   products,
   profiles,
@@ -165,6 +169,7 @@ export async function getTopProductsReport(
       purchasePrice: salesItems.purchasePrice,
       sellingPrice: salesItems.sellingPrice,
       subtotal: salesItems.subtotal,
+      isSoLine: salesItems.isSoLine,
     })
     .from(salesItems)
     .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
@@ -181,6 +186,7 @@ export async function getTopProductsReport(
   const productMap = new Map<string, TopProduct>();
 
   for (const item of rows) {
+    if (item.isSoLine) continue;
     const key = item.productId ?? item.sku;
     if (!productMap.has(key)) {
       productMap.set(key, {
@@ -194,9 +200,9 @@ export async function getTopProductsReport(
       });
     }
     const p = productMap.get(key)!;
-    p.totalQty += item.qty;
+    p.totalQty += toQtyNumber(item.qty);
     p.totalRevenue += item.subtotal;
-    p.totalProfit += (item.sellingPrice - item.purchasePrice) * item.qty;
+    p.totalProfit += (item.sellingPrice - item.purchasePrice) * toQtyNumber(item.qty);
   }
 
   return Array.from(productMap.values())
@@ -239,7 +245,7 @@ export async function getBranchSummariesReport(
 
   for (const s of stockRows) {
     const bSummary = summaries.find((b) => b.branchId === s.branchId);
-    if (bSummary && s.stock <= s.reorderPoint) {
+    if (bSummary && toQtyNumber(s.stock) <= s.reorderPoint) {
       bSummary.stockAlerts += 1;
     }
   }
@@ -272,9 +278,10 @@ export async function getStockAlertsReport(
   const alerts: StockAlertItem[] = [];
 
   for (const bp of bpRows) {
-    if (bp.stock > bp.reorderPoint) continue;
+    if (toQtyNumber(bp.stock) > bp.reorderPoint) continue;
     const p = productMap.get(bp.productId);
-    const stockStatus: StockStatus = bp.stock <= bp.reorderPoint * 0.4 ? "critical" : "low";
+    const stockNow = toQtyNumber(bp.stock);
+    const stockStatus: StockStatus = stockNow <= bp.reorderPoint * 0.4 ? "critical" : "low";
 
     alerts.push({
       branchProductId: bp.id,
@@ -284,8 +291,8 @@ export async function getStockAlertsReport(
       unit: p?.unit ?? "",
       branchId: bp.branchId,
       branchName: branchMap.get(bp.branchId) ?? "",
-      stock: bp.stock,
-      legacyStock: bp.legacyStock,
+      stock: stockNow,
+      legacyStock: toQtyNumber(bp.legacyStock),
       reorderPoint: bp.reorderPoint,
       stockStatus,
     });
@@ -297,18 +304,6 @@ export async function getStockAlertsReport(
 /** Alias — periode dashboard memakai tanggal WIB, selaras histori penjualan. */
 function txDateKey(iso: Date | string): string {
   return dateKeyInAppTz(iso);
-}
-
-function inDateRange(dateKey: string, from: string, to: string): boolean {
-  return dateKey >= from && dateKey <= to;
-}
-
-function isOpexCategory(category: string): boolean {
-  return (
-    category !== "HPP" &&
-    category !== "Pembelian" &&
-    category !== "Retur Penjualan"
-  );
 }
 
 const DASHBOARD_SALE_STATUSES = ["completed", "returned"] as const;
@@ -382,7 +377,7 @@ export async function getDashboardStatsReport(
       (s, i) =>
         s +
         effectiveItemSubtotal({
-          qty: i.qty,
+          qty: toQtyNumber(i.qty),
           qtyReturned: i.qtyReturned,
           subtotal: i.subtotal,
         }),
@@ -394,13 +389,9 @@ export async function getDashboardStatsReport(
   const sumRevenue = (arr: typeof txAll) =>
     arr.reduce((s, t) => s + effectiveRevenueForTx(t.id), 0);
 
-  const cashTxRows = await db.query.cashTransactions.findMany({
-    where: and(
-      eq(cashTransactions.tenantId, tenantId),
-      eq(cashTransactions.branchId, branchId),
-      eq(cashTransactions.type, "expense"),
-      gte(cashTransactions.createdAt, last30From),
-    ),
+  const pnlSource = await loadPnlSource(tenantId, branchId, {
+    from: last30Str,
+    to: todayStr,
   });
 
   const todayTx = txAll.filter((t) => txDateKey(t.createdAt) === todayStr);
@@ -408,41 +399,19 @@ export async function getDashboardStatsReport(
   const weekTx = txAll.filter((t) => txDateKey(t.createdAt) >= weekStartStr);
   const monthTx = txAll.filter((t) => txDateKey(t.createdAt) >= monthStartStr);
 
-  const grossProfitForRange = (from: string, to: string) => {
-    let gross = 0;
-    for (const item of salesItemRows) {
-      const d = txDateKey(item.createdAt);
-      if (!inDateRange(d, from, to)) continue;
-      gross += computeItemMargin({
-        qty: item.qty,
-        qtyReturned: item.qtyReturned,
-        subtotal: item.subtotal,
-        purchasePrice: item.purchasePrice,
-        isSoLine: item.isSoLine,
-      });
-    }
-    return gross;
-  };
+  const todayGrossPnl = summarizePnlSource(pnlSource, todayStr, todayStr);
+  const yesterdayGrossPnl = summarizePnlSource(pnlSource, yesterdayStr, yesterdayStr);
+  const weekGrossPnl = summarizePnlSource(pnlSource, weekStartStr, todayStr);
+  const monthGrossPnl = summarizePnlSource(pnlSource, monthStartStr, todayStr);
 
-  const opexForRange = (from: string, to: string) => {
-    let opex = 0;
-    for (const tx of cashTxRows) {
-      const d = txDateKey(tx.createdAt);
-      if (!inDateRange(d, from, to)) continue;
-      if (!isOpexCategory(tx.category)) continue;
-      opex += tx.amount;
-    }
-    return opex;
-  };
-
-  const todayGrossProfit = grossProfitForRange(todayStr, todayStr);
-  const todayOpex = opexForRange(todayStr, todayStr);
-  const yesterdayGrossProfit = grossProfitForRange(yesterdayStr, yesterdayStr);
-  const yesterdayOpex = opexForRange(yesterdayStr, yesterdayStr);
-  const weekGrossProfit = grossProfitForRange(weekStartStr, todayStr);
-  const weekOpex = opexForRange(weekStartStr, todayStr);
-  const monthGrossProfit = grossProfitForRange(monthStartStr, todayStr);
-  const monthOpex = opexForRange(monthStartStr, todayStr);
+  const todayGrossProfit = todayGrossPnl.grossProfit;
+  const todayOpex = todayGrossPnl.opex;
+  const yesterdayGrossProfit = yesterdayGrossPnl.grossProfit;
+  const yesterdayOpex = yesterdayGrossPnl.opex;
+  const weekGrossProfit = weekGrossPnl.grossProfit;
+  const weekOpex = weekGrossPnl.opex;
+  const monthGrossProfit = monthGrossPnl.grossProfit;
+  const monthOpex = monthGrossPnl.opex;
 
   const [arSummary, apSummary, stockAlerts, chartData, cashAccounts] = await Promise.all([
     getArSummary(tenantId, branchId),
@@ -512,43 +481,27 @@ export async function getProfitLossSummaryReport(
   tenantId: string,
   branchId: string,
   dateRange: DateRangeFilter,
-): Promise<{ revenue: number; cogs: number; grossProfit: number; grossMargin: number }> {
-  const db = getReadDb();
-
-  const rows = await db
-    .select({
-      qty: salesItems.qty,
-      qtyReturned: salesItems.qtyReturned,
-      purchasePrice: salesItems.purchasePrice,
-      subtotal: salesItems.subtotal,
-      isSoLine: salesItems.isSoLine,
-    })
-    .from(salesItems)
-    .innerJoin(salesTransactions, eq(salesItems.transactionId, salesTransactions.id))
-    .where(
-      and(
-        eq(salesItems.tenantId, tenantId),
-        eq(salesTransactions.branchId, branchId),
-        inArray(salesTransactions.status, [...DASHBOARD_SALE_STATUSES]),
-        gte(salesTransactions.createdAt, new Date(dateRange.from)),
-        lte(salesTransactions.createdAt, new Date(dateRange.to)),
-      ),
-    );
-
-  let revenue = 0;
-  let cogs = 0;
-
-  for (const item of rows) {
-    const eq = Math.max(0, item.qty - item.qtyReturned);
-    if (eq <= 0 || item.qty <= 0) continue;
-    revenue += Math.round((item.subtotal * eq) / item.qty);
-    cogs += item.purchasePrice * eq;
-  }
-
-  const grossProfit = revenue - cogs;
-  const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-
-  return { revenue, cogs, grossProfit, grossMargin: Math.round(grossMargin * 100) / 100 };
+): Promise<{
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  grossMargin: number;
+  opex: number;
+  netProfit: number;
+  salesMargin: number;
+  marginPct: number;
+}> {
+  const pl = await getUnifiedProfitLoss(tenantId, branchId, dateRange);
+  return {
+    revenue: pl.sales,
+    cogs: pl.cogs,
+    grossProfit: pl.grossProfit,
+    grossMargin: pl.grossMarginPct,
+    opex: pl.opex,
+    netProfit: pl.netProfit,
+    salesMargin: pl.salesMargin,
+    marginPct: pl.marginPct,
+  };
 }
 
 function reportPeriodToDateRange(periodDays: number): DateRangeFilter {
@@ -716,6 +669,8 @@ export async function getReportsBundleReport(
   let plRevenue = 0;
   let plCogs = 0;
   let plGross = 0;
+  let plOpex = 0;
+  let plNet = 0;
 
   await Promise.all(
     branchIds.map(async (branchId) => {
@@ -756,6 +711,8 @@ export async function getReportsBundleReport(
       plRevenue += pl.revenue;
       plCogs += pl.cogs;
       plGross += pl.grossProfit;
+      plOpex += pl.opex;
+      plNet += pl.netProfit;
     }),
   );
 
@@ -793,9 +750,9 @@ export async function getReportsBundleReport(
       salesMargin: plGross,
       cogs: plCogs,
       grossProfit: plGross,
-      opex: 0,
-      netProfit: plGross,
-      marginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
+      opex: plOpex,
+      netProfit: plNet,
+      marginPct: plRevenue > 0 ? Math.round((plNet / plRevenue) * 100) : 0,
       grossMarginPct: plRevenue > 0 ? Math.round((plGross / plRevenue) * 100) : 0,
     },
     cashierAudit,

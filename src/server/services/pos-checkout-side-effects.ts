@@ -7,12 +7,14 @@ import { generateDeliveryNumber } from "@/lib/delivery-utils";
 import { orderRequiresPhysicalDelivery } from "@/lib/sales-transaction-utils";
 import {
   branches,
-  cashAccounts,
   deliveries,
   salesOrderItems,
   salesOrders,
 } from "@/server/db/schema";
-import { insertCashTransactionInTx } from "@/server/services/finance";
+import {
+  insertCashTransactionInTx,
+  resolveDefaultCashAccountInTx,
+} from "@/server/services/finance";
 import { nextDocNumberForTable } from "@/server/services/doc-numbers";
 import type {
   PosCheckoutExtras,
@@ -34,28 +36,7 @@ async function resolveOrCreateCashAccountInTx(
   branchId: string,
   accountType: "cash" | "bank",
 ): Promise<string> {
-  const existing = await tx.query.cashAccounts.findFirst({
-    where: and(
-      eq(cashAccounts.tenantId, tenantId),
-      eq(cashAccounts.branchId, branchId),
-      eq(cashAccounts.type, accountType),
-      eq(cashAccounts.isActive, true),
-    ),
-  });
-  if (existing) return existing.id;
-
-  const [row] = await tx
-    .insert(cashAccounts)
-    .values({
-      tenantId,
-      branchId,
-      name: accountType === "cash" ? "Kas Toko" : "Rekening Bank",
-      type: accountType,
-      balance: 0,
-      isActive: true,
-    })
-    .returning();
-  return row!.id;
+  return resolveDefaultCashAccountInTx(tx, tenantId, branchId, accountType);
 }
 
 function cashAccountTypeForPayment(

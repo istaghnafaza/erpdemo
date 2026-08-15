@@ -51,8 +51,8 @@ export function ProfitLossCard({ data, periodLabel = "Bulan Ini" }: ProfitLossCa
         <h3 className="font-semibold">Laporan Laba Rugi — {periodLabel}</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-6">
-        Margin keuntungan dihitung per penjualan (harga jual − harga beli × qty) · Otomatis dari
-        transaksi POS
+        Margin keuntungan dari penjualan stok (harga jual − harga beli). Baris SO baru masuk
+        setelah barang keluar. Opex dari buku kas (bukan prive/setoran/HPP).
       </p>
       <div className="max-w-xl space-y-3">
         <PnlRow label="Pendapatan Penjualan" value={data.sales} bold />

@@ -54,6 +54,9 @@ import { Route as TenantSlugPurchasingGoodsReceiptRouteImport } from './routes/$
 import { Route as TenantSlugInventoryStockTransferRouteImport } from './routes/$tenantSlug/inventory/stock-transfer'
 import { Route as TenantSlugInventoryStockOpnameRouteImport } from './routes/$tenantSlug/inventory/stock-opname'
 import { Route as TenantSlugInventoryProductsRouteImport } from './routes/$tenantSlug/inventory/products'
+import { Route as TenantSlugFinanceOwnerCapitalRouteImport } from './routes/$tenantSlug/finance/owner-capital'
+import { Route as TenantSlugFinanceForecastRouteImport } from './routes/$tenantSlug/finance/forecast'
+import { Route as TenantSlugFinanceCashLockRouteImport } from './routes/$tenantSlug/finance/cash-lock'
 import { Route as TenantSlugFinanceCashBookRouteImport } from './routes/$tenantSlug/finance/cash-book'
 import { Route as TenantSlugSettingsMasterDataIndexRouteImport } from './routes/$tenantSlug/settings/master-data/index'
 import { Route as TenantSlugSettingsMasterDataProductAttributesRouteImport } from './routes/$tenantSlug/settings/master-data/product-attributes'
@@ -299,6 +302,24 @@ const TenantSlugInventoryProductsRoute =
     path: '/inventory/products',
     getParentRoute: () => TenantSlugRoute,
   } as any)
+const TenantSlugFinanceOwnerCapitalRoute =
+  TenantSlugFinanceOwnerCapitalRouteImport.update({
+    id: '/finance/owner-capital',
+    path: '/finance/owner-capital',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugFinanceForecastRoute =
+  TenantSlugFinanceForecastRouteImport.update({
+    id: '/finance/forecast',
+    path: '/finance/forecast',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
+const TenantSlugFinanceCashLockRoute =
+  TenantSlugFinanceCashLockRouteImport.update({
+    id: '/finance/cash-lock',
+    path: '/finance/cash-lock',
+    getParentRoute: () => TenantSlugRoute,
+  } as any)
 const TenantSlugFinanceCashBookRoute =
   TenantSlugFinanceCashBookRouteImport.update({
     id: '/finance/cash-book',
@@ -339,6 +360,9 @@ export interface FileRoutesByFullPath {
   '/platform/finance': typeof PlatformFinanceRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
+  '/$tenantSlug/finance/forecast': typeof TenantSlugFinanceForecastRoute
+  '/$tenantSlug/finance/owner-capital': typeof TenantSlugFinanceOwnerCapitalRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
   '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
@@ -388,6 +412,9 @@ export interface FileRoutesByTo {
   '/platform/finance': typeof PlatformFinanceRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
+  '/$tenantSlug/finance/forecast': typeof TenantSlugFinanceForecastRoute
+  '/$tenantSlug/finance/owner-capital': typeof TenantSlugFinanceOwnerCapitalRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
   '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
@@ -439,6 +466,9 @@ export interface FileRoutesById {
   '/platform/finance': typeof PlatformFinanceRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
+  '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
+  '/$tenantSlug/finance/forecast': typeof TenantSlugFinanceForecastRoute
+  '/$tenantSlug/finance/owner-capital': typeof TenantSlugFinanceOwnerCapitalRoute
   '/$tenantSlug/inventory/products': typeof TenantSlugInventoryProductsRoute
   '/$tenantSlug/inventory/stock-opname': typeof TenantSlugInventoryStockOpnameRoute
   '/$tenantSlug/inventory/stock-transfer': typeof TenantSlugInventoryStockTransferRoute
@@ -491,6 +521,9 @@ export interface FileRouteTypes {
     | '/platform/finance'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/finance/cash-lock'
+    | '/$tenantSlug/finance/forecast'
+    | '/$tenantSlug/finance/owner-capital'
     | '/$tenantSlug/inventory/products'
     | '/$tenantSlug/inventory/stock-opname'
     | '/$tenantSlug/inventory/stock-transfer'
@@ -540,6 +573,9 @@ export interface FileRouteTypes {
     | '/platform/finance'
     | '/onboarding'
     | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/finance/cash-lock'
+    | '/$tenantSlug/finance/forecast'
+    | '/$tenantSlug/finance/owner-capital'
     | '/$tenantSlug/inventory/products'
     | '/$tenantSlug/inventory/stock-opname'
     | '/$tenantSlug/inventory/stock-transfer'
@@ -590,6 +626,9 @@ export interface FileRouteTypes {
     | '/platform/finance'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
+    | '/$tenantSlug/finance/cash-lock'
+    | '/$tenantSlug/finance/forecast'
+    | '/$tenantSlug/finance/owner-capital'
     | '/$tenantSlug/inventory/products'
     | '/$tenantSlug/inventory/stock-opname'
     | '/$tenantSlug/inventory/stock-transfer'
@@ -951,6 +990,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantSlugInventoryProductsRouteImport
       parentRoute: typeof TenantSlugRoute
     }
+    '/$tenantSlug/finance/owner-capital': {
+      id: '/$tenantSlug/finance/owner-capital'
+      path: '/finance/owner-capital'
+      fullPath: '/$tenantSlug/finance/owner-capital'
+      preLoaderRoute: typeof TenantSlugFinanceOwnerCapitalRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/finance/forecast': {
+      id: '/$tenantSlug/finance/forecast'
+      path: '/finance/forecast'
+      fullPath: '/$tenantSlug/finance/forecast'
+      preLoaderRoute: typeof TenantSlugFinanceForecastRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
+    '/$tenantSlug/finance/cash-lock': {
+      id: '/$tenantSlug/finance/cash-lock'
+      path: '/finance/cash-lock'
+      fullPath: '/$tenantSlug/finance/cash-lock'
+      preLoaderRoute: typeof TenantSlugFinanceCashLockRouteImport
+      parentRoute: typeof TenantSlugRoute
+    }
     '/$tenantSlug/finance/cash-book': {
       id: '/$tenantSlug/finance/cash-book'
       path: '/finance/cash-book'
@@ -998,6 +1058,9 @@ interface TenantSlugRouteChildren {
   TenantSlugShopRoute: typeof TenantSlugShopRouteWithChildren
   TenantSlugTokoSayaRoute: typeof TenantSlugTokoSayaRoute
   TenantSlugFinanceCashBookRoute: typeof TenantSlugFinanceCashBookRoute
+  TenantSlugFinanceCashLockRoute: typeof TenantSlugFinanceCashLockRoute
+  TenantSlugFinanceForecastRoute: typeof TenantSlugFinanceForecastRoute
+  TenantSlugFinanceOwnerCapitalRoute: typeof TenantSlugFinanceOwnerCapitalRoute
   TenantSlugInventoryProductsRoute: typeof TenantSlugInventoryProductsRoute
   TenantSlugInventoryStockOpnameRoute: typeof TenantSlugInventoryStockOpnameRoute
   TenantSlugInventoryStockTransferRoute: typeof TenantSlugInventoryStockTransferRoute
@@ -1033,6 +1096,9 @@ const TenantSlugRouteChildren: TenantSlugRouteChildren = {
   TenantSlugShopRoute: TenantSlugShopRouteWithChildren,
   TenantSlugTokoSayaRoute: TenantSlugTokoSayaRoute,
   TenantSlugFinanceCashBookRoute: TenantSlugFinanceCashBookRoute,
+  TenantSlugFinanceCashLockRoute: TenantSlugFinanceCashLockRoute,
+  TenantSlugFinanceForecastRoute: TenantSlugFinanceForecastRoute,
+  TenantSlugFinanceOwnerCapitalRoute: TenantSlugFinanceOwnerCapitalRoute,
   TenantSlugInventoryProductsRoute: TenantSlugInventoryProductsRoute,
   TenantSlugInventoryStockOpnameRoute: TenantSlugInventoryStockOpnameRoute,
   TenantSlugInventoryStockTransferRoute: TenantSlugInventoryStockTransferRoute,

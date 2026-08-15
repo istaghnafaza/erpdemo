@@ -12,6 +12,10 @@ export const DASHBOARD_KPI_IDS = [
   "critical_stock",
   "overdue_ar",
   "cash_balance",
+  "cash_vs_profit",
+  "cash_forecast",
+  "cash_lock_stock",
+  "ar_ap_due",
 ] as const;
 
 export type DashboardKpiId = (typeof DASHBOARD_KPI_IDS)[number];
@@ -23,6 +27,10 @@ export const DASHBOARD_KPI_LABELS: Record<DashboardKpiId, string> = {
   critical_stock: "Stok Kritis",
   overdue_ar: "Piutang Jatuh Tempo",
   cash_balance: "Saldo Kas & Bank",
+  cash_vs_profit: "Kas vs Laba",
+  cash_forecast: "Proyeksi Kas 30 Hari",
+  cash_lock_stock: "Stok Lambat / Mati",
+  ar_ap_due: "AR vs AP 30 Hari",
 };
 
 const DEFAULT_VISIBLE: DashboardKpiId[] = [...DASHBOARD_KPI_IDS];

@@ -28,7 +28,8 @@ export type RbacFeature =
   | "online_orders"
   | "settings"
   | "pricing_rules"
-  | "toko_saya";
+  | "toko_saya"
+  | "owner_capital";
 
 const ACCESS_MATRIX: Record<RbacFeature, UserRole[]> = {
   dashboard: ["owner", "manager"],
@@ -55,6 +56,7 @@ const ACCESS_MATRIX: Record<RbacFeature, UserRole[]> = {
   settings: ["owner", "manager"],
   pricing_rules: ["owner", "manager"],
   toko_saya: ["owner"],
+  owner_capital: ["owner", "accountant"],
 };
 
 const EDIT_MATRIX: Partial<Record<RbacFeature, UserRole[]>> = {
@@ -70,6 +72,7 @@ const EDIT_MATRIX: Partial<Record<RbacFeature, UserRole[]>> = {
   settings: ["owner", "manager"],
   pricing_rules: ["owner", "manager"],
   toko_saya: ["owner"],
+  owner_capital: ["owner", "accountant"],
 };
 
 const APPROVE_MATRIX: Partial<Record<RbacFeature, UserRole[]>> = {

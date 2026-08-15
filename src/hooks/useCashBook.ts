@@ -12,7 +12,7 @@ import { useReceivablesStore } from "@/stores/receivables.store";
 import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import { fetchCashBookOverview } from "@/lib/finance-overview-client";
-import { recordCashTransaction } from "@/lib/api/finance";
+import { recordCashTransaction, transferBetweenAccounts } from "@/lib/api/finance";
 import { queryKeys } from "@/lib/query-keys";
 import { EXPENSE_CATEGORIES } from "@/lib/mock-finance";
 import { filterFinanceByBranches, getFinanceScopeLabel } from "@/lib/finance-scope";
@@ -58,6 +58,7 @@ export function useCashBook() {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -131,6 +132,9 @@ export function useCashBook() {
     await queryClient.invalidateQueries({
       queryKey: queryKeys.financeOverview(tenantId, branchIds),
     });
+    await queryClient.invalidateQueries({ queryKey: ["cashflow-vs-accrual"] });
+    await queryClient.invalidateQueries({ queryKey: ["cash-forecast"] });
+    await queryClient.invalidateQueries({ queryKey: ["cashflow-kpis"] });
   }, [isMockTenant, queryClient, tenantId, branchIds, dateFrom, dateTo]);
 
   const recordExpense = useCallback(
@@ -196,6 +200,35 @@ export function useCashBook() {
     ],
   );
 
+  const transferCash = useCallback(
+    async (data: {
+      fromAccountId: string;
+      toAccountId: string;
+      amount: number;
+      description: string | null;
+    }) => {
+      if (!user || !activeBranch?.id) {
+        return { success: false, error: "Pilih cabang terlebih dahulu" };
+      }
+      if (isMockTenant) {
+        return { success: false, error: "Transfer internal tersedia di data Neon" };
+      }
+      setActionLoading(true);
+      const result = await transferBetweenAccounts(
+        tenantId,
+        data.fromAccountId,
+        data.toAccountId,
+        data.amount,
+        data.description,
+      );
+      setActionLoading(false);
+      if (result.error) return { success: false, error: result.error };
+      await refreshData();
+      return { success: true };
+    },
+    [user, activeBranch, isMockTenant, tenantId, refreshData],
+  );
+
   return {
     user,
     branch: activeBranch,
@@ -217,8 +250,11 @@ export function useCashBook() {
     setTypeFilter,
     formOpen,
     setFormOpen,
+    transferOpen,
+    setTransferOpen,
     actionLoading,
     recordExpense,
+    transferCash,
     loadData: refreshData,
   };
 }

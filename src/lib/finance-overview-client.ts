@@ -5,6 +5,7 @@
 import { getFinanceOverview } from "@/lib/api/finance";
 import type { MockCashTxWithAccount } from "@/lib/mock-finance";
 import type { ReceivablesSummary } from "@/lib/receivables-calculations";
+import type { ProfitLossSummary } from "@/lib/finance-calculations";
 import type { CashAccount, CashTransaction } from "@/types/database";
 
 export interface FinanceOverviewBranchSlice {
@@ -12,16 +13,20 @@ export interface FinanceOverviewBranchSlice {
   accounts: CashAccount[];
   transactions: CashTransaction[];
   arSummary: { total: number; overdue: number; unpaid: number; partial: number };
+  profitLoss?: ProfitLossSummary;
 }
 
 export interface FinanceOverviewReport {
   branches: FinanceOverviewBranchSlice[];
+  profitLoss?: ProfitLossSummary;
 }
 
 export interface FinanceOverviewData {
   accounts: CashAccount[];
   transactions: MockCashTxWithAccount[];
   receivablesSummary: ReceivablesSummary;
+  profitLoss: ProfitLossSummary | null;
+  branchProfitLoss: Map<string, ProfitLossSummary>;
 }
 
 export async function fetchFinanceOverview(
@@ -38,7 +43,13 @@ export async function fetchFinanceOverview(
   };
 
   if (branchIds.length === 0) {
-    return { accounts: [], transactions: [], receivablesSummary: emptyAr };
+    return {
+      accounts: [],
+      transactions: [],
+      receivablesSummary: emptyAr,
+      profitLoss: null,
+      branchProfitLoss: new Map(),
+    };
   }
 
   const result = await getFinanceOverview(tenantId, branchIds, {
@@ -68,6 +79,12 @@ export async function fetchFinanceOverview(
     accounts: branches.flatMap((b) => b.accounts),
     transactions: branches.flatMap((b) => b.transactions) as MockCashTxWithAccount[],
     receivablesSummary,
+    profitLoss: result.data?.profitLoss ?? null,
+    branchProfitLoss: new Map(
+      branches
+        .filter((b) => b.profitLoss)
+        .map((b) => [b.branchId, b.profitLoss!]),
+    ),
   };
 }
 

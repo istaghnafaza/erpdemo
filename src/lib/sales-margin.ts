@@ -13,6 +13,13 @@ type MarginItem = {
   isSoLine?: boolean;
 };
 
+/** Drizzle `numeric` columns come back as string. */
+export function toQtyNumber(value: string | number | null | undefined): number {
+  if (value == null || value === "") return 0;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Qty efektif setelah retur — dipakai dashboard & histori penjualan. */
 export function effectiveItemQty(item: Pick<MarginItem, "qty" | "qtyReturned">): number {
   return Math.max(0, item.qty - (item.qtyReturned ?? 0));
@@ -26,22 +33,32 @@ export function effectiveItemSubtotal(item: Pick<MarginItem, "qty" | "qtyReturne
   return Math.round((item.subtotal * eq) / item.qty);
 }
 
-/** Margin satu baris (termasuk barang SO / indent dari checkout POS). */
+/**
+ * Margin satu baris stok yang sudah keluar.
+ * Baris SO ditunda sampai fulfillment (stok benar-benar keluar).
+ */
 export function computeItemMargin(item: MarginItem): number {
+  if (item.isSoLine) return 0;
   const eq = effectiveItemQty(item);
   if (eq <= 0 || item.qty <= 0) return 0;
   const unitMargin = (item.subtotal - item.purchasePrice * item.qty) / item.qty;
   return Math.round(unitMargin * eq);
 }
 
-/** Omzet efektif transaksi setelah retur (grandTotal × rasio subtotal efektif). */
+/** Subtotal efektif baris non-SO (untuk P&L accrual). */
+export function effectiveRecognizedSubtotal(item: MarginItem): number {
+  if (item.isSoLine) return 0;
+  return effectiveItemSubtotal(item);
+}
+
+/** Omzet P&L: SO dikeluarkan sampai barang keluar; sisanya proporsional setelah retur. */
 export function computeTransactionRevenue(tx: SalesTransactionRecord): number {
   if (tx.status !== "completed" && tx.status !== "returned") return 0;
   if (tx.items.length === 0) return tx.grandTotal;
   const totalSub = tx.items.reduce((s, i) => s + i.subtotal, 0);
   if (totalSub <= 0) return tx.grandTotal;
-  const effSub = tx.items.reduce((s, i) => s + effectiveItemSubtotal(i), 0);
-  return Math.round((tx.grandTotal * effSub) / totalSub);
+  const recognizedSub = tx.items.reduce((s, i) => s + effectiveRecognizedSubtotal(i), 0);
+  return Math.round((tx.grandTotal * recognizedSub) / totalSub);
 }
 
 export function computeTransactionMargin(tx: SalesTransactionRecord): number {
@@ -103,6 +120,7 @@ export function topProfitableFromSalesRecords(
     if (options?.to && d > options.to) continue;
 
     for (const item of sale.items) {
+      if (item.isSoLine) continue;
       const profit = computeItemMargin(item);
       const prev = bySku.get(item.sku);
       if (!prev) {

@@ -36,6 +36,7 @@ import type {
   SoFulfillment,
   StockTransfer,
   StockTransferItem,
+  OwnerCapitalTransaction,
 } from "@/types/database";
 import type {
   branches,
@@ -67,6 +68,7 @@ import type {
   soFulfillments,
   stockTransfers,
   stockTransferItems,
+  ownerCapitalTransactions,
 } from "@/server/db/schema";
 
 type TenantRow = typeof tenants.$inferSelect;
@@ -97,6 +99,7 @@ type SalesOrderItemRow = typeof salesOrderItems.$inferSelect;
 type SoFulfillmentRow = typeof soFulfillments.$inferSelect;
 type StockTransferRow = typeof stockTransfers.$inferSelect;
 type StockTransferItemRow = typeof stockTransferItems.$inferSelect;
+type OwnerCapitalRow = typeof ownerCapitalTransactions.$inferSelect;
 type ProductSellUnitRow = typeof productSellUnits.$inferSelect;
 
 /** Coerce Drizzle numeric (string | number) → number. */
@@ -394,6 +397,7 @@ export function toCashAccount(row: CashAccountRow): CashAccount {
     account_number: row.accountNumber,
     balance: row.balance,
     is_active: row.isActive,
+    is_default: row.isDefault ?? false,
   };
 }
 
@@ -409,6 +413,8 @@ export function toCashTransaction(row: CashTransactionRow): CashTransaction {
     reference: row.reference,
     description: row.description,
     user_id: row.userId,
+    counterpart_account_id: row.counterpartAccountId ?? null,
+    pair_id: row.pairId ?? null,
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -608,6 +614,7 @@ export function toSoFulfillment(row: SoFulfillmentRow): SoFulfillment {
     supplier_id: row.supplierId,
     purchase_price_at_time: row.purchasePriceAtTime,
     status: row.status,
+    created_at: row.createdAt?.toISOString?.() ?? new Date().toISOString(),
   };
 }
 
@@ -640,5 +647,20 @@ export function toStockTransferItem(row: StockTransferItemRow): StockTransferIte
     requested_qty: row.requestedQty,
     sent_qty: row.sentQty,
     received_qty: row.receivedQty,
+  };
+}
+
+export function toOwnerCapitalTransaction(row: OwnerCapitalRow): OwnerCapitalTransaction {
+  return {
+    id: row.id,
+    tenant_id: row.tenantId,
+    branch_id: row.branchId,
+    cash_account_id: row.cashAccountId,
+    kind: row.kind,
+    amount: row.amount,
+    occurred_at: formatDate(row.occurredAt),
+    notes: row.notes,
+    created_by: row.createdBy,
+    created_at: row.createdAt.toISOString(),
   };
 }

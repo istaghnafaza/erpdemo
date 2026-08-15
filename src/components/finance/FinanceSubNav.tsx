@@ -1,13 +1,24 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, LayoutDashboard } from "lucide-react";
+import { BookOpen, LayoutDashboard, Landmark, LineChart, Package } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
+import { canAccess, type RbacFeature } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
-const TABS = [
+const TABS: Array<{
+  route:
+    | "/$tenantSlug/finance"
+    | "/$tenantSlug/finance/cash-book"
+    | "/$tenantSlug/finance/forecast"
+    | "/$tenantSlug/finance/cash-lock"
+    | "/$tenantSlug/finance/owner-capital";
+  match: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  feature?: RbacFeature;
+}> = [
   {
     route: "/$tenantSlug/finance" as const,
-    match: "/finance",
-    exclude: "/finance/cash-book",
+    match: "ringkasan",
     label: "Ringkasan",
     icon: LayoutDashboard,
   },
@@ -17,23 +28,49 @@ const TABS = [
     label: "Buku Kas",
     icon: BookOpen,
   },
+  {
+    route: "/$tenantSlug/finance/forecast" as const,
+    match: "/finance/forecast",
+    label: "Forecast Kas",
+    icon: LineChart,
+  },
+  {
+    route: "/$tenantSlug/finance/cash-lock" as const,
+    match: "/finance/cash-lock",
+    label: "Cash Lock",
+    icon: Package,
+  },
+  {
+    route: "/$tenantSlug/finance/owner-capital" as const,
+    match: "/finance/owner-capital",
+    label: "Prive / Setoran",
+    icon: Landmark,
+    feature: "owner_capital",
+  },
 ];
 
 export function FinanceSubNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const tenantSlug =
     useAuthStore((s) => s.currentTenant?.slug) ?? pathname.split("/")[1] ?? "";
+  const role = useAuthStore((s) => s.currentUser?.profile.role);
+
+  const isRingkasan =
+    pathname.includes("/finance") &&
+    !pathname.includes("/finance/cash-book") &&
+    !pathname.includes("/finance/forecast") &&
+    !pathname.includes("/finance/cash-lock") &&
+    !pathname.includes("/finance/owner-capital");
 
   return (
     <nav
       className="flex flex-wrap gap-1 border-b border-border mb-6 pb-1"
       aria-label="Navigasi modul Keuangan"
     >
-      {TABS.map((tab) => {
+      {TABS.filter((tab) => !tab.feature || canAccess(role, tab.feature)).map((tab) => {
         const Icon = tab.icon;
         const active =
-          pathname.includes(tab.match) &&
-          !(tab.exclude && pathname.includes(tab.exclude));
+          tab.match === "ringkasan" ? isRingkasan : pathname.includes(tab.match);
         return (
           <Link
             key={tab.route}

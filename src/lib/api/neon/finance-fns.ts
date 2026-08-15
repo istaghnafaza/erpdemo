@@ -135,6 +135,105 @@ export const neonGetFinanceOverview = createServerFn({ method: "POST" })
     return getFinanceOverviewReport(data.tenantId, data.branchIds, data.options);
   });
 
+export const neonTransferBetweenAccounts = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      fromAccountId: string;
+      toAccountId: string;
+      amount: number;
+      description?: string | null;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const session = await requireTenant(data.tenantId);
+    const { transferBetweenAccounts } = await import("@/server/services/finance");
+    return transferBetweenAccounts(
+      data.tenantId,
+      data.fromAccountId,
+      data.toAccountId,
+      data.amount,
+      session.sub,
+      data.description,
+    );
+  });
+
+export const neonGetCashVsAccrual = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      branchIds: string[];
+      dateRange?: { from: string; to: string };
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { getCashVsAccrual } = await import("@/server/services/cashflow-intelligence");
+    return getCashVsAccrual(data.tenantId, data.branchIds, data.dateRange);
+  });
+
+export const neonGetCashForecast = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string; branchIds: string[]; horizonDays?: number }) => data)
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { getCashForecast } = await import("@/server/services/cashflow-intelligence");
+    return getCashForecast(data.tenantId, data.branchIds, data.horizonDays ?? 30);
+  });
+
+export const neonGetInventoryCashLock = createServerFn({ method: "POST" })
+  .validator(
+    (data: { tenantId: string; branchIds: string[]; categoryId?: string }) => data,
+  )
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { getInventoryCashLock } = await import("@/server/services/cashflow-intelligence");
+    return getInventoryCashLock(data.tenantId, data.branchIds, data.categoryId);
+  });
+
+export const neonGetCashflowDashboardKpis = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string; branchIds: string[] }) => data)
+  .handler(async ({ data }) => {
+    await requireTenant(data.tenantId);
+    const { getCashflowDashboardKpis } = await import("@/server/services/cashflow-intelligence");
+    return getCashflowDashboardKpis(data.tenantId, data.branchIds);
+  });
+
+export const neonListOwnerCapital = createServerFn({ method: "POST" })
+  .validator((data: { tenantId: string; branchIds: string[] }) => data)
+  .handler(async ({ data }) => {
+    const session = await requireTenant(data.tenantId);
+    const { assertTenantRoles } = await import("@/server/auth/request-session");
+    await assertTenantRoles(session, data.tenantId, ["owner", "accountant"]);
+    const { listOwnerCapitalTransactions } = await import("@/server/services/owner-capital");
+    return listOwnerCapitalTransactions(data.tenantId, data.branchIds);
+  });
+
+export const neonRecordOwnerCapital = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      tenantId: string;
+      payload: {
+        branch_id: string;
+        cash_account_id: string;
+        kind: "prive_keluar" | "setoran_owner";
+        amount: number;
+        occurred_at: string;
+        notes?: string | null;
+      };
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const session = await requireTenant(data.tenantId);
+    const { assertTenantRoles } = await import("@/server/auth/request-session");
+    await assertTenantRoles(session, data.tenantId, ["owner", "accountant"]);
+    const { recordOwnerCapital } = await import("@/server/services/owner-capital");
+    return recordOwnerCapital(data.tenantId, {
+      ...data.payload,
+      notes: data.payload.notes ?? null,
+      created_by: session.sub,
+    });
+  });
+
 // --- Receivables ---
 
 export const neonGetReceivables = createServerFn({ method: "POST" })

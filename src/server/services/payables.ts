@@ -6,7 +6,9 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toAccountPayable, toApPayment } from "@/server/db/mappers";
 import { accountsPayable, apPayments } from "@/server/db/schema";
-import { insertCashTransactionInTx } from "@/server/services/finance";
+import { insertCashTransactionInTx, resolveDefaultCashAccountInTx } from "@/server/services/finance";
+import { AP_PAYMENT_CATEGORY } from "@/lib/cashflow-constants";
+import { ensureCashflowSchema } from "@/server/db/ensure-cashflow-schema";
 import type {
   AccountPayable,
   AccountPayableInsert,
@@ -86,6 +88,7 @@ export async function recordApPayment(
   apId: string,
   payment: Omit<ApPaymentInsert, "tenant_id" | "ap_id">,
 ): Promise<ApPayment> {
+  await ensureCashflowSchema();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -100,13 +103,17 @@ export async function recordApPayment(
     const newPaid = ap.paidAmount + payment.amount;
     const newStatus = deriveApStatus(ap.totalAmount, newPaid);
 
+    const cashAccountId =
+      payment.cash_account_id ||
+      (await resolveDefaultCashAccountInTx(tx, tenantId, ap.branchId, "cash"));
+
     const [paymentRow] = await tx
       .insert(apPayments)
       .values({
         apId,
         tenantId,
         amount: payment.amount,
-        cashAccountId: payment.cash_account_id,
+        cashAccountId,
         paymentDate: payment.payment_date,
         notes: payment.notes,
         userId: payment.user_id,
@@ -118,16 +125,14 @@ export async function recordApPayment(
       .set({ paidAmount: newPaid, status: newStatus })
       .where(eq(accountsPayable.id, apId));
 
-    if (payment.cash_account_id) {
-      await insertCashTransactionInTx(tx, tenantId, ap.branchId, payment.cash_account_id, {
-        type: "expense",
-        category: "Pembayaran Hutang",
-        amount: payment.amount,
-        reference: `ap:${paymentRow.id}`,
-        description: `Bayar hutang ${ap.invoiceNumber}`,
-        user_id: payment.user_id,
-      });
-    }
+    await insertCashTransactionInTx(tx, tenantId, ap.branchId, cashAccountId, {
+      type: "expense",
+      category: AP_PAYMENT_CATEGORY,
+      amount: payment.amount,
+      reference: `ap:${paymentRow.id}`,
+      description: `Bayar hutang ${ap.invoiceNumber}`,
+      user_id: payment.user_id,
+    });
 
     return toApPayment(paymentRow);
   });

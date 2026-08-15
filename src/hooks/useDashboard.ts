@@ -24,6 +24,7 @@ import { useReceivablesStore } from "@/stores/receivables.store";
 import { usePayablesStore } from "@/stores/payables.store";
 import { useSalesTransactionsStore } from "@/stores/sales-transactions.store";
 import { getDashboardBundle } from "@/lib/api/reports";
+import { useCashflowDashboardKpis } from "@/hooks/useCashflowIntelligence";
 import { queryKeys } from "@/lib/query-keys";
 import {
   PRODUCTS,
@@ -159,6 +160,8 @@ export function useDashboard() {
   // helper) returns a new array reference every render, which trips
   // React 19's useSyncExternalStore into an infinite update loop.
   const allNotifications = useNotificationStore((s) => s.notifications);
+  const cashflowKpisQuery = useCashflowDashboardKpis();
+  const cashflowKpis = cashflowKpisQuery.data ?? null;
 
   const [period, setPeriod] = useState<DashboardPeriod>("today");
   const [mockLoading, setMockLoading] = useState(true);
@@ -687,6 +690,8 @@ export function useDashboard() {
     topProducts: isMockTenant ? TOP_PRODUCTS : neonTopProducts,
     topProfitableToday: resolvedTopProfitableToday,
     financeSummary,
+
+    cashflowKpis,
 
     recentNotifications,
 

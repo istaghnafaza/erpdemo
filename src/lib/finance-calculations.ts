@@ -5,6 +5,12 @@
 import type { CashTransaction } from "@/types/database";
 import type { SalesTransactionRecord } from "@/types/sales-transactions";
 import {
+  cashBalanceDelta,
+  isPnlOpexCategory,
+  TRANSFER_IN_CATEGORY,
+  TRANSFER_OUT_CATEGORY,
+} from "@/lib/cashflow-constants";
+import {
   computeItemMargin,
   computeTransactionRevenue,
 } from "@/lib/sales-margin";
@@ -99,11 +105,8 @@ export function computeProfitLoss(
   let opex = 0;
   for (const tx of transactions) {
     if (!inPeriod(tx.created_at, options?.from, options?.to)) continue;
-    if (tx.type === "transfer") continue;
-    if (tx.type === "expense") {
-      if (tx.category === "HPP" || tx.category === "Pembelian") continue;
-      opex += tx.amount;
-    }
+    if (!isPnlOpexCategory(tx.category, tx.type)) continue;
+    opex += tx.amount;
   }
 
   const { sales, salesMargin } = fromPos;
@@ -145,8 +148,9 @@ export function computeCashFlowSeries(
     if (tx.type === "income") bucket.inflow += tx.amount;
     else if (tx.type === "expense" && tx.category !== "HPP") bucket.outflow += tx.amount;
     else if (tx.type === "transfer") {
-      if (tx.amount > 0) bucket.inflow += tx.amount;
-      else bucket.outflow += Math.abs(tx.amount);
+      const delta = cashBalanceDelta(tx.type, tx.category, tx.amount);
+      if (delta > 0 || tx.category === TRANSFER_IN_CATEGORY) bucket.inflow += tx.amount;
+      else if (delta < 0 || tx.category === TRANSFER_OUT_CATEGORY) bucket.outflow += tx.amount;
     }
   }
 

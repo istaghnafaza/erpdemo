@@ -39,6 +39,7 @@ npm run start          # production lokal: node .output/server/index.mjs
 
 ## Dokumentasi
 
+- `APLIKASI.md` — **ringkasan produk saat ini** (goals, pengguna, fitur, billing, arsitektur)
 - `docs/WORKFLOW_GIT.md` — **workflow Git** (lokal → push → deploy, PC ↔ MacBook, pakai analogi)
 - `neon/README.md` — setup database
 - `DEPLOY.md` — Railway + domain

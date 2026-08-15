@@ -10,7 +10,9 @@ import { ProfitLossCard } from "@/components/finance/ProfitLossCard";
 import { CashFlowChart } from "@/components/finance/CashFlowChart";
 import { FinanceBranchSummaryTable } from "@/components/finance/FinanceBranchSummaryTable";
 import { ReceivablesSummaryCard } from "@/components/finance/ReceivablesSummaryCard";
+import { CashVsAccrualCard } from "@/components/finance/CashVsAccrualCard";
 import { useFinance } from "@/hooks/useFinance";
+import { useCashVsAccrual } from "@/hooks/useCashflowIntelligence";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
 
 export const Route = createFileRoute("/$tenantSlug/finance/")({
@@ -44,6 +46,7 @@ function FinanceDashboardPage() {
     receivablesSummary,
     tenantSlug,
   } = useFinance();
+  const cashVsQuery = useCashVsAccrual();
 
   if (!user) return null;
 
@@ -99,6 +102,8 @@ function FinanceDashboardPage() {
         monthLabel="Bulan Ini"
         loading={loading}
       />
+
+      <CashVsAccrualCard data={cashVsQuery.data ?? null} loading={cashVsQuery.isPending} />
 
       <CashAccountCards
         accounts={accounts}

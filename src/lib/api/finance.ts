@@ -12,6 +12,13 @@ import {
   neonGetCashTransactions,
   neonGetFinanceOverview,
   neonRecordCashTransaction,
+  neonTransferBetweenAccounts,
+  neonGetCashVsAccrual,
+  neonGetCashForecast,
+  neonGetInventoryCashLock,
+  neonGetCashflowDashboardKpis,
+  neonListOwnerCapital,
+  neonRecordOwnerCapital,
   neonUpdateCashAccount,
 } from "@/lib/api/neon/finance-fns";
 import type { ApiResponse, DateRangeFilter } from "@/types/app";
@@ -288,4 +295,87 @@ export async function getFinanceOverview(
   );
 
   return ok({ branches });
+}
+
+export async function transferBetweenAccounts(
+  tenantId: string,
+  fromAccountId: string,
+  toAccountId: string,
+  amount: number,
+  description?: string | null,
+): Promise<ApiResponse<{ out: CashTransaction; in: CashTransaction }>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonTransferBetweenAccounts({
+        data: { tenantId, fromAccountId, toAccountId, amount, description },
+      }),
+    );
+    if (result.error) return fail(result.error);
+    if (!result.data) return fail("Gagal memindahkan kas");
+    return ok(result.data);
+  }
+  return fail("Transfer internal hanya tersedia di backend Neon");
+}
+
+export async function getCashVsAccrual(
+  tenantId: string,
+  branchIds: string[],
+  dateRange?: { from: string; to: string },
+) {
+  const result = await neonCall(() =>
+    neonGetCashVsAccrual({ data: { tenantId, branchIds, dateRange } }),
+  );
+  if (result.error) return fail(result.error);
+  return ok(result.data);
+}
+
+export async function getCashForecast(tenantId: string, branchIds: string[], horizonDays = 30) {
+  const result = await neonCall(() =>
+    neonGetCashForecast({ data: { tenantId, branchIds, horizonDays } }),
+  );
+  if (result.error) return fail(result.error);
+  return ok(result.data);
+}
+
+export async function getInventoryCashLock(
+  tenantId: string,
+  branchIds: string[],
+  categoryId?: string,
+) {
+  const result = await neonCall(() =>
+    neonGetInventoryCashLock({ data: { tenantId, branchIds, categoryId } }),
+  );
+  if (result.error) return fail(result.error);
+  return ok(result.data);
+}
+
+export async function getCashflowDashboardKpis(tenantId: string, branchIds: string[]) {
+  const result = await neonCall(() =>
+    neonGetCashflowDashboardKpis({ data: { tenantId, branchIds } }),
+  );
+  if (result.error) return fail(result.error);
+  return ok(result.data);
+}
+
+export async function listOwnerCapital(tenantId: string, branchIds: string[]) {
+  const result = await neonCall(() => neonListOwnerCapital({ data: { tenantId, branchIds } }));
+  if (result.error) return fail(result.error);
+  return ok(result.data ?? []);
+}
+
+export async function recordOwnerCapital(
+  tenantId: string,
+  payload: {
+    branch_id: string;
+    cash_account_id: string;
+    kind: "prive_keluar" | "setoran_owner";
+    amount: number;
+    occurred_at: string;
+    notes?: string | null;
+  },
+) {
+  const result = await neonCall(() => neonRecordOwnerCapital({ data: { tenantId, payload } }));
+  if (result.error) return fail(result.error);
+  if (!result.data) return fail("Gagal mencatat modal owner");
+  return ok(result.data);
 }

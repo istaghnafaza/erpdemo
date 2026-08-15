@@ -24,6 +24,7 @@ import type { MockIndentPoRef } from "@/lib/mock-sales-orders";
 import { createReceivable } from "@/server/services/receivables";
 import { nextDocNumberForTable } from "@/server/services/doc-numbers";
 import { ensurePoStatusAwaitingSupplier } from "@/server/db/ensure-po-status-enum";
+import { ensureCashflowSchema } from "@/server/db/ensure-cashflow-schema";
 import type {
   SalesOrder,
   SalesOrderInsert,
@@ -371,6 +372,7 @@ export async function processItemFulfillment(
   supplierId?: string,
 ): Promise<ProcessItemFulfillmentResult> {
   await ensurePoStatusAwaitingSupplier();
+  await ensureCashflowSchema();
 
   const db = getDb();
   let indentResult: ProcessItemFulfillmentResult["indentPo"];
@@ -398,21 +400,10 @@ export async function processItemFulfillment(
 
     let branchPurchasePrice = 0;
     if (item.product_id) {
-      const bpLookup = await tx.query.branchProducts.findFirst({
-        where: and(
-          eq(branchProducts.tenantId, tenantId),
-          eq(branchProducts.branchId, order.branchId),
-          eq(branchProducts.productId, item.product_id),
-        ),
+      const prod = await tx.query.products.findFirst({
+        where: and(eq(products.tenantId, tenantId), eq(products.id, item.product_id)),
       });
-      if (bpLookup?.purchasePrice) {
-        branchPurchasePrice = bpLookup.purchasePrice;
-      } else {
-        const prod = await tx.query.products.findFirst({
-          where: and(eq(products.tenantId, tenantId), eq(products.id, item.product_id)),
-        });
-        branchPurchasePrice = prod?.purchasePrice ?? 0;
-      }
+      branchPurchasePrice = prod?.purchasePrice ?? 0;
     }
 
     if (stockQty > 0 && item.product_id) {
@@ -423,19 +414,25 @@ export async function processItemFulfillment(
           eq(branchProducts.productId, item.product_id),
         ),
       });
-      if (!bp || bp.stock < stockQty) throw new Error(`Stok tidak cukup untuk ${item.sku}`);
+      const stockNow = Number(bp?.stock ?? 0);
+      if (!bp || !Number.isFinite(stockNow) || stockNow < stockQty) {
+        throw new Error(`Stok tidak cukup untuk ${item.sku}`);
+      }
 
-      const newQty = bp.stock - stockQty;
-      await tx.update(branchProducts).set({ stock: newQty }).where(eq(branchProducts.id, bp.id));
+      const newQty = stockNow - stockQty;
+      await tx
+        .update(branchProducts)
+        .set({ stock: String(newQty) })
+        .where(eq(branchProducts.id, bp.id));
       await tx.insert(stockMovements).values({
         tenantId,
         branchId: order.branchId,
         productId: item.product_id,
         type: "out",
         stockSource: "verified",
-        qty: stockQty,
-        qtyBefore: bp.stock,
-        qtyAfter: newQty,
+        qty: String(stockQty),
+        qtyBefore: String(stockNow),
+        qtyAfter: String(newQty),
         reference: order.soNumber,
         notes: "Fulfillment SO dari stok",
         userId,
@@ -446,7 +443,7 @@ export async function processItemFulfillment(
         tenantId,
         source: "stock",
         qty: stockQty,
-        purchasePriceAtTime: 0,
+        purchasePriceAtTime: branchPurchasePrice,
         status: "delivered",
       });
     }
@@ -586,6 +583,7 @@ export async function convertSalesOrderToInvoice(
     invoice_number: invoiceNumber,
     customer_id: order.customerId,
     customer_name: order.customerName,
+    sales_transaction_id: null,
     sales_order_id: soId,
     total_amount: remaining,
     paid_amount: 0,

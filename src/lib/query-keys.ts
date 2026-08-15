@@ -30,6 +30,16 @@ export const queryKeys = {
   pricingBundle: (tenantId: string) => ["pricing-bundle", tenantId] as const,
   financeOverview: (tenantId: string, branchIds: readonly string[]) =>
     ["finance-overview", tenantId, [...branchIds].sort().join(",")] as const,
+  cashflowVsAccrual: (tenantId: string, branchIds: readonly string[]) =>
+    ["cashflow-vs-accrual", tenantId, [...branchIds].sort().join(",")] as const,
+  cashForecast: (tenantId: string, branchIds: readonly string[]) =>
+    ["cash-forecast", tenantId, [...branchIds].sort().join(",")] as const,
+  cashLock: (tenantId: string, branchIds: readonly string[], categoryId = "") =>
+    ["cash-lock", tenantId, [...branchIds].sort().join(","), categoryId] as const,
+  cashflowKpis: (tenantId: string, branchIds: readonly string[]) =>
+    ["cashflow-kpis", tenantId, [...branchIds].sort().join(",")] as const,
+  ownerCapital: (tenantId: string, branchIds: readonly string[]) =>
+    ["owner-capital", tenantId, [...branchIds].sort().join(",")] as const,
   cashBookOverview: (
     tenantId: string,
     branchIds: readonly string[],

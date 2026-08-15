@@ -551,7 +551,7 @@ export async function createGoodsReceiptRecord(
           if (soItem?.productId === item.product_id && f.status !== "delivered") {
             await tx
               .update(soFulfillments)
-              .set({ status: "delivered" })
+              .set({ status: "delivered", createdAt: new Date() })
               .where(eq(soFulfillments.id, f.id));
           }
         }

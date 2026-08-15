@@ -39,6 +39,7 @@ export function ArPaymentDialog({
 }: ArPaymentDialogProps) {
   const [amount, setAmount] = useState("");
   const [cashAccountId, setCashAccountId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer">("cash");
 
   const branchAccounts = useMemo(
     () => cashAccounts.filter((a) => a.branch_id === receivable?.branchId && a.is_active),
@@ -49,6 +50,7 @@ export function ArPaymentDialog({
     if (!receivable) return;
     setAmount(String(remainingAmount(receivable.amount, receivable.paid)));
     setCashAccountId(branchAccounts[0]?.id ?? "");
+    setPaymentMethod("cash");
   }, [receivable, branchAccounts]);
 
   const remaining = receivable ? remainingAmount(receivable.amount, receivable.paid) : 0;
@@ -68,6 +70,21 @@ export function ArPaymentDialog({
               <div className="text-lg font-bold text-primary">
                 <CurrencyDisplay value={remaining} />
               </div>
+            </div>
+            <div>
+              <Label className="text-xs">Metode</Label>
+              <Select
+                value={paymentMethod}
+                onValueChange={(v) => setPaymentMethod(v as "cash" | "transfer")}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Tunai</SelectItem>
+                  <SelectItem value="transfer">Transfer</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Akun Kas/Bank Penerima</Label>
@@ -108,6 +125,7 @@ export function ArPaymentDialog({
                 cash_account_id: cashAccountId,
                 amount: Number(amount),
                 user_id: userId,
+                payment_method: paymentMethod,
               });
               if (result.ok) {
                 onSuccess?.();

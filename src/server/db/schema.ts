@@ -556,6 +556,7 @@ export const cashTxTypeEnum = pgEnum("cash_tx_type", ["income", "expense", "tran
 export const arStatusEnum = pgEnum("ar_status", ["unpaid", "partial", "paid", "overdue"]);
 export const apStatusEnum = pgEnum("ap_status", ["unpaid", "partial", "paid", "overdue"]);
 export const arPaymentMethodEnum = pgEnum("ar_payment_method", ["cash", "transfer"]);
+export const ownerCapitalKindEnum = pgEnum("owner_capital_kind", ["prive_keluar", "setoran_owner"]);
 
 export const suppliers = pgTable("suppliers", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -603,6 +604,7 @@ export const cashAccounts = pgTable("cash_accounts", {
   accountNumber: text("account_number"),
   balance: bigint("balance", { mode: "number" }).notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
+  isDefault: boolean("is_default").notNull().default(false),
 });
 
 export const cashTransactions = pgTable("cash_transactions", {
@@ -622,6 +624,29 @@ export const cashTransactions = pgTable("cash_transactions", {
   reference: text("reference"),
   description: text("description"),
   userId: uuid("user_id").references(() => profiles.id, { onDelete: "set null" }),
+  counterpartAccountId: uuid("counterpart_account_id").references(() => cashAccounts.id, {
+    onDelete: "set null",
+  }),
+  pairId: uuid("pair_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const ownerCapitalTransactions = pgTable("owner_capital_transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+  cashAccountId: uuid("cash_account_id")
+    .notNull()
+    .references(() => cashAccounts.id, { onDelete: "restrict" }),
+  kind: ownerCapitalKindEnum("kind").notNull(),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  occurredAt: date("occurred_at").notNull(),
+  notes: text("notes"),
+  createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -894,6 +919,7 @@ export const soFulfillments = pgTable("so_fulfillments", {
   supplierId: uuid("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
   purchasePriceAtTime: bigint("purchase_price_at_time", { mode: "number" }).notNull().default(0),
   status: fulfillmentStatusEnum("status").notNull().default("planned"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const stockTransfers = pgTable(

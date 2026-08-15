@@ -158,13 +158,17 @@ export function useFinance() {
   ]);
 
   const profitLoss = useMemo(
-    () =>
-      computeProfitLoss(
+    () => {
+      if (!isMockTenant && financeQuery.data?.profitLoss) {
+        return financeQuery.data.profitLoss;
+      }
+      return computeProfitLoss(
         transactions,
         monthRange,
         isMockTenant ? mockScopedSales : undefined,
-      ),
-    [transactions, monthRange, isMockTenant, mockScopedSales],
+      );
+    },
+    [transactions, monthRange, isMockTenant, mockScopedSales, financeQuery.data?.profitLoss],
   );
 
   const cashFlow = useMemo(() => computeCashFlowSeries(transactions, 14), [transactions]);
@@ -185,7 +189,24 @@ export function useFinance() {
   );
 
   const branchSummaries = useMemo<FinanceBranchSummary[]>(() => {
-    if (!isMockTenant || !isConsolidated || !isOwner) return [];
+    if (!isConsolidated || !isOwner) return [];
+
+    if (!isMockTenant) {
+      return branches
+        .filter((b) => branchIds.includes(b.id))
+        .map((branch) => {
+          const branchAccounts = accounts.filter((a) => a.branch_id === branch.id);
+          const pl = financeQuery.data?.branchProfitLoss.get(branch.id);
+          return {
+            branchId: branch.id,
+            branchName: branch.name,
+            totalBalance: branchAccounts.reduce((s, a) => s + a.balance, 0),
+            sales: pl?.sales ?? 0,
+            netProfit: pl?.netProfit ?? 0,
+            receivablesOutstanding: 0,
+          };
+        });
+    }
 
     return branches.map((branch) => {
       const branchAccounts = mockAccounts.filter((a) => a.branch_id === branch.id);
@@ -225,6 +246,9 @@ export function useFinance() {
     mockSales,
     monthRange,
     tenantId,
+    accounts,
+    branchIds,
+    financeQuery.data?.branchProfitLoss,
   ]);
 
   return {

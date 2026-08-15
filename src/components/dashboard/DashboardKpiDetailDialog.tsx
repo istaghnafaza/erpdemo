@@ -246,6 +246,68 @@ export function DashboardKpiDetailDialog({
           </div>
         )}
 
+        {kpiId === "cash_vs_profit" && (
+          <div className="space-y-3">
+            <DetailRow label="Kas riil" value={<CurrencyDisplay value={cash.totalBalance} />} />
+            <DetailRow label="Laba akuntansi" value={<CurrencyDisplay value={profit.netProfit} />} />
+            <FormulaBlock>
+              Kas riil = jumlah saldo akun kas &amp; bank. Laba dari mesin P&amp;L (penjualan stok +
+              SO terpenuhi − opex). Selisih utama: piutang belum cair.
+            </FormulaBlock>
+            <Link
+              to="/$tenantSlug/finance"
+              params={{ tenantSlug }}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              Buka Keuangan <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {kpiId === "cash_forecast" && (
+          <div className="space-y-3">
+            <FormulaBlock>
+              Saldo(t) = Saldo(t-1) + AR jatuh tempo + rata-rata kas masuk POS (hari 30–60 lalu) − AP
+              jatuh tempo.
+            </FormulaBlock>
+            <Link
+              to="/$tenantSlug/finance/forecast"
+              params={{ tenantSlug }}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              Buka Forecast Kas <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {kpiId === "cash_lock_stock" && (
+          <div className="space-y-3">
+            <FormulaBlock>
+              Nilai terkunci = stok × harga beli. Bucket: cepat &lt;30 hari, lambat 30–90, mati &gt;90
+              tanpa outbound (bukan opname).
+            </FormulaBlock>
+            <Link
+              to="/$tenantSlug/finance/cash-lock"
+              params={{ tenantSlug }}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              Buka Cash Lock <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {kpiId === "ar_ap_due" && (
+          <div className="space-y-3">
+            <DetailRow
+              label="Piutang jatuh tempo"
+              value={<CurrencyDisplay value={receivables.overdueTotal} />}
+            />
+            <FormulaBlock>
+              Membandingkan piutang vs hutang yang jatuh tempo dalam 30 hari ke depan.
+            </FormulaBlock>
+          </div>
+        )}
+
         {kpiId === "cash_balance" && (
           <div className="space-y-3">
             <DetailRow
