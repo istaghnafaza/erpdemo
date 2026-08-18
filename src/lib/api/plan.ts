@@ -3,15 +3,25 @@
 // =============================================================================
 
 import { isNeonBackend } from "@/lib/api/backend";
-import { getPlanLimits, isTrialExpired, trialDaysRemaining } from "@/lib/plan-config";
+import {
+  getPlanLimits,
+  getTenantAccessStatus,
+  isTenantOperational,
+  isTrialExpired,
+  trialDaysRemaining,
+  type TenantAccessStatus,
+} from "@/lib/plan-config";
 import type { TenantPlan } from "@/types/app";
 import type { Tenant } from "@/types/database";
 
 export interface TenantPlanUsage {
   plan: TenantPlan;
   trialEndsAt: string | null;
+  planRenewsAt?: string | null;
   trialExpired: boolean;
   trialDaysLeft: number;
+  accessStatus?: TenantAccessStatus;
+  operational?: boolean;
   limits: { maxBranches: number; maxUsers: number; label: string };
   usage: { branches: number; users: number };
   canAddBranch: boolean;
@@ -32,8 +42,11 @@ export async function getTenantPlanUsage(
     return {
       plan: raw.plan as TenantPlan,
       trialEndsAt: raw.trialEndsAt,
+      planRenewsAt: raw.planRenewsAt,
       trialExpired: raw.trialExpired,
       trialDaysLeft: trialDaysRemaining(raw.trialEndsAt),
+      accessStatus: raw.accessStatus,
+      operational: raw.operational,
       limits: raw.limits,
       usage: raw.usage,
       canAddBranch: raw.canAddBranch,
@@ -45,14 +58,18 @@ export async function getTenantPlanUsage(
   const { tenant, branchCount, userCount } = fallback;
   const limits = getPlanLimits(tenant.plan);
   const trialExpired = tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at);
+  const operational = isTenantOperational(tenant);
   return {
     plan: tenant.plan,
     trialEndsAt: tenant.trial_ends_at,
+    planRenewsAt: tenant.plan_renews_at,
     trialExpired,
     trialDaysLeft: trialDaysRemaining(tenant.trial_ends_at),
+    accessStatus: getTenantAccessStatus(tenant),
+    operational,
     limits,
     usage: { branches: branchCount, users: userCount },
-    canAddBranch: !trialExpired && branchCount < limits.maxBranches,
-    canAddUser: !trialExpired && userCount < limits.maxUsers,
+    canAddBranch: operational && branchCount < limits.maxBranches,
+    canAddUser: operational && userCount < limits.maxUsers,
   };
 }

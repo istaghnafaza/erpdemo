@@ -3,7 +3,9 @@ import { Crown, Settings, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getPlanLimits,
+  getTenantAccessStatus,
   isTrialExpired,
+  tenantAccessLabel,
   trialDaysRemaining,
   TRIAL_DAYS,
 } from "@/lib/plan-config";
@@ -33,6 +35,7 @@ export function SidebarAccountPlan({ tenant, user }: SidebarAccountPlanProps) {
 
   const limits = getPlanLimits(tenant.plan);
   const trialExpired = tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at);
+  const accessStatus = getTenantAccessStatus(tenant);
   const trialDaysLeft = trialDaysRemaining(tenant.trial_ends_at);
   const showUpgrade = tenant.plan !== "enterprise";
   const canCheckout = user.isOwner;
@@ -76,8 +79,13 @@ export function SidebarAccountPlan({ tenant, user }: SidebarAccountPlanProps) {
             {tenant.plan === "trial" && (
               <p className="text-[10px] text-sidebar-foreground/60 mt-1 leading-relaxed">
                 {trialExpired
-                  ? "Trial berakhir — upgrade untuk melanjutkan"
+                  ? "Trial berakhir — POS dikunci sampai upgrade"
                   : `${trialDaysLeft} dari ${TRIAL_DAYS} hari trial tersisa`}
+              </p>
+            )}
+            {accessStatus === "past_due" && (
+              <p className="text-[10px] text-amber-200 mt-1 leading-relaxed">
+                {tenantAccessLabel(accessStatus)} — perpanjang paket
               </p>
             )}
           </div>

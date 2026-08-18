@@ -18,6 +18,7 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
+import { Route as PlatformPriceCompareRouteImport } from './routes/platform/price-compare'
 import { Route as PlatformFinanceRouteImport } from './routes/platform/finance'
 import { Route as PlatformDashboardRouteImport } from './routes/platform/dashboard'
 import { Route as PlatformCatalogRouteImport } from './routes/platform/catalog'
@@ -105,6 +106,11 @@ const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   id: '/onboarding/',
   path: '/onboarding/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformPriceCompareRoute = PlatformPriceCompareRouteImport.update({
+  id: '/price-compare',
+  path: '/price-compare',
+  getParentRoute: () => PlatformRoute,
 } as any)
 const PlatformFinanceRoute = PlatformFinanceRouteImport.update({
   id: '/finance',
@@ -358,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/platform/finance': typeof PlatformFinanceRoute
+  '/platform/price-compare': typeof PlatformPriceCompareRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
@@ -410,6 +417,7 @@ export interface FileRoutesByTo {
   '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/platform/finance': typeof PlatformFinanceRoute
+  '/platform/price-compare': typeof PlatformPriceCompareRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
@@ -464,6 +472,7 @@ export interface FileRoutesById {
   '/platform/catalog': typeof PlatformCatalogRoute
   '/platform/dashboard': typeof PlatformDashboardRoute
   '/platform/finance': typeof PlatformFinanceRoute
+  '/platform/price-compare': typeof PlatformPriceCompareRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/$tenantSlug/finance/cash-book': typeof TenantSlugFinanceCashBookRoute
   '/$tenantSlug/finance/cash-lock': typeof TenantSlugFinanceCashLockRoute
@@ -519,6 +528,7 @@ export interface FileRouteTypes {
     | '/platform/catalog'
     | '/platform/dashboard'
     | '/platform/finance'
+    | '/platform/price-compare'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/finance/cash-lock'
@@ -571,6 +581,7 @@ export interface FileRouteTypes {
     | '/platform/catalog'
     | '/platform/dashboard'
     | '/platform/finance'
+    | '/platform/price-compare'
     | '/onboarding'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/finance/cash-lock'
@@ -624,6 +635,7 @@ export interface FileRouteTypes {
     | '/platform/catalog'
     | '/platform/dashboard'
     | '/platform/finance'
+    | '/platform/price-compare'
     | '/onboarding/'
     | '/$tenantSlug/finance/cash-book'
     | '/$tenantSlug/finance/cash-lock'
@@ -737,6 +749,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/onboarding/'
       preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/platform/price-compare': {
+      id: '/platform/price-compare'
+      path: '/price-compare'
+      fullPath: '/platform/price-compare'
+      preLoaderRoute: typeof PlatformPriceCompareRouteImport
+      parentRoute: typeof PlatformRoute
     }
     '/platform/finance': {
       id: '/platform/finance'
@@ -1136,12 +1155,14 @@ interface PlatformRouteChildren {
   PlatformCatalogRoute: typeof PlatformCatalogRoute
   PlatformDashboardRoute: typeof PlatformDashboardRoute
   PlatformFinanceRoute: typeof PlatformFinanceRoute
+  PlatformPriceCompareRoute: typeof PlatformPriceCompareRoute
 }
 
 const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformCatalogRoute: PlatformCatalogRoute,
   PlatformDashboardRoute: PlatformDashboardRoute,
   PlatformFinanceRoute: PlatformFinanceRoute,
+  PlatformPriceCompareRoute: PlatformPriceCompareRoute,
 }
 
 const PlatformRouteWithChildren = PlatformRoute._addFileChildren(

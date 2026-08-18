@@ -38,11 +38,17 @@ export const Route = createFileRoute("/$tenantSlug/pos")({
 });
 
 function POSPage() {
+  const { tenantSlug } = Route.useParams();
+  const navigate = Route.useNavigate();
   const [showCloseShift, setShowCloseShift] = useState(false);
   const [showTakeover, setShowTakeover] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const isMobile = useIsMobile();
+
+  const cancelOpenShift = () => {
+    void navigate({ to: "/$tenantSlug/dashboard", params: { tenantSlug } });
+  };
 
   const {
     user,
@@ -50,6 +56,7 @@ function POSPage() {
     branch,
     activeSession,
     sessionLoading,
+    sessionChecked,
     sessionError,
     openSession,
     closeSession,
@@ -188,6 +195,17 @@ function POSPage() {
   };
 
   if (!activeSession) {
+    if (!sessionChecked) {
+      return (
+        <AppShell
+          title="POS Kasir"
+          subtitle="Sistem kasir terpadu — harga terkunci, transaksi tercatat"
+        >
+          <p className="text-sm text-muted-foreground">Memeriksa shift kasir…</p>
+        </AppShell>
+      );
+    }
+
     return (
       <AppShell
         title="POS Kasir"
@@ -200,6 +218,7 @@ function POSPage() {
           isLoading={sessionLoading}
           error={sessionError}
           onConfirm={(balance) => void openSession(balance)}
+          onCancel={cancelOpenShift}
         />
       </AppShell>
     );

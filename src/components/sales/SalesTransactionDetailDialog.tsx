@@ -19,13 +19,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { SalesReceiptPrintDialog } from "@/components/sales/SalesReceiptPrintDialog";
+import { HandoverPrintDialog } from "@/components/print/HandoverPrintDialog";
 import { SalesReturnDialog } from "@/components/sales/SalesReturnDialog";
 import { buildReceiptFromSalesTransaction } from "@/lib/build-receipt-data";
+import { buildHandoverDocFromPos, buildHandoverLinesFromSaleItems } from "@/lib/handover-doc";
 import { paymentMethodLabel, RETURN_STATUS_LABELS, TX_STATUS_LABELS, orderFulfillmentLabel } from "@/lib/sales-transaction-utils";
 import { canVoidSale } from "@/lib/rbac";
 import { voidTransaction } from "@/lib/api/transactions";
 import { rupiah, tanggal } from "@/lib/format";
-import { Printer, RotateCcw, Ban, Package } from "lucide-react";
+import { Printer, RotateCcw, Ban, Package, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth.store";
 import { findSalesOrderByPosTransaction } from "@/lib/api/sales-orders";
@@ -61,6 +63,7 @@ export function SalesTransactionDetailDialog({
   onUpdated,
 }: SalesTransactionDetailDialogProps) {
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [handoverOpen, setHandoverOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(true);
   const [returnOpen, setReturnOpen] = useState(false);
   const [voiding, setVoiding] = useState(false);
@@ -107,6 +110,7 @@ export function SalesTransactionDetailDialog({
       setDetailOpen(true);
       setReturnOpen(false);
       setReceiptOpen(false);
+      setHandoverOpen(false);
     }
   }, [transaction?.id]);
 
@@ -120,6 +124,27 @@ export function SalesTransactionDetailDialog({
           })
         : null,
     [transaction, branchAddress, branchPhone, storeName],
+  );
+
+  const handoverDoc = useMemo(
+    () =>
+      transaction
+        ? buildHandoverDocFromPos({
+            storeName,
+            branchName: transaction.branchName,
+            branchAddress,
+            branchPhone,
+            transactionNumber: transaction.transactionNumber,
+            createdAt: transaction.createdAt,
+            cashierName: transaction.cashierName,
+            customerName: transaction.customerName,
+            deliverySiteLabel: transaction.deliverySiteLabel,
+            deliveryAddress: transaction.deliveryAddress,
+            orderFulfillmentType: transaction.orderFulfillmentType,
+            handoverLines: buildHandoverLinesFromSaleItems(transaction.items),
+          })
+        : null,
+    [transaction, storeName, branchAddress, branchPhone],
   );
 
   if (!transaction) return null;
@@ -298,6 +323,9 @@ export function SalesTransactionDetailDialog({
               <Button variant="outline" onClick={() => setReceiptOpen(true)}>
                 <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk
               </Button>
+              <Button variant="outline" onClick={() => setHandoverOpen(true)}>
+                <ClipboardList className="h-4 w-4 mr-1.5" /> Cetak Surat Jalan
+              </Button>
               {hasSoLines && linkedSoId && tenantSlug && (
                 <Button variant="outline" asChild>
                   <Link
@@ -337,6 +365,12 @@ export function SalesTransactionDetailDialog({
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
         receipt={receiptData}
+      />
+
+      <HandoverPrintDialog
+        open={handoverOpen}
+        onOpenChange={setHandoverOpen}
+        doc={handoverDoc}
       />
 
       {canReturn && transaction && (

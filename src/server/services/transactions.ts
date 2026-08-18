@@ -731,6 +731,8 @@ export async function createSaleTransaction(
   await ensureSellUnitsSchema();
   const { ensureCashflowSchema } = await import("@/server/db/ensure-cashflow-schema");
   await ensureCashflowSchema();
+  const { assertTenantOperational } = await import("@/server/services/plan-limits");
+  await assertTenantOperational(tenantId);
   const db = getDb();
 
   const clientTxId = nullIfEmptyUuid(transaction.client_tx_id ?? null);

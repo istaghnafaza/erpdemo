@@ -4,21 +4,28 @@
 
 import {
   getPlanLimits,
-  isTrialExpired,
+  getTenantAccessStatus,
+  isTenantOperational,
   planLimitErrorMessage,
-  trialExpiredMessage,
+  subscriptionLockedMessage,
 } from "@/lib/plan-config";
 import type { Tenant } from "@/types/database";
+
+export function checkTenantOperational(
+  tenant: Tenant | null | undefined,
+): { ok: true } | { ok: false; message: string } {
+  if (!tenant) return { ok: false, message: "Data toko belum dimuat" };
+  if (isTenantOperational(tenant)) return { ok: true };
+  return { ok: false, message: subscriptionLockedMessage(getTenantAccessStatus(tenant)) };
+}
 
 export function checkCanAddBranchClient(
   tenant: Tenant | null | undefined,
   activeBranchCount: number,
 ): { ok: true } | { ok: false; message: string } {
+  const operational = checkTenantOperational(tenant);
+  if (!operational.ok) return operational;
   if (!tenant) return { ok: false, message: "Data toko belum dimuat" };
-
-  if (tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at)) {
-    return { ok: false, message: trialExpiredMessage() };
-  }
 
   const limits = getPlanLimits(tenant.plan);
   if (activeBranchCount >= limits.maxBranches) {
@@ -35,11 +42,9 @@ export function checkCanAddUserClient(
   tenant: Tenant | null | undefined,
   activeUserCount: number,
 ): { ok: true } | { ok: false; message: string } {
+  const operational = checkTenantOperational(tenant);
+  if (!operational.ok) return operational;
   if (!tenant) return { ok: false, message: "Data toko belum dimuat" };
-
-  if (tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at)) {
-    return { ok: false, message: trialExpiredMessage() };
-  }
 
   const limits = getPlanLimits(tenant.plan);
   if (activeUserCount >= limits.maxUsers) {

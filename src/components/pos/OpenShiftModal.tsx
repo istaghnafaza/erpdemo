@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { rupiah, tanggal } from "@/lib/format";
 
 // -----------------------------------------------------------------------------
-// OpenShiftModal — blocks the POS screen until the cashier opens a shift.
+// OpenShiftModal — cashier must confirm opening cash, or go back without a shift.
 // -----------------------------------------------------------------------------
 
 export interface OpenShiftModalProps {
@@ -22,6 +23,7 @@ export interface OpenShiftModalProps {
   isLoading: boolean;
   error: string | null;
   onConfirm: (openingBalance: number) => void;
+  onCancel: () => void;
 }
 
 export function OpenShiftModal({
@@ -31,19 +33,30 @@ export function OpenShiftModal({
   isLoading,
   error,
   onConfirm,
+  onCancel,
 }: OpenShiftModalProps) {
-  const [cash, setCash] = useState("500000");
+  const [cash, setCash] = useState("");
+
+  const openingBalance = Number(cash) || 0;
 
   return (
     <Dialog open={open}>
       <DialogContent
         className="max-w-md"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
         hideCloseButton
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          if (!isLoading) onCancel();
+        }}
       >
         <DialogHeader>
           <DialogTitle>Buka Shift Kasir</DialogTitle>
+          <DialogDescription>
+            Shift belum dibuka. Isi saldo kas di laci, atau kembali jika belum siap.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="rounded-lg bg-muted p-4 space-y-1.5">
@@ -67,23 +80,34 @@ export function OpenShiftModal({
             <Input
               id="opening-cash"
               inputMode="numeric"
+              placeholder="0"
               value={cash ? Number(cash).toLocaleString("id-ID") : ""}
               onChange={(e) => setCash(e.target.value.replace(/\D/g, ""))}
               className="text-lg h-11"
             />
             <p className="text-xs text-muted-foreground">
-              Total uang tunai di laci kasir saat ini: {rupiah(Number(cash) || 0)}
+              Total uang tunai di laci kasir saat ini: {rupiah(openingBalance)}
             </p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-row gap-2 sm:justify-end">
           <Button
-            className="bg-gradient-primary w-full"
+            type="button"
+            variant="outline"
+            className="flex-1 sm:flex-none"
             disabled={isLoading}
-            onClick={() => onConfirm(Number(cash) || 0)}
+            onClick={onCancel}
           >
-            {isLoading ? "Membuka Shift..." : "Buka Shift & Mulai Transaksi"}
+            Kembali
+          </Button>
+          <Button
+            type="button"
+            className="bg-gradient-primary flex-1 sm:flex-none"
+            disabled={isLoading}
+            onClick={() => onConfirm(openingBalance)}
+          >
+            {isLoading ? "Membuka Shift..." : "Buka Shift"}
           </Button>
         </DialogFooter>
       </DialogContent>

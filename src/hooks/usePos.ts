@@ -153,6 +153,8 @@ export function usePos() {
   const getLastUsedSiteId = useCustomerDeliverySitesStore((s) => s.getLastUsedSiteId);
   const addDeliverySite = useCustomerDeliverySitesStore((s) => s.addSite);
 
+  const [sessionChecked, setSessionChecked] = useState(false);
+
   // -------------------------------------------------------------------------
   // Init POS context whenever cashier/branch changes
   // -------------------------------------------------------------------------
@@ -175,10 +177,22 @@ export function usePos() {
 
   // Restore open shift from DB so refresh/redeploy does not force duplicate sessions.
   useEffect(() => {
-    if (!user || !activeBranch || !tenantId || isMockTenant) return;
-    void restoreOpenSessionFn();
+    if (!user || !activeBranch || !tenantId) {
+      return;
+    }
+    let cancelled = false;
+    setSessionChecked(false);
+    void (async () => {
+      if (!isMockTenant) {
+        await restoreOpenSessionFn();
+      }
+      if (!cancelled) setSessionChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, activeBranch?.id, tenantId, restoreOpenSessionFn]);
+  }, [user?.id, activeBranch?.id, tenantId, isMockTenant, restoreOpenSessionFn]);
 
   useEffect(() => {
     seedDeliverySites();
@@ -762,6 +776,7 @@ export function usePos() {
     // Session
     activeSession,
     sessionLoading,
+    sessionChecked,
     sessionError,
     openSession: openSessionFn,
     closeSession: closeSessionFn,

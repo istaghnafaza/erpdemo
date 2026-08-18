@@ -38,12 +38,14 @@ import { STORE } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { isBranchSetupExemptPath, navigateToBranchSetup } from "@/lib/branch-setup-utils";
 import { checkCanAddBranchClient } from "@/lib/plan-guard";
+import { isTenantOperational } from "@/lib/plan-config";
 import { BranchSwitcher } from "@/components/layout/BranchSwitcher";
 import { BranchSetupRequired } from "@/components/branches/BranchSetupRequired";
 import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
 import { OnboardingProgressWidget } from "@/components/onboarding/OnboardingProgressWidget";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { PlanBanner } from "@/components/subscription/PlanBanner";
+import { SubscriptionLockPanel } from "@/components/subscription/SubscriptionLockPanel";
 import { SidebarAccountPlan } from "@/components/subscription/SidebarAccountPlan";
 import { useModuleNavBadges } from "@/hooks/useModuleNavBadges";
 import { resolveScopedBranchIds } from "@/lib/branch-scope";
@@ -254,6 +256,12 @@ export function AppShell({
   const needsStoreSetup = needsOnboarding || needsActiveBranch;
   const showBranchSetupGate =
     needsStoreSetup && !isBranchSetupExemptPath(pathname, tenantSlug);
+  const subscriptionLocked = Boolean(currentTenant) && !isTenantOperational(currentTenant!);
+  const showSubscriptionLock =
+    subscriptionLocked &&
+    !isBranchSetupExemptPath(pathname, tenantSlug) &&
+    !pathname.endsWith("/dashboard") &&
+    !pathname.includes("/toko-saya");
 
   const goToBranchSetup = () => {
     if (onboardingComplete) {
@@ -327,6 +335,7 @@ export function AppShell({
           onboardingComplete={onboardingComplete}
           isOwner={isOwner}
           onBranchSetup={goToBranchSetup}
+          subscriptionLocked={subscriptionLocked}
           onPrefetchModule={prefetchNavModule}
         />
       </aside>
@@ -351,11 +360,13 @@ export function AppShell({
               tenant={currentTenant}
               user={currentUser}
               needsBranchSetup={needsStoreSetup}
+              onboardingComplete={onboardingComplete}
               isOwner={isOwner}
               onBranchSetup={goToBranchSetup}
               onPrefetchModule={prefetchNavModule}
+              subscriptionLocked={subscriptionLocked}
             />
-          </aside>
+      </aside>
         </div>
       )}
 
@@ -455,9 +466,13 @@ export function AppShell({
         {/* Page header */}
         <div className="px-4 lg:px-8 pt-6 pb-4 flex flex-wrap items-end gap-4 justify-between">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{title}</h1>
+            <h1 suppressHydrationWarning className="text-2xl lg:text-3xl font-bold tracking-tight">
+              {title}
+            </h1>
             {subtitle && !showBranchSetupGate && (
-              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+              <p suppressHydrationWarning className="text-sm text-muted-foreground mt-1">
+                {subtitle}
+              </p>
             )}
           </div>
           {actions && !showBranchSetupGate && <div className="flex gap-2">{actions}</div>}
@@ -470,6 +485,8 @@ export function AppShell({
               onboardingComplete={onboardingComplete}
               onSetup={goToBranchSetup}
             />
+          ) : showSubscriptionLock && currentTenant ? (
+            <SubscriptionLockPanel tenant={currentTenant} isOwner={isOwner} />
           ) : (
             children
           )}
@@ -493,6 +510,7 @@ function SidebarContent({
   isOwner,
   onBranchSetup,
   onPrefetchModule,
+  subscriptionLocked,
 }: {
   nav: NavItem[];
   pathname: string;
@@ -506,6 +524,7 @@ function SidebarContent({
   isOwner?: boolean;
   onBranchSetup?: () => void;
   onPrefetchModule?: (suffix: string) => void;
+  subscriptionLocked?: boolean;
 }) {
   return (
     <>
@@ -552,21 +571,31 @@ function SidebarContent({
             : pathname.startsWith(item.to);
           const Icon = item.icon;
           const badgeCount = item.badgeKey ? moduleBadges[item.badgeKey] : 0;
+          const lockedNav =
+            Boolean(subscriptionLocked) &&
+            item.suffix !== "/dashboard" &&
+            item.suffix !== "/toko-saya";
           return (
             <Link
               key={item.to}
               to={item.to}
-              onClick={onNavigate}
+              onClick={(e) => {
+                if (lockedNav) e.preventDefault();
+                onNavigate?.();
+              }}
               onMouseEnter={() => {
+                if (lockedNav) return;
                 const suffix = item.to.replace(/^\/[^/]+/, "");
                 onPrefetchModule?.(suffix);
               }}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                lockedNav && "opacity-40 pointer-events-auto cursor-not-allowed",
                 active
                   ? cn(ACCENT_ACTIVE_BG[item.accent], "text-white shadow-glow")
                   : "text-sidebar-foreground/80 hover:bg-white/10 hover:text-white",
               )}
+              aria-disabled={lockedNav}
             >
               <Icon className="h-4.5 w-4.5 shrink-0" style={{ width: 18, height: 18 }} />
               <span className="flex-1 truncate">{item.label}</span>

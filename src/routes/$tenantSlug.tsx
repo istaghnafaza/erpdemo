@@ -240,6 +240,18 @@ function TenantLayout() {
   }, [isPortalRoute, currentTenant?.id, currentUser?.id, loadBranches]);
 
   useEffect(() => {
+    if (isPortalRoute || !currentTenant?.id) return;
+    let cancelled = false;
+    void getTenant(currentTenant.id).then((result) => {
+      if (cancelled || !result.data) return;
+      useAuthStore.setState({ currentTenant: result.data });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPortalRoute, currentTenant?.id]);
+
+  useEffect(() => {
     if (isPortalRoute || !currentTenant || !activeBranchId) return;
 
     if (tenantSlug === "toko-simetri" && currentTenant.slug === "toko-simetri") {

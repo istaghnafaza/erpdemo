@@ -30,6 +30,9 @@ import { DeliveryStatusBadge } from "@/components/deliveries/DeliveryStatusBadge
 import { DELIVERY_STATUS_FLOW, deliveryStatusLabel } from "@/lib/delivery-utils";
 import { orderFulfillmentLabel, paymentMethodLabel } from "@/lib/sales-transaction-utils";
 import { tanggal } from "@/lib/format";
+import { HandoverPrintDialog } from "@/components/print/HandoverPrintDialog";
+import { buildHandoverDocFromDelivery } from "@/lib/handover-doc";
+import { ClipboardList } from "lucide-react";
 import type { DeliveryRecord, DeliveryStatus, UpdateDeliveryDraft } from "@/types/deliveries";
 
 interface DeliveryDetailDialogProps {
@@ -56,6 +59,7 @@ export function DeliveryDetailDialog({
   const [qtyByLine, setQtyByLine] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     if (!delivery) return;
@@ -71,6 +75,12 @@ export function DeliveryDetailDialog({
   }, [delivery]);
 
   if (!delivery) return null;
+
+  const handoverDoc = {
+    ...buildHandoverDocFromDelivery(delivery),
+    driverName: driverName.trim() || delivery.driverName,
+    vehiclePlate: vehiclePlate.trim() || delivery.vehiclePlate,
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -97,6 +107,7 @@ export function DeliveryDetailDialog({
   };
 
   return (
+    <>
     <Dialog open={!!delivery} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -151,7 +162,7 @@ export function DeliveryDetailDialog({
           <div>
             <div className="text-muted-foreground text-xs">Total order</div>
             <div>
-              <CurrencyDisplay amount={delivery.grandTotal} />
+              <CurrencyDisplay value={delivery.grandTotal} />
             </div>
           </div>
           {delivery.deliveredAt && (
@@ -279,17 +290,24 @@ export function DeliveryDetailDialog({
 
         {error && <p className="text-sm text-destructive mt-3">{error}</p>}
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose}>
-            Tutup
+        <DialogFooter className="gap-2 sm:justify-between flex-wrap">
+          <Button variant="outline" onClick={() => setPrintOpen(true)}>
+            <ClipboardList className="h-4 w-4 mr-1.5" /> Cetak Surat Jalan
           </Button>
-          {canEdit && (
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Menyimpan..." : "Simpan perubahan"}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Tutup
             </Button>
-          )}
+            {canEdit && (
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Menyimpan..." : "Simpan perubahan"}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <HandoverPrintDialog open={printOpen} onOpenChange={setPrintOpen} doc={handoverDoc} />
+    </>
   );
 }

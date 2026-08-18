@@ -46,8 +46,9 @@ import {
   resolveDeliveryAddress,
 } from "@/lib/customer-delivery-utils";
 import { resolveCashAccountForPayment } from "@/lib/mock-finance";
-import { MOCK_TENANT_ID } from "@/stores/auth.store";
+import { MOCK_TENANT_ID, useAuthStore } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
+import { checkTenantOperational } from "@/lib/plan-guard";
 import { buildPosCheckoutExtras } from "@/lib/build-pos-checkout-extras";
 import { isMockTenantId } from "@/lib/mock-session";
 import type { CashierSession, PosCart, Customer, CartItem } from "@/types/database";
@@ -67,6 +68,7 @@ import {
 import type { PosReturnOffset } from "@/lib/pos-return-offset";
 import { useSalesOrdersStore } from "@/stores/sales-orders.store";
 import { usePosHeldCartsStore } from "@/stores/pos-held-carts.store";
+import { buildHandoverLinesFromCart, type HandoverLine } from "@/lib/handover-doc";
 
 // ---------------------------------------------------------------------------
 // Internal cart representation (what the store holds per slot)
@@ -151,6 +153,9 @@ export interface PosState {
     storeName: string;
     createdAt: string;
     returnOffset?: PosReturnOffset | null;
+    customerPhone?: string | null;
+    deliveryNumber?: string | null;
+    handoverLines?: HandoverLine[];
   } | null;
 
   // Context (set from outside — from auth + branch stores)
@@ -932,6 +937,10 @@ export const usePosStore = create<PosState>()(
 
       if (!activeSession) return { success: false, error: "Tidak ada sesi aktif" };
       if (cart.items.length === 0) return { success: false, error: "Keranjang kosong" };
+      if (!isMockSession) {
+        const operational = checkTenantOperational(useAuthStore.getState().currentTenant);
+        if (!operational.ok) return { success: false, error: operational.message };
+      }
 
       if (hasCartSoLines(cart.items) && cart.orderFulfillmentType === "cod") {
         return {
@@ -954,6 +963,8 @@ export const usePosStore = create<PosState>()(
           };
         }
       }
+
+      let createdDeliveryNumber: string | null = null;
 
       const grossTotal = cartGrandTotal(cart.items, cart.discount);
       const returnOffsetAmount = cartReturnOffsetAmount(cart);
@@ -1129,7 +1140,7 @@ export const usePosStore = create<PosState>()(
           shippableEntries.length > 0
         ) {
           if (isMockSession || !isNeonBackend()) {
-            useDeliveriesStore.getState().createFromCheckout(
+            const created = useDeliveriesStore.getState().createFromCheckout(
             {
               tenantId,
               branchId,
@@ -1161,6 +1172,7 @@ export const usePosStore = create<PosState>()(
             },
             branchCode,
           );
+            if (created?.deliveryNumber) createdDeliveryNumber = created.deliveryNumber;
           }
         }
 
@@ -1230,6 +1242,13 @@ export const usePosStore = create<PosState>()(
             storeName: get().storeName,
             createdAt: new Date().toISOString(),
             returnOffset: cart.returnOffset,
+            customerPhone: cart.customer?.phone ?? null,
+            deliveryNumber: createdDeliveryNumber,
+            handoverLines: buildHandoverLinesFromCart(
+              cart.items,
+              cart.orderFulfillmentType,
+              cart.partialShip,
+            ),
           };
         });
       };

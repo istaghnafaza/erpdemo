@@ -259,3 +259,64 @@ iframe#snap-midtrans,
   z-index: 2147483646 !important;
   pointer-events: auto !important;
 }
+
+/* Surat jalan / struk: isolasi elemen cetak dari chrome aplikasi */
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  body[data-print] * {
+    visibility: hidden !important;
+  }
+
+  body[data-print="receipt"] .receipt-print-root,
+  body[data-print="receipt"] .receipt-print-root * {
+    visibility: visible !important;
+  }
+
+  body[data-print="handover"] .handover-print-root,
+  body[data-print="handover"] .handover-print-root * {
+    visibility: visible !important;
+  }
+
+  body[data-print="receipt"] .receipt-print-root,
+  body[data-print="handover"] .handover-print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body[data-print="receipt"] .receipt-print-root {
+    display: block !important;
+    max-width: 80mm;
+    padding: 0 !important;
+  }
+
+  body[data-print="handover"] .handover-print-root {
+    display: block !important;
+    max-width: none;
+    padding: 0 !important;
+  }
+}

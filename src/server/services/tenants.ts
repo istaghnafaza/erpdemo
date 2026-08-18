@@ -2,7 +2,7 @@
 // Tenant service — Neon/Drizzle
 // =============================================================================
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toTenant } from "@/server/db/mappers";
 import { tenants } from "@/server/db/schema";
@@ -60,6 +60,7 @@ export async function createTenant(payload: TenantInsert): Promise<Tenant> {
       phone: payload.phone,
       plan: payload.plan,
       trialEndsAt: payload.trial_ends_at ? new Date(payload.trial_ends_at) : null,
+      planRenewsAt: payload.plan_renews_at ? new Date(payload.plan_renews_at) : null,
       isActive: payload.is_active,
       onboardingComplete: payload.onboarding_complete,
       legacyModeActive: payload.legacy_mode_active,
@@ -90,7 +91,11 @@ export async function updateTenant(tenantId: string, updates: TenantUpdate): Pro
   if (updates.trial_ends_at !== undefined) {
     patch.trialEndsAt = updates.trial_ends_at ? new Date(updates.trial_ends_at) : null;
   }
+  if (updates.plan_renews_at !== undefined) {
+    patch.planRenewsAt = updates.plan_renews_at ? new Date(updates.plan_renews_at) : null;
+  }
   if (updates.is_active !== undefined) patch.isActive = updates.is_active;
+  patch.updatedAt = new Date();
   if (updates.onboarding_complete !== undefined) patch.onboardingComplete = updates.onboarding_complete;
   if (updates.legacy_mode_active !== undefined) patch.legacyModeActive = updates.legacy_mode_active;
   if (updates.logo_url !== undefined) patch.logoUrl = updates.logo_url;

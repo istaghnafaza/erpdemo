@@ -16,7 +16,7 @@ import {
   NOTIFICATION_TYPE_CONFIG,
 } from "@/components/layout/NotificationPanel";
 import { useDashboard, type DashboardPeriod } from "@/hooks/useDashboard";
-import { rupiah, tanggal } from "@/lib/format";
+import { compactAngka, greetingWord, rupiah, tanggal, tanggalHariIni } from "@/lib/format";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -75,14 +75,6 @@ const PERIOD_OPTIONS: { value: DashboardPeriod; label: string }[] = [
   { value: "week", label: "Minggu Ini" },
   { value: "month", label: "Bulan Ini" },
 ];
-
-function greetingWord(): string {
-  const h = new Date().getHours();
-  if (h < 11) return "Pagi";
-  if (h < 15) return "Siang";
-  if (h < 19) return "Sore";
-  return "Malam";
-}
 
 function DashboardPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -282,7 +274,7 @@ function DashboardPage() {
           key="cash_vs_profit"
           label="Kas vs Laba"
           value={<CurrencyDisplay value={cashflowKpis?.kasRiil ?? totalCashBalance} compact />}
-          sub={`Laba ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.labaNet ?? periodProfit.netProfit)} · Piutang ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.openArTotal ?? 0)}`}
+          sub={`Laba ${compactAngka(cashflowKpis?.labaNet ?? periodProfit.netProfit)} · Piutang ${compactAngka(cashflowKpis?.openArTotal ?? 0)}`}
           icon={Scale}
           gradient="info"
           cta={{ label: "Keuangan", to: "/$tenantSlug/finance", params: { tenantSlug } }}
@@ -317,7 +309,7 @@ function DashboardPage() {
           key="cash_lock_stock"
           label="Stok Lambat / Mati"
           value={<CurrencyDisplay value={(cashflowKpis?.deadStockValue ?? 0) + (cashflowKpis?.slowStockValue ?? 0)} compact />}
-          sub={`Mati ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.deadStockValue ?? 0)} · Lambat ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.slowStockValue ?? 0)}`}
+          sub={`Mati ${compactAngka(cashflowKpis?.deadStockValue ?? 0)} · Lambat ${compactAngka(cashflowKpis?.slowStockValue ?? 0)}`}
           icon={Package}
           gradient="warning"
           alert={(cashflowKpis?.deadStockValue ?? 0) > 0}
@@ -333,7 +325,7 @@ function DashboardPage() {
           key="ar_ap_due"
           label="AR vs AP 30 Hari"
           value={<CurrencyDisplay value={cashflowKpis?.arDue30 ?? overdueTotal} compact />}
-          sub={`Piutang vs hutang jatuh tempo 30 hari: ${new Intl.NumberFormat("id-ID", { notation: "compact" }).format(cashflowKpis?.apDue30 ?? 0)} AP`}
+          sub={`Piutang vs hutang jatuh tempo 30 hari: ${compactAngka(cashflowKpis?.apDue30 ?? 0)} AP`}
           icon={Receipt}
           gradient="warning"
           cta={{ label: "Piutang", to: "/$tenantSlug/receivables", params: { tenantSlug } }}
@@ -354,7 +346,7 @@ function DashboardPage() {
   return (
     <AppShell
       title={`Selamat ${greetingWord()}, ${user.name.split(" ")[0]}! 👋`}
-      subtitle={`Ringkasan toko hari ini, ${tanggal(new Date().toISOString(), { full: true })}`}
+      subtitle={`Ringkasan toko hari ini, ${tanggalHariIni({ full: true })}`}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {isOwner && <DashboardKpiSettingsDialog />}

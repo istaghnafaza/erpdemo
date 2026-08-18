@@ -19,6 +19,7 @@ export interface PlatformTenantRow {
   phone: string | null;
   plan: string;
   trialEndsAt: string | null;
+  planRenewsAt: string | null;
   isActive: boolean;
   onboardingComplete: boolean;
   createdAt: string;
@@ -60,6 +61,7 @@ type RawTenantRow = {
   phone: string | null;
   plan: string;
   trial_ends_at: Date | string | null;
+  plan_renews_at: Date | string | null;
   is_active: boolean;
   onboarding_complete: boolean;
   created_at: Date | string;
@@ -92,6 +94,7 @@ export async function listPlatformTenants(): Promise<PlatformTenantRow[]> {
       t.phone,
       t.plan,
       t.trial_ends_at,
+      t.plan_renews_at,
       t.is_active,
       t.onboarding_complete,
       t.created_at,
@@ -135,6 +138,7 @@ export async function listPlatformTenants(): Promise<PlatformTenantRow[]> {
     phone: row.phone,
     plan: row.plan,
     trialEndsAt: toIso(row.trial_ends_at),
+    planRenewsAt: toIso(row.plan_renews_at),
     isActive: row.is_active,
     onboardingComplete: row.onboarding_complete,
     createdAt: toIso(row.created_at) ?? new Date().toISOString(),

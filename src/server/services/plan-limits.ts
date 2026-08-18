@@ -6,11 +6,12 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import {
   getPlanLimits,
+  getTenantAccessStatus,
+  isTenantOperational,
   isTrialExpired,
   planLimitErrorMessage,
-  trialExpiredMessage,
+  subscriptionLockedMessage,
 } from "@/lib/plan-config";
-import type { TenantPlan } from "@/types/app";
 import { profiles } from "@/server/db/schema";
 import { countActiveBranches } from "@/server/services/branches";
 import { getTenantById } from "@/server/services/tenants";
@@ -24,18 +25,18 @@ async function countActiveUsers(tenantId: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-function assertTrialActive(plan: TenantPlan, trialEndsAt: string | null): void {
-  if (plan !== "trial") return;
-  if (isTrialExpired(trialEndsAt)) {
-    throw new Error(trialExpiredMessage());
+export async function assertTenantOperational(tenantId: string): Promise<void> {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) throw new Error("Tenant tidak ditemukan");
+  if (!isTenantOperational(tenant)) {
+    throw new Error(subscriptionLockedMessage(getTenantAccessStatus(tenant)));
   }
 }
 
 export async function assertCanAddBranch(tenantId: string): Promise<void> {
+  await assertTenantOperational(tenantId);
   const tenant = await getTenantById(tenantId);
   if (!tenant) throw new Error("Tenant tidak ditemukan");
-
-  assertTrialActive(tenant.plan, tenant.trial_ends_at);
 
   const limits = getPlanLimits(tenant.plan);
   const current = await countActiveBranches(tenantId);
@@ -47,10 +48,9 @@ export async function assertCanAddBranch(tenantId: string): Promise<void> {
 }
 
 export async function assertCanAddUser(tenantId: string): Promise<void> {
+  await assertTenantOperational(tenantId);
   const tenant = await getTenantById(tenantId);
   if (!tenant) throw new Error("Tenant tidak ditemukan");
-
-  assertTrialActive(tenant.plan, tenant.trial_ends_at);
 
   const limits = getPlanLimits(tenant.plan);
   const current = await countActiveUsers(tenantId);
@@ -69,22 +69,22 @@ export async function getTenantPlanUsage(tenantId: string) {
     countActiveUsers(tenantId),
   ]);
 
+  const accessStatus = getTenantAccessStatus(tenant);
+  const operational = isTenantOperational(tenant);
+
   return {
     plan: tenant.plan,
     trialEndsAt: tenant.trial_ends_at,
+    planRenewsAt: tenant.plan_renews_at,
     trialExpired: tenant.plan === "trial" && isTrialExpired(tenant.trial_ends_at),
+    accessStatus,
+    operational,
     limits,
     usage: {
       branches: activeBranches,
       users: activeUsers,
     },
-    canAddBranch:
-      tenant.plan !== "trial" || !isTrialExpired(tenant.trial_ends_at)
-        ? activeBranches < limits.maxBranches
-        : false,
-    canAddUser:
-      tenant.plan !== "trial" || !isTrialExpired(tenant.trial_ends_at)
-        ? activeUsers < limits.maxUsers
-        : false,
+    canAddBranch: operational ? activeBranches < limits.maxBranches : false,
+    canAddUser: operational ? activeUsers < limits.maxUsers : false,
   };
 }

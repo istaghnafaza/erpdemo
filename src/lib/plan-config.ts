@@ -82,6 +82,117 @@ export function getPlanLimits(plan: TenantPlan): PlanLimits {
   return PLAN_LIMITS[plan] ?? PLAN_LIMITS.basic;
 }
 
+export type TenantAccessStatus =
+  | "inactive"
+  | "trial_expired"
+  | "past_due"
+  | "trial"
+  | "active";
+
+export interface TenantAccessFields {
+  plan: string;
+  is_active?: boolean;
+  isActive?: boolean;
+  trial_ends_at?: string | Date | null;
+  trialEndsAt?: string | Date | null;
+  plan_renews_at?: string | Date | null;
+  planRenewsAt?: string | Date | null;
+}
+
+function fieldActive(t: TenantAccessFields): boolean {
+  return t.is_active ?? t.isActive ?? true;
+}
+
+function fieldTrialEnd(t: TenantAccessFields): string | Date | null | undefined {
+  return t.trial_ends_at ?? t.trialEndsAt;
+}
+
+function fieldRenewsAt(t: TenantAccessFields): string | Date | null | undefined {
+  return t.plan_renews_at ?? t.planRenewsAt;
+}
+
+export function isPaidPeriodExpired(renewsAt: string | Date | null | undefined): boolean {
+  if (!renewsAt) return false;
+  return new Date(renewsAt).getTime() < Date.now();
+}
+
+export function getTenantAccessStatus(t: TenantAccessFields): TenantAccessStatus {
+  if (!fieldActive(t)) return "inactive";
+  if (t.plan === "trial") {
+    return isTrialExpired(fieldTrialEnd(t)) ? "trial_expired" : "trial";
+  }
+  if (isPaidPlan(t.plan) && isPaidPeriodExpired(fieldRenewsAt(t))) {
+    return "past_due";
+  }
+  return "active";
+}
+
+export function isTenantOperational(t: TenantAccessFields): boolean {
+  const status = getTenantAccessStatus(t);
+  return status === "trial" || status === "active";
+}
+
+export function tenantAccessLabel(status: TenantAccessStatus): string {
+  switch (status) {
+    case "inactive":
+      return "Nonaktif";
+    case "trial_expired":
+      return "Trial berakhir";
+    case "past_due":
+      return "Langganan habis";
+    case "trial":
+      return "Trial";
+    case "active":
+      return "Aktif";
+  }
+}
+
+export function subscriptionLockedMessage(status: TenantAccessStatus): string {
+  if (status === "inactive") {
+    return "Toko dinonaktifkan. Hubungi SEPS untuk mengaktifkan kembali.";
+  }
+  if (status === "trial_expired") {
+    return "Masa trial 7 hari telah berakhir. Upgrade ke Basic, Pro, atau Enterprise untuk memakai POS dan modul operasional.";
+  }
+  if (status === "past_due") {
+    return "Masa aktif langganan telah berakhir. Perpanjang paket untuk memakai POS dan modul operasional.";
+  }
+  return "";
+}
+
+export function defaultPlanAccessDates(
+  plan: TenantPlan,
+  cycle: BillingCycle = "monthly",
+  from: Date = new Date(),
+): { trialEndsAt: string | null; planRenewsAt: string | null } {
+  if (plan === "trial") {
+    return {
+      trialEndsAt: new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+      planRenewsAt: null,
+    };
+  }
+  return {
+    trialEndsAt: null,
+    planRenewsAt: new Date(from.getTime() + getPlanPeriodDays(cycle) * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+/** YYYY-MM-DD in Asia/Jakarta for date inputs. */
+export function isoToDateInput(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+export function dateInputToIsoEndOfDay(ymd: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  return `${ymd}T23:59:59.999+07:00`;
+}
+
 export function isTrialExpired(trialEndsAt: string | Date | null | undefined): boolean {
   if (!trialEndsAt) return false;
   return new Date(trialEndsAt).getTime() < Date.now();
@@ -118,5 +229,5 @@ export function planLimitErrorMessage(
 }
 
 export function trialExpiredMessage(): string {
-  return "Masa trial 7 hari telah berakhir. Upgrade ke Basic, Pro, atau Enterprise untuk melanjutkan menambah cabang/pegawai.";
+  return "Masa trial 7 hari telah berakhir. Upgrade ke Basic, Pro, atau Enterprise untuk memakai POS dan modul operasional.";
 }

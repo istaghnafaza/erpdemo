@@ -3,7 +3,7 @@ import { AlertTriangle, Crown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UpgradePlanSheet } from "@/components/subscription/UpgradePlanSheet";
 import { getTenantPlanUsage, type TenantPlanUsage } from "@/lib/api/plan";
-import { TRIAL_DAYS } from "@/lib/plan-config";
+import { TRIAL_DAYS, isTenantOperational } from "@/lib/plan-config";
 import { useAuthStore } from "@/stores/auth.store";
 
 const PLAN_BADGE: Record<string, string> = {
@@ -27,13 +27,14 @@ export function PlanBanner() {
       branchCount: 0,
       userCount: 0,
     }).then(setUsage);
-  }, [tenantId, isOwner, tenant?.plan, tenant?.trial_ends_at]);
+  }, [tenantId, isOwner, tenant?.plan, tenant?.trial_ends_at, tenant?.plan_renews_at]);
 
   if (!tenant || !isOwner || !usage) return null;
 
   const { trialExpired, trialDaysLeft, limits } = usage;
-  const atBranchLimit = !usage.canAddBranch && !trialExpired;
-  const atUserLimit = !usage.canAddUser && !trialExpired;
+  const locked = !isTenantOperational(tenant);
+  const atBranchLimit = !usage.canAddBranch && !locked;
+  const atUserLimit = !usage.canAddUser && !locked;
   const showTrialWarning =
     usage.plan === "trial" && !trialExpired && trialDaysLeft <= 3;
   const renewSoon =
@@ -42,7 +43,7 @@ export function PlanBanner() {
     new Date(tenant.plan_renews_at!).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 &&
     new Date(tenant.plan_renews_at!).getTime() >= Date.now();
 
-  if (!trialExpired && !showTrialWarning && !atBranchLimit && !atUserLimit && !renewSoon) {
+  if (!locked && !showTrialWarning && !atBranchLimit && !atUserLimit && !renewSoon) {
     return null;
   }
 
@@ -50,13 +51,13 @@ export function PlanBanner() {
     <>
       <div
         className={
-          trialExpired
+          locked
             ? "mx-4 lg:mx-8 mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 flex flex-wrap items-center gap-3 justify-between"
             : "mx-4 lg:mx-8 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex flex-wrap items-center gap-3 justify-between"
         }
       >
         <div className="flex items-start gap-3 min-w-0">
-          {trialExpired ? (
+          {locked ? (
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
           ) : (
             <Crown className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -75,8 +76,10 @@ export function PlanBanner() {
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {trialExpired
-                ? "Masa trial 7 hari berakhir. Upgrade untuk menambah cabang/pegawai dan lanjut berlangganan."
+              {locked
+                ? tenant.plan === "trial"
+                  ? "Masa trial 7 hari berakhir. POS dan modul operasional dikunci sampai toko di-upgrade."
+                  : "Masa aktif langganan berakhir. POS dan modul operasional dikunci sampai diperpanjang."
                 : showTrialWarning
                   ? `Trial berakhir dalam ${trialDaysLeft} hari — pilih paket Basic, Pro, atau Enterprise.`
                   : renewSoon
@@ -91,7 +94,7 @@ export function PlanBanner() {
         </div>
         <Button
           size="sm"
-          variant={trialExpired ? "destructive" : "default"}
+          variant={locked ? "destructive" : "default"}
           onClick={() => setUpgradeOpen(true)}
         >
           <Sparkles className="h-4 w-4 mr-1.5" />

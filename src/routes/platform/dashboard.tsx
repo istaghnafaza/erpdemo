@@ -5,7 +5,9 @@ import {
   CreditCard,
   Database,
   LogOut,
+  Pencil,
   RefreshCw,
+  Search,
   Sparkles,
   Store,
   TrendingUp,
@@ -25,10 +27,12 @@ import {
 } from "@/components/ui/table";
 import { getPlatformDashboard } from "@/lib/api/platform";
 import { angka, rupiah, tanggal } from "@/lib/format";
+import { getTenantAccessStatus, tenantAccessLabel } from "@/lib/plan-config";
 import { requirePlatformAdmin } from "@/routes/platform";
 import { useAuthStore } from "@/stores/auth.store";
-import type { PlatformDashboardData } from "@/types/platform";
+import type { PlatformDashboardData, PlatformTenantRow } from "@/types/platform";
 import { toast } from "sonner";
+import { PlatformTenantPlanDialog } from "@/components/platform/PlatformTenantPlanDialog";
 
 export const Route = createFileRoute("/platform/dashboard")({
   beforeLoad: () => {
@@ -61,6 +65,7 @@ function PlatformDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [manualOrderId, setManualOrderId] = useState("");
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [editTenant, setEditTenant] = useState<PlatformTenantRow | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -96,6 +101,12 @@ function PlatformDashboardPage() {
             <Link to="/platform/catalog">
               <Database className="h-4 w-4 mr-2" />
               Master Data Katalog
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/platform/price-compare">
+              <Search className="h-4 w-4 mr-2" />
+              Banding Harga
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
@@ -259,6 +270,7 @@ function PlatformDashboardPage() {
                 <TableHead>Kontak</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead></TableHead>
                 <TableHead className="text-right">Cabang</TableHead>
                 <TableHead className="text-right">User</TableHead>
                 <TableHead className="text-right">Tx 30h</TableHead>
@@ -269,7 +281,7 @@ function PlatformDashboardPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     Memuat data...
                   </TableCell>
                 </TableRow>
@@ -288,20 +300,40 @@ function PlatformDashboardPage() {
                     <TableCell>{planBadge(tenant.plan)}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1 items-start">
-                        <Badge variant={tenant.isActive ? "default" : "secondary"}>
-                          {tenant.isActive ? "Aktif" : "Nonaktif"}
-                        </Badge>
+                        {(() => {
+                          const status = getTenantAccessStatus(tenant);
+                          const locked = status === "trial_expired" || status === "past_due" || status === "inactive";
+                          return (
+                            <Badge variant={locked ? (status === "inactive" ? "secondary" : "destructive") : status === "trial" ? "outline" : "default"}>
+                              {tenantAccessLabel(status)}
+                            </Badge>
+                          );
+                        })()}
                         {!tenant.onboardingComplete ? (
                           <Badge variant="outline" className="text-amber-700 border-amber-300">
                             Setup pending
                           </Badge>
                         ) : null}
-                        {tenant.trialEndsAt ? (
+                        {tenant.plan === "trial" && tenant.trialEndsAt ? (
                           <span className="text-[11px] text-muted-foreground">
                             Trial s/d {tanggal(tenant.trialEndsAt)}
                           </span>
                         ) : null}
+                        {tenant.plan !== "trial" && tenant.planRenewsAt ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            Aktif s/d {tanggal(tenant.planRenewsAt)}
+                          </span>
+                        ) : null}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditTenant(tenant)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Plan
+                      </Button>
                     </TableCell>
                     <TableCell className="text-right">{angka(tenant.activeBranchCount)}</TableCell>
                     <TableCell className="text-right">{angka(tenant.activeUserCount)}</TableCell>
@@ -316,7 +348,7 @@ function PlatformDashboardPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     Belum ada tenant terdaftar
                   </TableCell>
                 </TableRow>
@@ -329,8 +361,16 @@ function PlatformDashboardPage() {
       <p className="text-xs text-muted-foreground mt-4">
         Tip: buka toko tenant dari browser dengan URL{" "}
         <code className="rounded bg-muted px-1">/{`{slug}`}/dashboard</code> setelah login sebagai
-        owner masing-masing.
+        owner masing-masing. Status toko mengikuti masa trial / tanggal aktif, bukan hanya flag akun.
       </p>
+      <PlatformTenantPlanDialog
+        tenant={editTenant}
+        open={!!editTenant}
+        onOpenChange={(open) => {
+          if (!open) setEditTenant(null);
+        }}
+        onSaved={() => void load()}
+      />
     </PlatformShell>
   );
 }
