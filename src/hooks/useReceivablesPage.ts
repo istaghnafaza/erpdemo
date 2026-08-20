@@ -97,6 +97,8 @@ export function useReceivablesPage() {
         paid: r.paid_amount,
         dueDate: r.due_date,
         issuedDate: r.created_at,
+        salesTransactionId: r.sales_transaction_id,
+        salesOrderId: r.sales_order_id,
       })),
     [neonArQuery.data],
   );

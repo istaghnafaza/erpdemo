@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { FileText, Package, Pencil, Truck } from "lucide-react";
+import { FileText, Package, Pencil, Printer, Truck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,9 @@ import {
 } from "@/lib/so-fulfillment-utils";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth.store";
+import { useBranchStore } from "@/stores/branch.store";
+import { SalesDocsPrintDialog } from "@/components/print/SalesDocsPrintDialog";
+import { docsFromSalesOrder } from "@/lib/print-docs";
 import { indentPoStatusLabel } from "@/stores/purchasing.store";
 import type { FulfillItemResult } from "@/lib/api/sales-orders";
 import type { MockSalesOrderWithDetails } from "@/lib/mock-sales-orders";
@@ -72,7 +75,11 @@ export function SalesOrderDetailDialog({
   onEdit,
 }: SalesOrderDetailDialogProps) {
   const tenantSlug = useAuthStore((s) => s.currentTenant?.slug) ?? "";
+  const tenantId = useAuthStore((s) => s.currentUser?.tenantId) ?? "";
+  const storeName = useAuthStore((s) => s.currentTenant?.name) ?? "SEPS";
+  const branches = useBranchStore((s) => s.branches);
   const [activeTab, setActiveTab] = useState("fulfillment");
+  const [printOpen, setPrintOpen] = useState(false);
   const [stockQtys, setStockQtys] = useState<Record<string, number>>({});
   const [indentQtys, setIndentQtys] = useState<Record<string, number>>({});
   const [supplierIds, setSupplierIds] = useState<Record<string, string>>({});
@@ -90,6 +97,14 @@ export function SalesOrderDetailDialog({
   }, [order?.id, getProductStock, getDefaultSupplierId]);
 
   if (!order) return null;
+
+  const orderBranch = branches.find((b) => b.id === order.branch_id);
+  const printDoc = docsFromSalesOrder(order, {
+    branchName: orderBranch?.name ?? "Cabang",
+    branchAddress: orderBranch?.address ?? null,
+    branchPhone: orderBranch?.phone ?? null,
+    storeName,
+  });
 
   const canFulfill =
     order.status === "confirmed" ||
@@ -150,6 +165,7 @@ export function SalesOrderDetailDialog({
   };
 
   return (
+    <>
     <Dialog open={!!order} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -512,6 +528,10 @@ export function SalesOrderDetailDialog({
         </Tabs>
 
         <DialogFooter className="flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setPrintOpen(true)} className="gap-1.5">
+            <Printer className="h-4 w-4" />
+            Cetak Struk / Invoice
+          </Button>
           {showEdit && (
             <Button variant="outline" onClick={onEdit} disabled={loading} className="gap-1.5">
               <Pencil className="h-4 w-4" />
@@ -566,6 +586,16 @@ export function SalesOrderDetailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <SalesDocsPrintDialog
+      open={printOpen}
+      onOpenChange={setPrintOpen}
+      receipt={printDoc}
+      invoice={printDoc}
+      tenantId={tenantId}
+      branchId={order.branch_id}
+      title="Cetak SO"
+    />
+    </>
   );
 }
 

@@ -36,24 +36,31 @@ export async function listSellUnitsForProducts(
   const map = new Map<string, ProductSellUnit[]>();
   if (productIds.length === 0) return map;
 
-  const db = getDb();
-  const rows = await db
-    .select()
-    .from(productSellUnits)
-    .where(
-      and(
-        eq(productSellUnits.tenantId, tenantId),
-        inArray(productSellUnits.productId, productIds),
-        eq(productSellUnits.isActive, true),
-      ),
-    )
-    .orderBy(asc(productSellUnits.sortOrder));
+  const { ensureSellUnitsSchema } = await import("@/server/db/ensure-sell-units-schema");
+  await ensureSellUnitsSchema();
 
-  for (const row of rows) {
-    const unit = toProductSellUnit(row);
-    const list = map.get(unit.product_id) ?? [];
-    list.push(unit);
-    map.set(unit.product_id, list);
+  const db = getDb();
+  try {
+    const rows = await db
+      .select()
+      .from(productSellUnits)
+      .where(
+        and(
+          eq(productSellUnits.tenantId, tenantId),
+          inArray(productSellUnits.productId, productIds),
+          eq(productSellUnits.isActive, true),
+        ),
+      )
+      .orderBy(asc(productSellUnits.sortOrder));
+
+    for (const row of rows) {
+      const unit = toProductSellUnit(row);
+      const list = map.get(unit.product_id) ?? [];
+      list.push(unit);
+      map.set(unit.product_id, list);
+    }
+  } catch (err) {
+    console.error("[SEPS] listSellUnitsForProducts failed", err);
   }
   return map;
 }

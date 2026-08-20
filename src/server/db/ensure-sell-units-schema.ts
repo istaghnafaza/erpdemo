@@ -79,6 +79,14 @@ export async function ensureSellUnitsSchema(): Promise<void> {
         ON product_sell_units (product_id)
         WHERE is_active = true
     `);
+    await db.execute(sql`
+      ALTER TABLE product_sell_units
+        ADD COLUMN IF NOT EXISTS allow_fraction boolean NOT NULL DEFAULT false
+    `);
+    await db.execute(sql`
+      ALTER TABLE product_sell_units
+        ADD COLUMN IF NOT EXISTS preset_qty jsonb NOT NULL DEFAULT '[]'::jsonb
+    `);
     ensured = true;
   })();
 

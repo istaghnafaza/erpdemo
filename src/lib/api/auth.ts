@@ -13,6 +13,8 @@ import {
   neonSignInWithPin,
   neonSignOut,
   neonUpdateProfile,
+  neonRequestPasswordReset,
+  neonConfirmPasswordReset,
 } from "@/lib/api/neon/fns";
 import type { ApiResponse, AuthUser, AppProfile, GoogleSignInResult, RegisterInput, AccountProfileUpdates } from "@/types/app";
 import type { Profile } from "@/types/database";
@@ -125,6 +127,44 @@ export async function signInWithPin(
   }
 
   return fail("PIN login memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export type PasswordResetRequestResult = {
+  challengeId: string;
+  channel: "email" | "sms";
+  destinationHint: string;
+  expiresInSec: number;
+  debugOtp?: string;
+};
+
+export async function requestPasswordReset(
+  identifier: string,
+  channel: "email" | "sms",
+): Promise<ApiResponse<PasswordResetRequestResult>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonRequestPasswordReset({ data: { identifier, channel } }),
+    );
+    if (result.error) return fail(result.error);
+    if (!result.data) return fail("Gagal mengirim kode OTP");
+    return ok(result.data);
+  }
+  return fail("Reset PIN memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function confirmPasswordReset(
+  challengeId: string,
+  otp: string,
+  newPin: string,
+): Promise<ApiResponse<{ ok: true }>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonConfirmPasswordReset({ data: { challengeId, otp, newPin } }),
+    );
+    if (result.error) return fail(result.error);
+    return ok({ ok: true });
+  }
+  return fail("Reset PIN memerlukan VITE_DATA_BACKEND=neon");
 }
 
 // ---------------------------------------------------------------------------

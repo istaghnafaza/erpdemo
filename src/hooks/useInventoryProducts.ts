@@ -44,7 +44,9 @@ import {
   downloadImportTemplateCsv,
   downloadImportTemplateExcel,
 } from "@/lib/inventory-import-template";
-import type { StockMovement, ProductCategory } from "@/types/database";
+import type { Branch, StockMovement, ProductCategory } from "@/types/database";
+
+const EMPTY_BRANCHES: Branch[] = [];
 
 export interface InventoryProductRow {
   branchProductId: string;
@@ -112,7 +114,7 @@ export function useInventoryProducts() {
   const [movementsLoading, setMovementsLoading] = useState(false);
 
   const branchList =
-    branches.length > 0 ? branches : isMockTenant ? MOCK_BRANCHES : [];
+    branches.length > 0 ? branches : isMockTenant ? MOCK_BRANCHES : EMPTY_BRANCHES;
 
   const isOwner = role === "owner";
   const consolidated = isOwnerConsolidatedView(isConsolidated, isOwner);
@@ -302,24 +304,26 @@ export function useInventoryProducts() {
           categoryId: bp.product.category_id,
           unit: bp.product.unit,
           stockUnit: bp.product.stock_unit ?? bp.product.unit,
-          sellUnits: (bp.product.sell_units ?? []).map((u) => ({
-            id: u.id,
-            label: u.label,
-            factor_to_base: u.factor_to_base,
-            selling_price: u.selling_price,
-            purchase_price: u.purchase_price,
-            sort_order: u.sort_order,
-            is_active: u.is_active,
-            allow_fraction: u.allow_fraction,
-            preset_qty: u.preset_qty,
-          })),
-          stock: bp.stock,
+          sellUnits: Array.isArray(bp.product.sell_units)
+            ? bp.product.sell_units.map((u) => ({
+                id: u.id,
+                label: u.label,
+                factor_to_base: u.factor_to_base,
+                selling_price: u.selling_price,
+                purchase_price: u.purchase_price,
+                sort_order: u.sort_order,
+                is_active: u.is_active,
+                allow_fraction: u.allow_fraction,
+                preset_qty: u.preset_qty,
+              }))
+            : [],
+          stock: Number(bp.stock) || 0,
           reorderPoint: bp.reorder_point,
           purchasePrice: bp.product.purchase_price,
           sellingPrice: bp.selling_price,
           warehouseLocation: bp.warehouse_location ?? "",
           isActive: bp.product.is_active,
-          stockStatus: inventoryStockStatus(bp.stock, bp.reorder_point),
+          stockStatus: inventoryStockStatus(Number(bp.stock) || 0, bp.reorder_point),
         });
       }
     }
@@ -327,6 +331,7 @@ export function useInventoryProducts() {
   }, [isMockTenant, mockRawRows, inventoryQuery.data, effectiveBranchIds, branchList]);
 
   const loading = isMockTenant ? mockLoading : inventoryQuery.isPending;
+  const inventoryError = isMockTenant ? null : inventoryQuery.error?.message ?? null;
 
   const invalidateInventory = useCallback(() => {
     void queryClient.invalidateQueries({
@@ -336,8 +341,15 @@ export function useInventoryProducts() {
     void queryClient.invalidateQueries({ queryKey: ["pos-catalog", tenantId] });
   }, [queryClient, tenantId, effectiveBranchIds]);
 
-  const catalogCategoryNames = useProductAttributesStore((s) =>
-    s.listCatalogCategories(false).map((c) => c.name),
+  const catalogCategories = useProductAttributesStore((s) => s.catalogCategories);
+
+  const catalogCategoryNames = useMemo(
+    () =>
+      (catalogCategories ?? [])
+        .filter((c) => c.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((c) => c.name),
+    [catalogCategories],
   );
 
   const categoryNames = useMemo(() => {
@@ -612,6 +624,7 @@ export function useInventoryProducts() {
     isConsolidated,
     branchList,
     loading,
+    inventoryError,
     search,
     setSearch,
     categoryFilter,
@@ -644,6 +657,7 @@ export function useInventoryProducts() {
     handleDeactivate,
     handleSaveProduct,
     invalidateInventory,
+    retryInventory: () => void inventoryQuery.refetch(),
     loadMovements,
   };
 }

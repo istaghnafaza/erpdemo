@@ -15,6 +15,7 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as TenantSlugRouteImport } from './routes/$tenantSlug'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
@@ -40,6 +41,7 @@ import { Route as TenantSlugFinanceIndexRouteImport } from './routes/$tenantSlug
 import { Route as TenantSlugDeliveriesIndexRouteImport } from './routes/$tenantSlug/deliveries/index'
 import { Route as TenantSlugCustomersIndexRouteImport } from './routes/$tenantSlug/customers/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
+import { Route as ApiPrintThermerRouteImport } from './routes/api/print/thermer'
 import { Route as ApiMidtransNotificationRouteImport } from './routes/api/midtrans/notification'
 import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
 import { Route as TenantSlugSettingsPricingRouteImport } from './routes/$tenantSlug/settings/pricing'
@@ -90,6 +92,11 @@ const LandingRoute = LandingRouteImport.update({
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TenantSlugRoute = TenantSlugRouteImport.update({
@@ -222,6 +229,11 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   path: '/auth/google/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPrintThermerRoute = ApiPrintThermerRouteImport.update({
+  id: '/api/print/thermer',
+  path: '/api/print/thermer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMidtransNotificationRoute = ApiMidtransNotificationRouteImport.update({
   id: '/api/midtrans/notification',
   path: '/api/midtrans/notification',
@@ -348,6 +360,7 @@ const TenantSlugSettingsMasterDataProductAttributesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/health': typeof HealthRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -385,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
@@ -402,6 +416,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/health': typeof HealthRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -438,6 +453,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries': typeof TenantSlugDeliveriesIndexRoute
@@ -456,6 +472,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$tenantSlug': typeof TenantSlugRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/health': typeof HealthRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
@@ -493,6 +510,7 @@ export interface FileRoutesById {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
   '/$tenantSlug/deliveries/': typeof TenantSlugDeliveriesIndexRoute
@@ -512,6 +530,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$tenantSlug'
+    | '/forgot-password'
     | '/health'
     | '/landing'
     | '/login'
@@ -549,6 +568,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
     | '/$tenantSlug/deliveries/'
@@ -566,6 +586,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$tenantSlug'
+    | '/forgot-password'
     | '/health'
     | '/landing'
     | '/login'
@@ -602,6 +623,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers'
     | '/$tenantSlug/deliveries'
@@ -619,6 +641,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$tenantSlug'
+    | '/forgot-password'
     | '/health'
     | '/landing'
     | '/login'
@@ -656,6 +679,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
     | '/$tenantSlug/deliveries/'
@@ -674,6 +698,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TenantSlugRoute: typeof TenantSlugRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   HealthRoute: typeof HealthRoute
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
@@ -682,6 +707,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ApiMidtransNotificationRoute: typeof ApiMidtransNotificationRoute
+  ApiPrintThermerRoute: typeof ApiPrintThermerRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
 
@@ -727,6 +753,13 @@ declare module '@tanstack/react-router' {
       path: '/health'
       fullPath: '/health'
       preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$tenantSlug': {
@@ -902,6 +935,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/google/callback'
       fullPath: '/auth/google/callback'
       preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/print/thermer': {
+      id: '/api/print/thermer'
+      path: '/api/print/thermer'
+      fullPath: '/api/print/thermer'
+      preLoaderRoute: typeof ApiPrintThermerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/midtrans/notification': {
@@ -1172,6 +1212,7 @@ const PlatformRouteWithChildren = PlatformRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TenantSlugRoute: TenantSlugRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   HealthRoute: HealthRoute,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
@@ -1180,6 +1221,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   ApiMidtransNotificationRoute: ApiMidtransNotificationRoute,
+  ApiPrintThermerRoute: ApiPrintThermerRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }
 export const routeTree = rootRouteImport

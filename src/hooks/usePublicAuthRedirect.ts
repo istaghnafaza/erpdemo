@@ -1,29 +1,36 @@
-import { useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useRouter } from "@tanstack/react-router";
 import {
-  resolveAuthenticatedRedirectPath,
-  syncAuthFromServer,
+  resolveAuthenticatedRedirectHref,
+  waitForAuthHydration,
 } from "@/lib/auth-bootstrap";
 
 /**
- * Client-only: sync sesi ke server lalu redirect jika sudah login.
- * Dipakai di login/register agar beforeLoad tetap sync (SSR hydration aman).
+ * Tunggu persist auth, lalu kembalikan ke halaman terakhir (bukan form login).
  */
 export function usePublicAuthRedirect() {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const [gate, setGate] = useState<"pending" | "guest" | "leaving">("pending");
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      await syncAuthFromServer({ force: true });
+      await waitForAuthHydration();
       if (cancelled) return;
-      const dest = resolveAuthenticatedRedirectPath();
-      if (dest) navigate({ to: dest, replace: true });
+      const href = resolveAuthenticatedRedirectHref();
+      if (href) {
+        setGate("leaving");
+        router.history.replace(href);
+        return;
+      }
+      setGate("guest");
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [router]);
+
+  return gate;
 }

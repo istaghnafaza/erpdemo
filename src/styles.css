@@ -292,12 +292,17 @@ iframe#snap-midtrans,
     visibility: visible !important;
   }
 
+  body[data-print="invoice"] .invoice-print-root,
+  body[data-print="invoice"] .invoice-print-root * {
+    visibility: visible !important;
+  }
+
   body[data-print="receipt"] .receipt-print-root,
-  body[data-print="handover"] .handover-print-root {
+  body[data-print="handover"] .handover-print-root,
+  body[data-print="invoice"] .invoice-print-root {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    width: 100% !important;
     margin: 0 !important;
     background: white !important;
     box-shadow: none !important;
@@ -310,12 +315,15 @@ iframe#snap-midtrans,
 
   body[data-print="receipt"] .receipt-print-root {
     display: block !important;
-    max-width: 80mm;
+    width: var(--print-receipt-width, 58mm) !important;
+    max-width: var(--print-receipt-width, 58mm) !important;
     padding: 0 !important;
   }
 
-  body[data-print="handover"] .handover-print-root {
+  body[data-print="handover"] .handover-print-root,
+  body[data-print="invoice"] .invoice-print-root {
     display: block !important;
+    width: 100% !important;
     max-width: none;
     padding: 0 !important;
   }

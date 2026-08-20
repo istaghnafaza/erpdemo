@@ -72,6 +72,12 @@ const SERVER_ENV_KEYS = [
   "MIDTRANS_NOTIFICATION_URL",
   "PLAN_OPS_TELEGRAM_BOT_TOKEN",
   "PLAN_OPS_TELEGRAM_CHAT_ID",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_FROM",
+  "FONNTE_TOKEN",
 ] as const;
 
 /** Which expected keys exist in process.env (helps debug Railway misconfiguration). */

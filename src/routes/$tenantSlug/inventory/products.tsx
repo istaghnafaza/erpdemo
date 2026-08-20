@@ -41,6 +41,7 @@ function ProductsPage() {
     isConsolidated,
     branchList,
     loading,
+    inventoryError,
     search,
     setSearch,
     categoryFilter,
@@ -73,6 +74,7 @@ function ProductsPage() {
     handleDeactivate,
     handleSaveProduct,
     invalidateInventory,
+    retryInventory,
   } = useInventoryProducts();
 
   const importBranchId = activeBranch?.id ?? branchList[0]?.id ?? "";
@@ -161,6 +163,13 @@ function ProductsPage() {
           <div className="p-4">
             <LoadingSkeleton variant="table-row" count={8} />
           </div>
+        ) : inventoryError ? (
+          <div className="p-6 text-sm space-y-3">
+            <p className="text-destructive">Master barang gagal dimuat: {inventoryError}</p>
+            <Button variant="outline" size="sm" onClick={() => retryInventory()}>
+              Coba lagi
+            </Button>
+          </div>
         ) : (
           <ProductTable
             rows={filteredRows}
@@ -185,18 +194,20 @@ function ProductsPage() {
         canSeePurchasePrice={canSeePurchasePrice}
       />
 
-      <ProductFormModal
-        open={formOpen}
-        onClose={closeForm}
-        editing={!!editingProductId}
-        defaults={editingDefaults}
-        categoryNames={categoryNames}
-        existingSkus={existingSkus}
-        canEditPurchasePrice={canSeePurchasePrice && ["owner", "manager"].includes(user.role)}
-        onSave={handleSaveProduct}
-      />
+      {formOpen ? (
+        <ProductFormModal
+          open={formOpen}
+          onClose={closeForm}
+          editing={!!editingProductId}
+          defaults={editingDefaults}
+          categoryNames={categoryNames}
+          existingSkus={existingSkus}
+          canEditPurchasePrice={canSeePurchasePrice && ["owner", "manager"].includes(user.role)}
+          onSave={handleSaveProduct}
+        />
+      ) : null}
 
-      {canEditProduct && importBranchId ? (
+      {canEditProduct && importBranchId && importOpen ? (
         <ProductImportDialog
           open={importOpen}
           onClose={closeImportDialog}

@@ -89,6 +89,8 @@ export interface Receivable {
   paid: number;
   dueDate: string; // ISO
   issuedDate: string;
+  salesTransactionId?: string | null;
+  salesOrderId?: string | null;
 }
 
 export interface ArPaymentRecord {

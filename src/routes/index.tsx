@@ -1,13 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRouteSync, waitForAuthHydration } from "@/lib/auth-bootstrap";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: () => {
-    // Sudah login → masuk app / platform
+  beforeLoad: async () => {
+    await waitForAuthHydration();
     const authedRedirect = preparePublicAuthRouteSync();
     if (authedRedirect) throw authedRedirect;
 
-    // Funnel iklan / pengunjung baru → landing (bukan login)
     throw redirect({ to: "/landing" });
   },
 });

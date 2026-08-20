@@ -19,7 +19,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { getTenant, getTenantBySlug } from "@/lib/api/tenants";
-import { syncAuthFromServer } from "@/lib/auth-bootstrap";
+import { syncAuthFromServer, waitForAuthHydration } from "@/lib/auth-bootstrap";
 import { isMockBackend } from "@/lib/api/backend";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
 import { seedMockNotifications } from "@/lib/mock-notifications";
@@ -90,6 +90,7 @@ export const Route = createFileRoute("/$tenantSlug")({
       "landing",
       "login",
       "register",
+      "forgot-password",
       "pricing",
       "platform",
       "health",
@@ -102,6 +103,7 @@ export const Route = createFileRoute("/$tenantSlug")({
       if (slug === "landing") throw redirect({ to: "/landing" });
       if (slug === "login") throw redirect({ to: "/login" });
       if (slug === "register") throw redirect({ to: "/register" });
+      if (slug === "forgot-password") throw redirect({ to: "/forgot-password" });
       if (slug === "pricing") throw redirect({ to: "/pricing" });
       if (slug === "platform") throw redirect({ to: "/platform/dashboard" });
       if (slug === "health") throw redirect({ to: "/health" });
@@ -117,6 +119,7 @@ export const Route = createFileRoute("/$tenantSlug")({
       return { tenant, isPortal: true as const };
     }
 
+    await waitForAuthHydration();
     const user = requireAuth();
 
     const { currentTenant: cachedTenant } = useAuthStore.getState();

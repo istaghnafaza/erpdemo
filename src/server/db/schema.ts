@@ -2,6 +2,7 @@
 // Drizzle schema — Phase 1 tables (Neon)
 // =============================================================================
 
+import { sql } from "drizzle-orm";
 import {
   boolean,
   jsonb,
@@ -110,6 +111,20 @@ export const authUsers = pgTable("auth_users", {
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const passwordResetOtps = pgTable("password_reset_otps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  codeHash: text("code_hash").notNull(),
+  destination: text("destination").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const branches = pgTable(
@@ -244,7 +259,7 @@ export const productSellUnits = pgTable(
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     allowFraction: boolean("allow_fraction").notNull().default(false),
-    presetQty: jsonb("preset_qty").$type<number[]>().notNull().default([]),
+    presetQty: jsonb("preset_qty").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -465,7 +480,7 @@ export const salesItems = pgTable("sales_items", {
   stockSource: stockSourceEnum("stock_source").notNull().default("verified"),
   /** Baris indent/SO — tidak mengurangi stok cabang saat checkout POS */
   isSoLine: boolean("is_so_line").notNull().default(false),
-  qtyReturned: integer("qty_returned").notNull().default(0),
+  qtyReturned: numeric("qty_returned", { precision: 18, scale: 4 }).notNull().default("0"),
   sellUnitId: uuid("sell_unit_id"),
   sellUnitLabel: text("sell_unit_label"),
   qtyBase: numeric("qty_base", { precision: 18, scale: 4 }),
@@ -535,9 +550,9 @@ export const salesReturnItems = pgTable("sales_return_items", {
   productName: text("product_name").notNull(),
   sku: text("sku").notNull(),
   unit: text("unit").notNull(),
-  qtySold: integer("qty_sold").notNull(),
-  qtyRequested: integer("qty_requested").notNull(),
-  qtyQcPassed: integer("qty_qc_passed").notNull().default(0),
+  qtySold: numeric("qty_sold", { precision: 18, scale: 4 }).notNull(),
+  qtyRequested: numeric("qty_requested", { precision: 18, scale: 4 }).notNull(),
+  qtyQcPassed: numeric("qty_qc_passed", { precision: 18, scale: 4 }).notNull().default("0"),
   unitRefundPrice: bigint("unit_refund_price", { mode: "number" }).notNull().default(0),
   refundSubtotal: bigint("refund_subtotal", { mode: "number" }).notNull().default(0),
   qcPassed: boolean("qc_passed"),

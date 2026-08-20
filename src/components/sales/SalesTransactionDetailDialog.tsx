@@ -321,7 +321,7 @@ export function SalesTransactionDetailDialog({
           <DialogFooter className="gap-2 sm:justify-between flex-wrap">
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setReceiptOpen(true)}>
-                <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk
+                <Printer className="h-4 w-4 mr-1.5" /> Cetak Struk / Invoice
               </Button>
               <Button variant="outline" onClick={() => setHandoverOpen(true)}>
                 <ClipboardList className="h-4 w-4 mr-1.5" /> Cetak Surat Jalan

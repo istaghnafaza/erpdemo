@@ -4,7 +4,9 @@
 
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
-import { toSalesItem, toSalesTransaction } from "@/server/db/mappers";
+import { num, stockStr, toSalesItem, toSalesTransaction } from "@/server/db/mappers";
+import { ensureReturnsQtySchema } from "@/server/db/ensure-returns-qty-schema";
+import { roundQty } from "@/lib/product-sell-units";
 import {
   branchProducts,
   branches,
@@ -69,9 +71,9 @@ function mapReturnRow(
       productName: it.productName,
       sku: it.sku,
       unit: it.unit,
-      qtySold: it.qtySold,
-      qtyRequested: it.qtyRequested,
-      qtyQcPassed: it.qtyQcPassed,
+      qtySold: num(it.qtySold),
+      qtyRequested: num(it.qtyRequested),
+      qtyQcPassed: num(it.qtyQcPassed),
       unitRefundPrice: it.unitRefundPrice,
       refundSubtotal: it.refundSubtotal,
       qcPassed: it.qcPassed,
@@ -140,12 +142,13 @@ async function restoreReturnStockInTx(
   if (!bp) return;
 
   const isLegacy = stockSource === "legacy";
-  const currentQty = isLegacy ? bp.legacyStock : bp.stock;
-  const newQty = currentQty + qty;
+  const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
+  const addQty = num(qty);
+  const newQty = roundQty(currentQty + addQty);
 
   await tx
     .update(branchProducts)
-    .set(isLegacy ? { legacyStock: newQty } : { stock: newQty })
+    .set(isLegacy ? { legacyStock: stockStr(newQty) } : { stock: stockStr(newQty) })
     .where(eq(branchProducts.id, bp.id));
 
   await tx.insert(stockMovements).values({
@@ -154,9 +157,9 @@ async function restoreReturnStockInTx(
     productId,
     type: isLegacy ? "legacy_in" : "in",
     stockSource,
-    qty,
-    qtyBefore: currentQty,
-    qtyAfter: newQty,
+    qty: stockStr(addQty),
+    qtyBefore: stockStr(currentQty),
+    qtyAfter: stockStr(newQty),
     reference,
     notes: "Retur penjualan — stok masuk",
     userId,
@@ -220,7 +223,7 @@ async function getPendingReturnQtyByItemInTx(
     for (const ri of retItems) {
       map.set(
         ri.originalSalesItemId,
-        (map.get(ri.originalSalesItemId) ?? 0) + ri.qtyRequested,
+        (map.get(ri.originalSalesItemId) ?? 0) + num(ri.qtyRequested),
       );
     }
   }
@@ -239,7 +242,7 @@ async function syncTransactionReturnStatusInTx(tx: Tx, transactionId: string): P
   const pendingByItem = await getPendingReturnQtyByItemInTx(tx, transactionId);
 
   const finalizedStatus = updateOriginalReturnStatus(
-    itemRows.map((i) => ({ qty: i.qty, qty_returned: i.qtyReturned })),
+    itemRows.map((i) => ({ qty: num(i.qty), qty_returned: num(i.qtyReturned) })),
   );
 
   const hasPending = pendingByItem.size > 0;
@@ -361,6 +364,7 @@ export async function createReturnRequest(
   userId: string,
   input: CreateReturnInput,
 ): Promise<SalesReturnRecord> {
+  await ensureReturnsQtySchema();
   const db = getDb();
   const windowDays = await getWindowDays(tenantId);
 
@@ -389,9 +393,12 @@ export async function createReturnRequest(
       const orig = itemMap.get(line.salesItemId);
       if (!orig) throw new Error(`Baris transaksi tidak ditemukan: ${line.salesItemId}`);
       if (orig.isSoLine) throw new Error(`Barang SO tidak bisa diretur: ${orig.sku}`);
-      const pendingQty = pendingByItem.get(orig.id) ?? 0;
-      const available = orig.qty - orig.qtyReturned - pendingQty;
-      if (line.qty <= 0 || line.qty > available) {
+      const qtySold = num(orig.qty);
+      const qtyReturned = num(orig.qtyReturned);
+      const pendingQty = num(pendingByItem.get(orig.id) ?? 0);
+      const qtyRequested = num(line.qty);
+      const available = roundQty(qtySold - qtyReturned - pendingQty);
+      if (qtyRequested <= 0 || qtyRequested > available) {
         if (pendingQty > 0 && available <= 0) {
           throw new Error(
             `${orig.sku}: semua qty sudah diajukan retur atau sudah diretur`,
@@ -415,8 +422,8 @@ export async function createReturnRequest(
         }
       }
 
-      const unitPrice = Math.round(orig.subtotal / orig.qty);
-      const lineTotal = unitPrice * line.qty;
+      const unitPrice = qtySold > 0 ? Math.round(orig.subtotal / qtySold) : 0;
+      const lineTotal = unitPrice * qtyRequested;
       requestedTotal += lineTotal;
 
       pendingItems.push({
@@ -426,8 +433,8 @@ export async function createReturnRequest(
         productName: orig.productName,
         sku: orig.sku,
         unit: orig.unit,
-        qtySold: orig.qty,
-        qtyRequested: line.qty,
+        qtySold: stockStr(qtySold),
+        qtyRequested: stockStr(qtyRequested),
         unitRefundPrice: unitPrice,
         refundSubtotal: 0,
         stockSource: orig.stockSource,
@@ -477,6 +484,7 @@ export async function completeReturnQc(
   lines: QcReturnLineInput[],
   qcNotes?: string,
 ): Promise<SalesReturnRecord> {
+  await ensureReturnsQtySchema();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -500,13 +508,14 @@ export async function completeReturnQc(
 
       if (qc.passed) {
         anyPassed = true;
-        const subtotal = item.unitRefundPrice * item.qtyRequested;
+        const requested = num(item.qtyRequested);
+        const subtotal = item.unitRefundPrice * requested;
         approvedTotal += subtotal;
         await tx
           .update(salesReturnItems)
           .set({
             qcPassed: true,
-            qtyQcPassed: item.qtyRequested,
+            qtyQcPassed: stockStr(requested),
             refundSubtotal: subtotal,
             qcRejectReason: null,
           })
@@ -516,7 +525,7 @@ export async function completeReturnQc(
           .update(salesReturnItems)
           .set({
             qcPassed: false,
-            qtyQcPassed: 0,
+            qtyQcPassed: stockStr(0),
             refundSubtotal: 0,
             qcRejectReason: qc.rejectReason ?? "Tidak lolos QC",
           })
@@ -689,14 +698,14 @@ async function finalizeReturnInTx(
   if (refundAmount <= 0) throw new Error("Nilai retur nol");
 
   for (const ri of returnItemRows) {
-    if (!ri.qcPassed || ri.qtyQcPassed <= 0 || !ri.productId) continue;
+    if (!ri.qcPassed || num(ri.qtyQcPassed) <= 0 || !ri.productId) continue;
 
     await restoreReturnStockInTx(
       tx,
       tenantId,
       retRow.branchId,
       ri.productId,
-      ri.qtyQcPassed,
+      num(ri.qtyQcPassed),
       ri.stockSource,
       retRow.returnNumber,
       userId,
@@ -708,7 +717,7 @@ async function finalizeReturnInTx(
     if (origItem) {
       await tx
         .update(salesItems)
-        .set({ qtyReturned: origItem.qtyReturned + ri.qtyQcPassed })
+        .set({ qtyReturned: stockStr(num(origItem.qtyReturned) + num(ri.qtyQcPassed)) })
         .where(eq(salesItems.id, origItem.id));
     }
   }
@@ -792,6 +801,7 @@ export async function completeReturnRefund(
   userId: string,
   input: CompleteReturnRefundInput,
 ): Promise<SalesReturnRecord> {
+  await ensureReturnsQtySchema();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -877,7 +887,7 @@ export async function getTransactionForReturn(
     for (const ri of retItems) {
       pendingByItem.set(
         ri.originalSalesItemId,
-        (pendingByItem.get(ri.originalSalesItemId) ?? 0) + ri.qtyRequested,
+        (pendingByItem.get(ri.originalSalesItemId) ?? 0) + num(ri.qtyRequested),
       );
     }
   }

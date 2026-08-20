@@ -174,13 +174,4 @@ export function buildHandoverDocFromDelivery(delivery: DeliveryRecord): Handover
   };
 }
 
-export function printByKind(kind: "receipt" | "handover"): void {
-  document.body.dataset.print = kind;
-  const cleanup = () => {
-    delete document.body.dataset.print;
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  window.print();
-  window.setTimeout(cleanup, 1500);
-}
+export { printByKind } from "@/lib/print-page";

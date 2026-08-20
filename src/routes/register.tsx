@@ -18,11 +18,12 @@ import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { validateRegisterForm } from "@/lib/validation/register-form";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
-import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRouteSync, waitForAuthHydration } from "@/lib/auth-bootstrap";
 import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 
 export const Route = createFileRoute("/register")({
-  beforeLoad: () => {
+  beforeLoad: async () => {
+    await waitForAuthHydration();
     const authedRedirect = preparePublicAuthRouteSync();
     if (authedRedirect) throw authedRedirect;
   },
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/register")({
 });
 
 function RegisterPage() {
-  usePublicAuthRedirect();
+  const authGate = usePublicAuthRedirect();
   const register = useAuthStore((s) => s.register);
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();
@@ -118,6 +119,14 @@ function RegisterPage() {
       });
     }
   };
+
+  if (authGate !== "guest") {
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">
+        {authGate === "leaving" ? "Menyambung sesi…" : "Memuat…"}
+      </div>
+    );
+  }
 
   return (
     <AuthShell

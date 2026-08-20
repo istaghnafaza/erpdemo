@@ -8,6 +8,10 @@ import { getPostAuthDestination } from "@/lib/auth-navigate";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOnboardingStore } from "@/stores/onboarding.store";
 import { markAuthSynced, shouldSkipAuthSync } from "@/lib/auth-sync-cache";
+import {
+  rememberedRouteForPlatform,
+  rememberedRouteForTenant,
+} from "@/lib/last-route";
 
 export function waitForAuthHydration(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
@@ -59,25 +63,33 @@ export function preparePublicAuthRouteSync(): AuthRedirect {
 
 /** Path redirect jika sudah login — untuk navigate() di client. */
 export function resolveAuthenticatedRedirectPath(): string | null {
-  const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
-  if (!isAuthenticated || !currentUser) return null;
-  if (currentUser.isPlatformAdmin) return "/platform/dashboard";
-  if (!currentTenant) return null;
-  return getPostAuthDestination(currentTenant, currentUser.profile.role);
+  return resolveAuthenticatedRedirectHref();
 }
 
-/** Redirect untuk user yang sudah login — null jika belum auth atau tenant belum ter-load. */
-export function redirectIfAuthenticated(): AuthRedirect {
+/** Href halaman terakhir (12 jam) atau dashboard/POS default. */
+export function resolveAuthenticatedRedirectHref(): string | null {
   const { isAuthenticated, currentUser, currentTenant } = useAuthStore.getState();
   if (!isAuthenticated || !currentUser) return null;
 
   if (currentUser.isPlatformAdmin) {
-    return redirect({ to: "/platform/dashboard" });
+    return rememberedRouteForPlatform() ?? "/platform/dashboard";
   }
 
   if (!currentTenant) return null;
 
-  return redirect(getPostAuthDestination(currentTenant, currentUser.profile.role));
+  const last = rememberedRouteForTenant(currentTenant.slug);
+  if (last) return last;
+
+  const dest = getPostAuthDestination(currentTenant, currentUser.profile.role);
+  if (dest.to === "/$tenantSlug/pos") return `/${currentTenant.slug}/pos`;
+  return `/${currentTenant.slug}/dashboard`;
+}
+
+/** Redirect untuk user yang sudah login — null jika belum auth atau tenant belum ter-load. */
+export function redirectIfAuthenticated(): AuthRedirect {
+  const href = resolveAuthenticatedRedirectHref();
+  if (!href) return null;
+  return redirect({ href });
 }
 
 /** Redirect jika onboarding sudah selesai (halaman setup tidak perlu dibuka lagi). */

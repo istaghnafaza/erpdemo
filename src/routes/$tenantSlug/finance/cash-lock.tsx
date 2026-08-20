@@ -34,7 +34,7 @@ function bucketLabel(bucket: string) {
   return "Mati (>90 hari / belum keluar)";
 }
 
-export function CashLockPage() {
+function CashLockPage() {
   const { tenantId, isMock } = useCashflowScope();
   const [categoryId, setCategoryId] = useState<string>("all");
   const query = useInventoryCashLock(categoryId === "all" ? undefined : categoryId);

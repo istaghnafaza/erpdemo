@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resolvePostAuthDestination } from "@/lib/auth-navigate";
-import { preparePublicAuthRouteSync } from "@/lib/auth-bootstrap";
+import { preparePublicAuthRouteSync, waitForAuthHydration } from "@/lib/auth-bootstrap";
 import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 import { isMockBackend, isNeonBackend } from "@/lib/api/backend";
 import { AUTH_UI } from "@/lib/auth-features";
@@ -17,7 +17,8 @@ import { FEATURE_ONLINE_ORDERS_ENABLED } from "@/lib/feature-flags";
 import { validateLoginForm } from "@/lib/validation/login-form";
 
 export const Route = createFileRoute("/login")({
-  beforeLoad: () => {
+  beforeLoad: async () => {
+    await waitForAuthHydration();
     const authedRedirect = preparePublicAuthRouteSync();
     if (authedRedirect) throw authedRedirect;
   },
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  usePublicAuthRedirect();
+  const authGate = usePublicAuthRedirect();
   const login = useAuthStore((s) => s.login);
   const loginWithMockCredentials = useAuthStore((s) => s.loginWithMockCredentials);
   const isLoading = useAuthStore((s) => s.isLoading);
@@ -93,6 +94,14 @@ function LoginPage() {
   const loginPlaceholder = AUTH_UI.loginWithUsername
     ? "contoh: owner"
     : "contoh: owner@seps.id";
+
+  if (authGate !== "guest") {
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">
+        {authGate === "leaving" ? "Menyambung sesi…" : "Memuat…"}
+      </div>
+    );
+  }
 
   return (
     <AuthShell
@@ -182,6 +191,13 @@ function LoginPage() {
             </p>
           ) : null}
         </div>
+        {showNeonLogin && AUTH_UI.showForgotPassword ? (
+          <p className="-mt-1 text-right text-sm">
+            <Link to="/forgot-password" className="text-primary font-medium hover:underline">
+              Lupa PIN?
+            </Link>
+          </p>
+        ) : null}
         <Button
           type="submit"
           disabled={isLoading}

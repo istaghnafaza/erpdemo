@@ -13,10 +13,13 @@ import { getArApStatus, remainingAmount } from "@/lib/ar-ap-utils";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { tanggal, daysBetween } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Clock, Receipt, TrendingUp } from "lucide-react";
+import { Clock, Printer, Receipt, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import type { Receivable } from "@/lib/mock-data";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
+import { ReceivableDocsPrintDialog } from "@/components/print/ReceivableDocsPrintDialog";
+import { useAuthStore } from "@/stores/auth.store";
+import { useBranchStore } from "@/stores/branch.store";
 
 export const Route = createFileRoute("/$tenantSlug/receivables")({
   beforeLoad: ({ params }) => {
@@ -50,6 +53,10 @@ function ReceivablesPage() {
 
   const [payTarget, setPayTarget] = useState<Receivable | null>(null);
   const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
+  const [printTarget, setPrintTarget] = useState<Receivable | null>(null);
+  const tenantId = useAuthStore((s) => s.currentUser?.tenantId) ?? "";
+  const storeName = useAuthStore((s) => s.currentTenant?.name) ?? "SEPS";
+  const branches = useBranchStore((s) => s.branches);
 
   useEffect(() => {
     if (!user || user.role === "cashier") navigate({ to: "/login" });
@@ -150,7 +157,11 @@ function ReceivablesPage() {
                     <td className="px-4 py-3 text-center">
                       <ArApStatusBadge status={status} />
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2">
+                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                      <Button size="sm" variant="ghost" onClick={() => setPrintTarget(r)}>
+                        <Printer className="h-4 w-4" />
+                        <span className="sr-only">Cetak</span>
+                      </Button>
                       {remaining > 0 && (
                         <Button size="sm" variant="outline" onClick={() => setPayTarget(r)}>
                           Catat Bayar
@@ -164,6 +175,20 @@ function ReceivablesPage() {
           </table>
         </div>
       </Card>
+
+      <ReceivableDocsPrintDialog
+        open={!!printTarget}
+        onOpenChange={(o) => {
+          if (!o) setPrintTarget(null);
+        }}
+        receivable={printTarget}
+        tenantId={tenantId}
+        customerName={printTarget ? (customerNameById[printTarget.customerId] ?? "—") : ""}
+        branchName={printTarget ? (branchNameById[printTarget.branchId] ?? "Cabang") : "Cabang"}
+        branchAddress={printTarget ? (branches.find((b) => b.id === printTarget.branchId)?.address ?? null) : null}
+        branchPhone={printTarget ? (branches.find((b) => b.id === printTarget.branchId)?.phone ?? null) : null}
+        storeName={storeName}
+      />
 
       <ArPaymentDialog
         open={!!payTarget}

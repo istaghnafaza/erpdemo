@@ -207,10 +207,12 @@ export function toProductSellUnit(row: ProductSellUnitRow): import("@/lib/produc
     purchase_price: row.purchasePrice ?? null,
     sort_order: row.sortOrder,
     is_active: row.isActive,
-    allow_fraction: row.allowFraction,
+    allow_fraction: Boolean(row.allowFraction),
     preset_qty: preset,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString(),
+    created_at:
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt ?? ""),
+    updated_at:
+      row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt ?? ""),
   };
 }
 

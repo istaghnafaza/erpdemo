@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Scripts,
+  useRouter,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
@@ -16,6 +17,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { initOfflineListeners } from "@/stores/offline.store";
 import { initOfflineCache } from "@/lib/offline/init";
 import { useThemeStore } from "@/stores/theme.store";
+import { rememberAppRoute } from "@/lib/last-route";
 
 function NotFoundComponent() {
   return (
@@ -122,6 +124,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
   const refreshUser = useAuthStore((s) => s.refreshUser);
   const theme = useThemeStore((s) => s.theme);
 
@@ -140,6 +143,17 @@ function RootComponent() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    const saveFromLocation = (pathname: string, searchStr: string) => {
+      rememberAppRoute(pathname, searchStr.startsWith("?") || searchStr === "" ? searchStr : `?${searchStr}`);
+    };
+    const loc = router.state.location;
+    saveFromLocation(loc.pathname, loc.searchStr ?? "");
+    return router.subscribe("onResolved", ({ toLocation }) => {
+      saveFromLocation(toLocation.pathname, toLocation.searchStr ?? "");
+    });
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>

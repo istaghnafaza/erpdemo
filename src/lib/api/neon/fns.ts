@@ -99,6 +99,25 @@ export const neonSignInWithPin = createServerFn({ method: "POST" })
     return profile;
   });
 
+export const neonRequestPasswordReset = createServerFn({ method: "POST" })
+  .validator((data: { identifier: string; channel: "email" | "sms" }) => data)
+  .handler(async ({ data }) => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("password-reset");
+    const { requestPasswordResetOtp } = await import("@/server/services/password-reset");
+    return requestPasswordResetOtp(data);
+  });
+
+export const neonConfirmPasswordReset = createServerFn({ method: "POST" })
+  .validator((data: { challengeId: string; otp: string; newPin: string }) => data)
+  .handler(async ({ data }) => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("password-reset-confirm");
+    const { confirmPasswordReset } = await import("@/server/services/password-reset");
+    await confirmPasswordReset(data);
+    return { ok: true as const };
+  });
+
 export const neonUpdateProfile = createServerFn({ method: "POST" })
   .validator(
     (data: { userId: string; updates: import("@/types/app").AccountProfileUpdates }) => data,

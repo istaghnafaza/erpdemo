@@ -13,6 +13,7 @@ import { useBranchStore } from "@/stores/branch.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { usePosStore } from "@/stores/pos.store";
 import { MOCK_TENANT_ID } from "@/lib/mock-ids";
+import { clearRememberedAppRoute } from "@/lib/last-route";
 import { markAuthSynced, resetAuthSyncCache } from "@/lib/auth-sync-cache";
 
 const AUTH_REFRESH_TTL_MS = 45_000;
@@ -411,6 +412,7 @@ export const useAuthStore = create<AuthState>()(
         await signOut();
         resetAuthSyncCache();
         lastRefreshAt = 0;
+        clearRememberedAppRoute();
         useBranchStore.getState().clearBranches();
         useNotificationStore.getState().unsubscribe();
         useNotificationStore.getState().clearAll();
@@ -444,6 +446,9 @@ export const useAuthStore = create<AuthState>()(
         try {
           const userResult = await getCurrentUser();
           if (userResult.error || !userResult.data) {
+            if (get().isAuthenticated && get().currentUser) {
+              return;
+            }
             set({
               currentUser: null,
               currentTenant: null,
