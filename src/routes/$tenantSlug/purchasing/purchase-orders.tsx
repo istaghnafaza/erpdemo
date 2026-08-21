@@ -31,6 +31,7 @@ function PurchaseOrdersPage() {
 
   const {
     user,
+    branch,
     loading,
     orders,
     typeFilter,
@@ -119,6 +120,7 @@ function PurchaseOrdersPage() {
         suppliers={suppliers}
         products={products}
         indentSoItemOptions={indentSoItemOptions}
+        branchAddress={branch?.address}
         loading={actionLoading}
         onSubmit={createPo}
       />

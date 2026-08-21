@@ -32,6 +32,10 @@ export async function ensureProductSuppliersTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_product_suppliers_supplier
       ON product_suppliers (tenant_id, supplier_id)
     `);
+    await db.execute(sql`
+      ALTER TABLE product_suppliers
+        ADD COLUMN IF NOT EXISTS last_purchase_price bigint NOT NULL DEFAULT 0
+    `);
     ensured = true;
   })();
 

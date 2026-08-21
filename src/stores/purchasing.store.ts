@@ -46,6 +46,9 @@ export interface CreatePoDraft {
   type: DbPoType;
   ownership_mode?: import("@/types/database").DbPoOwnership;
   pay_trigger?: import("@/types/database").DbPoPayTrigger;
+  discount_amount?: number;
+  rebate_after_qty?: number | null;
+  rebate_per_unit?: number;
   supplier_id: string;
   sales_order_id: string | null;
   sales_order_number?: string | null;
@@ -111,6 +114,10 @@ function mergeIndentPosFromSalesOrders(existing: MockPoWithItems[]): MockPoWithI
         type: "indent",
         ownership_mode: "owned",
         pay_trigger: "on_receipt_credit",
+        discount_amount: 0,
+        rebate_after_qty: null,
+        rebate_per_unit: 0,
+        consignment_sold_qty: 0,
         sales_order_id: so.id,
         supplier_id: ip.supplier_id,
         delivery_address: so.delivery_address,
@@ -292,6 +299,10 @@ export const usePurchasingStore = create<PurchasingState>()(
         pay_trigger:
           draft.pay_trigger ??
           (draft.ownership_mode === "consignment" ? "on_sale" : "on_receipt_credit"),
+        discount_amount: draft.discount_amount ?? 0,
+        rebate_after_qty: draft.rebate_after_qty ?? null,
+        rebate_per_unit: draft.rebate_per_unit ?? 0,
+        consignment_sold_qty: 0,
         sales_order_id: draft.sales_order_id,
         supplier_id: draft.supplier_id,
         delivery_address: draft.delivery_address,

@@ -5,7 +5,7 @@
 import { and, desc, eq, ilike, inArray } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { suppliersKey } from "@/server/cache/keys";
-import { invalidateSuppliers } from "@/server/cache/invalidate";
+import { invalidateBranchProducts, invalidateSuppliers } from "@/server/cache/invalidate";
 import { CACHE_TTL, getCached } from "@/server/cache/redis";
 import {
   toGoodsReceipt,
@@ -22,6 +22,7 @@ import {
   cashAccounts,
   goodsReceiptItems,
   goodsReceipts,
+  products,
   purchaseOrderItems,
   purchaseOrders,
   productSuppliers,
@@ -35,6 +36,7 @@ import { ensureProductSuppliersTable } from "@/server/db/ensure-product-supplier
 import { ensurePoStatusAwaitingSupplier } from "@/server/db/ensure-po-status-enum";
 import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
 import { insertCashTransactionInTx } from "@/server/services/finance";
+import { PURCHASE_DISCOUNT_CATEGORY } from "@/lib/cashflow-constants";
 import type {
   GoodsReceipt,
   GoodsReceiptInsert,
@@ -249,6 +251,10 @@ export async function createPurchaseOrderRecord(
         type: po.type ?? "regular",
         ownershipMode,
         payTrigger,
+        discountAmount: po.discount_amount ?? 0,
+        rebateAfterQty: po.rebate_after_qty ?? null,
+        rebatePerUnit: po.rebate_per_unit ?? 0,
+        consignmentSoldQty: 0,
         salesOrderId: po.sales_order_id,
         supplierId: po.supplier_id,
         deliveryAddress: po.delivery_address,
@@ -358,6 +364,9 @@ async function createPayableFromGrInTx(
 
   if (totalAmount <= 0) return;
 
+  const discount = Math.max(0, Math.min(po?.discountAmount ?? 0, totalAmount));
+  const netAmount = Math.max(0, totalAmount - discount);
+
   const invoiceNumber = `AP-${gr.grNumber}`;
   const existing = await tx.query.accountsPayable.findFirst({
     where: and(
@@ -374,7 +383,7 @@ async function createPayableFromGrInTx(
   const termDays = supplier?.paymentTermDays ?? 30;
   const due = new Date();
   if (po?.payTrigger === "on_receipt_cash") {
-    // COD: jatuh tempo hari ini, langsung lunas
+    // COD: jatuh tempo hari ini
   } else {
     due.setDate(due.getDate() + termDays);
   }
@@ -388,23 +397,40 @@ async function createPayableFromGrInTx(
     supplierId: gr.supplierId,
     supplierName: supplier?.name ?? "Supplier",
     purchaseOrderId: gr.purchaseOrderId,
-    totalAmount,
-    paidAmount: isCash ? totalAmount : 0,
+    totalAmount: netAmount,
+    paidAmount: isCash ? netAmount : 0,
     dueDate,
     status: isCash ? "paid" : "unpaid",
   });
 
-  if (isCash && totalAmount > 0) {
-    const cashAcc = await tx.query.cashAccounts.findFirst({
-      where: and(eq(cashAccounts.tenantId, tenantId), eq(cashAccounts.branchId, gr.branchId)),
+  if (!isCash && netAmount > 0 && supplier) {
+    await tx
+      .update(suppliers)
+      .set({ outstandingDebt: (supplier.outstandingDebt ?? 0) + netAmount })
+      .where(eq(suppliers.id, supplier.id));
+  }
+
+  const cashAcc = await tx.query.cashAccounts.findFirst({
+    where: and(eq(cashAccounts.tenantId, tenantId), eq(cashAccounts.branchId, gr.branchId)),
+  });
+
+  if (isCash && cashAcc && totalAmount > 0) {
+    // Gross: expense list + income diskon → net kas = netAmount; diskon = keuntungan
+    await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
+      type: "expense",
+      amount: totalAmount,
+      category: "Pembelian",
+      reference: invoiceNumber,
+      description: `COD GR ${gr.grNumber}`,
+      user_id: userId,
     });
-    if (cashAcc) {
+    if (discount > 0) {
       await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
-        type: "expense",
-        amount: totalAmount,
-        category: "Pembelian",
+        type: "income",
+        amount: discount,
+        category: PURCHASE_DISCOUNT_CATEGORY,
         reference: invoiceNumber,
-        description: `COD GR ${gr.grNumber}`,
+        description: `Diskon COD GR ${gr.grNumber}`,
         user_id: userId,
       });
     }
@@ -482,6 +508,7 @@ export async function createGoodsReceiptRecord(
   userId: string,
 ): Promise<GoodsReceipt> {
   await ensureStockOwnershipSchema();
+  await ensureProductSuppliersTable();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -593,6 +620,41 @@ export async function createGoodsReceiptRecord(
             : "Penerimaan barang dari PO",
           userId,
         });
+
+        const poItemForCost = await tx.query.purchaseOrderItems.findFirst({
+          where: and(
+            eq(purchaseOrderItems.poId, gr.purchase_order_id),
+            eq(purchaseOrderItems.productId, item.product_id),
+          ),
+        });
+        const unitCost = poItemForCost?.purchasePrice ?? 0;
+        if (unitCost > 0) {
+          await tx
+            .insert(productSuppliers)
+            .values({
+              tenantId,
+              productId: item.product_id,
+              supplierId: po.supplierId,
+              isPreferred: false,
+              lastPurchasePrice: unitCost,
+            })
+            .onConflictDoUpdate({
+              target: [
+                productSuppliers.tenantId,
+                productSuppliers.productId,
+                productSuppliers.supplierId,
+              ],
+              set: { lastPurchasePrice: unitCost },
+            });
+
+          // Milik toko: HPP master = last cost (harga PO terbaru). Konsinyasi: jangan timpa HPP milik.
+          if (!isConsignment) {
+            await tx
+              .update(products)
+              .set({ purchasePrice: unitCost, updatedAt: new Date() })
+              .where(and(eq(products.tenantId, tenantId), eq(products.id, item.product_id)));
+          }
+        }
       } else {
         for (const f of indentFulfillments) {
           const soItem = await tx.query.salesOrderItems.findFirst({
@@ -628,6 +690,9 @@ export async function createGoodsReceiptRecord(
       .where(eq(purchaseOrders.id, gr.purchase_order_id));
 
     await createPayableFromGrInTx(tx, tenantId, grRow, items, userId);
+
+    await invalidateBranchProducts(tenantId, gr.branch_id);
+    await invalidateSuppliers(tenantId);
 
     return toGoodsReceipt(grRow);
   });

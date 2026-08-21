@@ -491,6 +491,7 @@ export interface ProductSupplier {
   product_id: string;
   supplier_id: string;
   is_preferred: boolean;
+  last_purchase_price: number;
 }
 
 export type SupplierWithProducts = Supplier & { product_ids: string[] };
@@ -507,6 +508,10 @@ export interface PurchaseOrder {
   type: DbPoType;
   ownership_mode: DbPoOwnership;
   pay_trigger: DbPoPayTrigger;
+  discount_amount: number;
+  rebate_after_qty: number | null;
+  rebate_per_unit: number;
+  consignment_sold_qty: number;
   sales_order_id: string | null;
   supplier_id: string;
   delivery_address: string | null;
@@ -522,7 +527,7 @@ export interface PurchaseOrder {
 export type PurchaseOrderInsert = Omit<PurchaseOrder, 'id' | 'created_at'> & { id?: string };
 export type PurchaseOrderUpdate = Partial<Pick<PurchaseOrder,
   'status' | 'expected_date' | 'delivery_address' | 'notes' | 'subtotal' | 'grand_total' |
-  'ownership_mode' | 'pay_trigger'
+  'ownership_mode' | 'pay_trigger' | 'discount_amount' | 'rebate_after_qty' | 'rebate_per_unit'
 >>;
 
 

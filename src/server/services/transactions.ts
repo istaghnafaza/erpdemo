@@ -30,6 +30,8 @@ import {
   customers,
   posCarts,
   profiles,
+  purchaseOrderItems,
+  purchaseOrders,
   salesItems,
   salesReturns,
   salesTransactions,
@@ -963,7 +965,7 @@ async function createSaleTransactionInner(
         softOpenForProduct,
       );
 
-      // Konsinyasi: hutang ke sales muncul saat terjual
+      // Konsinyasi: hutang ke sales muncul saat terjual (+ rebate setelah threshold)
       if (
         deductResult.stockOwnership === "consignment" &&
         deductResult.consignmentSupplierId &&
@@ -975,10 +977,51 @@ async function createSaleTransactionInner(
             eq(suppliers.id, deductResult.consignmentSupplierId),
           ),
         });
-        const amount = Math.round(
-          (item.purchase_price > 0 ? item.purchase_price : item.selling_price * 0.7) *
-            deductResult.deductedQty,
-        );
+
+        const consignPo = await tx.query.purchaseOrders.findFirst({
+          where: and(
+            eq(purchaseOrders.tenantId, tenantId),
+            eq(purchaseOrders.branchId, transaction.branch_id),
+            eq(purchaseOrders.supplierId, deductResult.consignmentSupplierId),
+            eq(purchaseOrders.ownershipMode, "consignment"),
+            inArray(purchaseOrders.status, ["sent", "partial_received", "received"]),
+          ),
+          orderBy: [desc(purchaseOrders.createdAt)],
+        });
+
+        let unitCost =
+          item.purchase_price > 0 ? item.purchase_price : Math.round(item.selling_price * 0.7);
+        let rebatePerUnit = 0;
+        let rebateAfterQty: number | null = null;
+        let soldBefore = 0;
+
+        if (consignPo) {
+          const poItem = await tx.query.purchaseOrderItems.findFirst({
+            where: and(
+              eq(purchaseOrderItems.poId, consignPo.id),
+              eq(purchaseOrderItems.productId, item.product_id!),
+            ),
+          });
+          if (poItem && poItem.purchasePrice > 0) unitCost = poItem.purchasePrice;
+          rebatePerUnit = consignPo.rebatePerUnit ?? 0;
+          rebateAfterQty = consignPo.rebateAfterQty;
+          soldBefore = consignPo.consignmentSoldQty ?? 0;
+          await tx
+            .update(purchaseOrders)
+            .set({
+              consignmentSoldQty: soldBefore + Math.round(deductResult.deductedQty),
+            })
+            .where(eq(purchaseOrders.id, consignPo.id));
+        }
+
+        const soldAfter = soldBefore + deductResult.deductedQty;
+        const threshold = rebateAfterQty != null && rebateAfterQty > 0 ? rebateAfterQty : null;
+        let effectiveUnit = unitCost;
+        if (threshold != null && rebatePerUnit > 0 && soldAfter >= threshold) {
+          effectiveUnit = Math.max(0, unitCost - rebatePerUnit);
+        }
+
+        const amount = Math.round(effectiveUnit * deductResult.deductedQty);
         if (amount > 0) {
           const invoiceNumber = `CONS-${transactionNumber}-${item.sku}`.slice(0, 64);
           const due = new Date();
@@ -989,12 +1032,20 @@ async function createSaleTransactionInner(
             invoiceNumber,
             supplierId: deductResult.consignmentSupplierId,
             supplierName: supplier?.name ?? "Sales konsinyasi",
-            purchaseOrderId: null,
+            purchaseOrderId: consignPo?.id ?? null,
             totalAmount: amount,
             paidAmount: 0,
             dueDate: due.toISOString().slice(0, 10),
             status: "unpaid",
           });
+          if (supplier) {
+            await tx
+              .update(suppliers)
+              .set({
+                outstandingDebt: (supplier.outstandingDebt ?? 0) + amount,
+              })
+              .where(eq(suppliers.id, supplier.id));
+          }
         }
       }
     }

@@ -243,6 +243,10 @@ export function usePurchaseOrders() {
           pay_trigger:
             draft.pay_trigger ??
             (draft.ownership_mode === "consignment" ? "on_sale" : "on_receipt_credit"),
+          discount_amount: draft.discount_amount ?? 0,
+          rebate_after_qty: draft.rebate_after_qty ?? null,
+          rebate_per_unit: draft.rebate_per_unit ?? 0,
+          consignment_sold_qty: 0,
           sales_order_id: draft.sales_order_id,
           supplier_id: draft.supplier_id,
           delivery_address: draft.delivery_address,

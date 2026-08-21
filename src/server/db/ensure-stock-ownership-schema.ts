@@ -62,6 +62,26 @@ export async function ensureStockOwnershipSchema(): Promise<void> {
       ALTER TABLE purchase_orders
         ADD COLUMN IF NOT EXISTS pay_trigger po_pay_trigger NOT NULL DEFAULT 'on_receipt_credit'
     `);
+    await db.execute(sql`
+      ALTER TABLE purchase_orders
+        ADD COLUMN IF NOT EXISTS discount_amount bigint NOT NULL DEFAULT 0
+    `);
+    await db.execute(sql`
+      ALTER TABLE purchase_orders
+        ADD COLUMN IF NOT EXISTS rebate_after_qty integer
+    `);
+    await db.execute(sql`
+      ALTER TABLE purchase_orders
+        ADD COLUMN IF NOT EXISTS rebate_per_unit bigint NOT NULL DEFAULT 0
+    `);
+    await db.execute(sql`
+      ALTER TABLE purchase_orders
+        ADD COLUMN IF NOT EXISTS consignment_sold_qty integer NOT NULL DEFAULT 0
+    `);
+    await db.execute(sql`
+      ALTER TABLE product_suppliers
+        ADD COLUMN IF NOT EXISTS last_purchase_price bigint NOT NULL DEFAULT 0
+    `);
 
     // Migrasi legacy_stock → stock + unverified (satu angka stok)
     await db.execute(sql`

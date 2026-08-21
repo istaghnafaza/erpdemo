@@ -610,6 +610,8 @@ export const productSuppliers = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: "cascade" }),
     isPreferred: boolean("is_preferred").notNull().default(false),
+    /** Harga beli terakhir dari supplier ini (boleh beda antar supplier). */
+    lastPurchasePrice: bigint("last_purchase_price", { mode: "number" }).notNull().default(0),
   },
   (t) => [unique().on(t.tenantId, t.productId, t.supplierId)],
 );
@@ -863,6 +865,13 @@ export const purchaseOrders = pgTable(
     type: poTypeEnum("type").notNull().default("regular"),
     ownershipMode: poOwnershipEnum("ownership_mode").notNull().default("owned"),
     payTrigger: poPayTriggerEnum("pay_trigger").notNull().default("on_receipt_credit"),
+    /** Diskon invoice (COD/tempo) — tercatat sebagai keuntungan Diskon Pembelian. */
+    discountAmount: bigint("discount_amount", { mode: "number" }).notNull().default(0),
+    /** Konsinyasi: potongan per unit setelah qty terjual mencapai threshold. */
+    rebateAfterQty: integer("rebate_after_qty"),
+    rebatePerUnit: bigint("rebate_per_unit", { mode: "number" }).notNull().default(0),
+    /** Akumulasi qty terjual dari PO konsinyasi ini (untuk hitung rebate). */
+    consignmentSoldQty: integer("consignment_sold_qty").notNull().default(0),
     salesOrderId: uuid("sales_order_id").references(() => salesOrders.id, { onDelete: "set null" }),
     supplierId: uuid("supplier_id")
       .notNull()

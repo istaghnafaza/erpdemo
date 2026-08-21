@@ -10,11 +10,13 @@ export const AR_COLLECTION_CATEGORY = "Penagihan Piutang";
 export const AP_PAYMENT_CATEGORY = "Pembayaran Hutang";
 export const POS_SALE_CATEGORY = "Penjualan";
 export const VOID_SALE_CATEGORY = "Void Penjualan";
+export const PURCHASE_DISCOUNT_CATEGORY = "Diskon Pembelian";
 
 /** Biaya yang tidak masuk opex P&L (HPP, pembelian, retur, void, prive, setoran). */
 export const PNL_OPEX_EXCLUDE_CATEGORIES = [
   "HPP",
   "Pembelian",
+  PURCHASE_DISCOUNT_CATEGORY,
   POS_SALE_CATEGORY,
   "Retur Penjualan",
   VOID_SALE_CATEGORY,

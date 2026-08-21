@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
@@ -19,6 +20,7 @@ export function useGoodsReceipt() {
   const pendingGrPoId = usePurchasingStore((s) => s.pendingGrPoId);
   const setPendingGrPoId = usePurchasingStore((s) => s.setPendingGrPoId);
   const receiveMockGoods = usePurchasingStore((s) => s.receiveMockGoods);
+  const queryClient = useQueryClient();
 
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
@@ -129,9 +131,22 @@ export function useGoodsReceipt() {
       closeForm();
       await loadReceipts();
       await loadPendingPos();
+      await queryClient.invalidateQueries({ queryKey: ["payables", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: ["branch-products", tenantId] });
       return { success: true, grNumber: result.data?.gr_number };
     },
-    [user, selectedPo, isMockTenant, receiveMockGoods, closeForm, loadReceipts, loadPendingPos, tenantId],
+    [
+      user,
+      selectedPo,
+      isMockTenant,
+      receiveMockGoods,
+      closeForm,
+      loadReceipts,
+      loadPendingPos,
+      tenantId,
+      queryClient,
+    ],
   );
 
   return {

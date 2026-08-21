@@ -34,17 +34,33 @@ interface LineDraft {
   purchase_price: number;
 }
 
+function formatIdrInput(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return Math.round(n).toLocaleString("id-ID");
+}
+
+function parseIdrInput(raw: string): number {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return 0;
+  return Number(digits);
+}
+
 interface PurchaseOrderFormDialogProps {
   open: boolean;
   onClose: () => void;
   suppliers: Supplier[];
   products: PoProductOption[];
   indentSoItemOptions: IndentSoItemOption[];
+  /** Alamat cabang aktif — auto-isi & kunci untuk PO reguler */
+  branchAddress?: string | null;
   loading: boolean;
   onSubmit: (data: {
     type: DbPoType;
     ownership_mode: DbPoOwnership;
     pay_trigger: DbPoPayTrigger;
+    discount_amount: number;
+    rebate_after_qty: number | null;
+    rebate_per_unit: number;
     supplier_id: string;
     sales_order_id: string | null;
     sales_order_number?: string | null;
@@ -62,12 +78,16 @@ export function PurchaseOrderFormDialog({
   suppliers,
   products,
   indentSoItemOptions,
+  branchAddress,
   loading,
   onSubmit,
 }: PurchaseOrderFormDialogProps) {
   const [poType, setPoType] = useState<DbPoType>("regular");
   const [ownershipMode, setOwnershipMode] = useState<DbPoOwnership>("owned");
   const [payTrigger, setPayTrigger] = useState<DbPoPayTrigger>("on_receipt_credit");
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [rebateAfterQty, setRebateAfterQty] = useState("");
+  const [rebatePerUnit, setRebatePerUnit] = useState(0);
   const [supplierId, setSupplierId] = useState("");
   const [soItemId, setSoItemId] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -78,20 +98,25 @@ export function PurchaseOrderFormDialog({
   const [error, setError] = useState<string | null>(null);
 
   const selectedSoItem = indentSoItemOptions.find((o) => o.soItemId === soItemId);
+  const isIndent = poType === "indent";
+  const isRegular = poType === "regular";
 
   useEffect(() => {
     if (!open) return;
     setPoType("regular");
     setOwnershipMode("owned");
     setPayTrigger("on_receipt_credit");
+    setDiscountAmount(0);
+    setRebateAfterQty("");
+    setRebatePerUnit(0);
     setSupplierId(suppliers[0]?.id ?? "");
     setSoItemId("");
-    setDeliveryAddress("");
+    setDeliveryAddress(branchAddress?.trim() || "");
     setExpectedDate("");
     setNotes("");
     setLines([]);
     setError(null);
-  }, [open, suppliers]);
+  }, [open, suppliers, branchAddress]);
 
   useEffect(() => {
     if (ownershipMode === "consignment") {
@@ -99,10 +124,13 @@ export function PurchaseOrderFormDialog({
     } else if (payTrigger === "on_sale") {
       setPayTrigger("on_receipt_credit");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to ownership flips
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownershipMode]);
 
-
+  useEffect(() => {
+    if (!isRegular) return;
+    setDeliveryAddress(branchAddress?.trim() || "");
+  }, [isRegular, branchAddress, poType]);
 
   useEffect(() => {
     if (poType !== "indent" || !selectedSoItem) return;
@@ -120,20 +148,12 @@ export function PurchaseOrderFormDialog({
     ]);
   }, [poType, selectedSoItem]);
 
-
-
   useEffect(() => {
     if (poType === "regular") {
       setSoItemId("");
+      setLines([]);
     }
   }, [poType]);
-
-
-
-  const grandTotal = lines.reduce((s, l) => s + l.ordered_qty * l.purchase_price, 0);
-  const isIndent = poType === "indent";
-
-
 
   const addLine = () => {
     const p = products.find((x) => x.productId === addProductId);
@@ -153,7 +173,7 @@ export function PurchaseOrderFormDialog({
     setAddProductId("");
   };
 
-
+  const linesSubtotal = lines.reduce((s, l) => s + l.ordered_qty * l.purchase_price, 0);
 
   const handleSubmit = async () => {
     setError(null);
@@ -161,6 +181,12 @@ export function PurchaseOrderFormDialog({
       type: poType,
       ownership_mode: ownershipMode,
       pay_trigger: payTrigger,
+      discount_amount: Math.max(0, Math.min(discountAmount, linesSubtotal)),
+      rebate_after_qty:
+        ownershipMode === "consignment" && rebateAfterQty.trim()
+          ? Math.max(1, Number(rebateAfterQty) || 0)
+          : null,
+      rebate_per_unit: ownershipMode === "consignment" ? Math.max(0, rebatePerUnit) : 0,
       supplier_id: supplierId,
       sales_order_id: isIndent && selectedSoItem ? selectedSoItem.salesOrderId : null,
       sales_order_number: isIndent && selectedSoItem ? selectedSoItem.soNumber : null,
@@ -173,13 +199,10 @@ export function PurchaseOrderFormDialog({
     if (!result.success) setError(result.error ?? "Gagal membuat PO");
   };
 
-
-
   const canSubmit =
     lines.length > 0 &&
+    Boolean(supplierId) &&
     (!isIndent || (soItemId && indentSoItemOptions.some((o) => o.soItemId === soItemId)));
-
-
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -187,8 +210,6 @@ export function PurchaseOrderFormDialog({
         <DialogHeader>
           <DialogTitle>Purchase Order Baru</DialogTitle>
         </DialogHeader>
-
-
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -252,7 +273,49 @@ export function PurchaseOrderFormDialog({
           </div>
         </div>
 
+        {ownershipMode === "owned" && (
+          <div className="space-y-1.5">
+            <Label>Diskon invoice (Rp)</Label>
+            <Input
+              inputMode="numeric"
+              placeholder="0"
+              value={formatIdrInput(discountAmount)}
+              onChange={(e) => setDiscountAmount(parseIdrInput(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              COD: diskon dicatat sebagai keuntungan (Diskon Pembelian). Tempo: mengurangi
+              hutang.
+            </p>
+          </div>
+        )}
 
+        {ownershipMode === "consignment" && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Rebate setelah terjual (qty)</Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="mis. 100"
+                value={rebateAfterQty}
+                onChange={(e) => setRebateAfterQty(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Potongan per unit (Rp)</Label>
+              <Input
+                inputMode="numeric"
+                placeholder="0"
+                value={formatIdrInput(rebatePerUnit)}
+                onChange={(e) => setRebatePerUnit(parseIdrInput(e.target.value))}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Setelah qty terjual mencapai threshold, hutang settle memakai harga − potongan
+              per unit. HPP milik toko tidak diubah oleh harga konsinyasi.
+            </p>
+          </div>
+        )}
 
         {isIndent && (
           <div className="space-y-1.5">
@@ -276,23 +339,24 @@ export function PurchaseOrderFormDialog({
                 </SelectContent>
               </Select>
             )}
-            {selectedSoItem && (
-              <p className="text-xs text-muted-foreground">
-                Pelanggan: {selectedSoItem.customerName} · Baris dengan supplier sama
-                digabung ke satu nomor PO indent
-              </p>
-            )}
           </div>
         )}
 
-
-
         <div className="space-y-1.5">
-          <Label>{isIndent ? "Alamat Kirim ke Klien" : "Alamat Pengiriman"}</Label>
-          <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
+          <Label>{isIndent ? "Alamat Kirim ke Klien" : "Alamat Pengiriman (cabang)"}</Label>
+          <Input
+            value={deliveryAddress}
+            readOnly={isRegular}
+            disabled={isRegular}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+            className={isRegular ? "bg-muted" : undefined}
+          />
+          {isRegular ? (
+            <p className="text-xs text-muted-foreground">
+              Restock cabang — alamat mengikuti alamat cabang aktif, tidak bisa diubah.
+            </p>
+          ) : null}
         </div>
-
-
 
         {!isIndent && (
           <div className="flex gap-2 items-end">
@@ -319,8 +383,6 @@ export function PurchaseOrderFormDialog({
           </div>
         )}
 
-
-
         {lines.length > 0 && (
           <div className="rounded-lg border overflow-hidden">
             <Table>
@@ -328,7 +390,7 @@ export function PurchaseOrderFormDialog({
                 <TableRow>
                   <TableHead>Produk</TableHead>
                   <TableHead className="w-20 text-center">Qty</TableHead>
-                  <TableHead className="w-28 text-center">Harga Beli</TableHead>
+                  <TableHead className="w-32 text-center">Harga Beli</TableHead>
                   {!isIndent && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
@@ -357,17 +419,16 @@ export function PurchaseOrderFormDialog({
                     </TableCell>
                     <TableCell>
                       <Input
-                        type="number"
-                        min={0}
+                        inputMode="numeric"
                         className="h-8 text-center"
-                        value={line.purchase_price}
+                        value={formatIdrInput(line.purchase_price)}
                         onChange={(e) =>
                           setLines((prev) =>
                             prev.map((l) =>
                               l.key === line.key
                                 ? {
                                     ...l,
-                                    purchase_price: Math.max(0, Number(e.target.value) || 0),
+                                    purchase_price: parseIdrInput(e.target.value),
                                   }
                                 : l,
                             ),
@@ -392,53 +453,47 @@ export function PurchaseOrderFormDialog({
                 ))}
               </TableBody>
             </Table>
+            <div className="flex justify-between px-3 py-2 text-sm border-t bg-muted/30">
+              <span className="text-muted-foreground">Subtotal</span>
+              <CurrencyDisplay value={linesSubtotal} />
+            </div>
           </div>
         )}
 
-
-
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Estimasi Terima</Label>
-            <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+            <Label>Tanggal diharapkan</Label>
+            <Input
+              type="date"
+              value={expectedDate}
+              onChange={(e) => setExpectedDate(e.target.value)}
+            />
           </div>
-          <div className="flex items-end justify-end">
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Grand Total</div>
-              <div className="text-lg font-bold">
-                <CurrencyDisplay value={grandTotal} />
-              </div>
-            </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Catatan</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
           </div>
         </div>
 
-
-
-        <div className="space-y-1.5">
-          <Label>Catatan</Label>
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-        </div>
-
-
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Batal
           </Button>
           <Button
-            className="bg-orange-600 hover:bg-orange-700"
-            disabled={loading || !canSubmit}
+            type="button"
+            disabled={!canSubmit || loading}
             onClick={() => void handleSubmit()}
           >
-            {loading ? "Menyimpan..." : "Simpan Draft PO"}
+            {loading ? "Menyimpan…" : "Buat PO"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
