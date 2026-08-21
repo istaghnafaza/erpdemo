@@ -239,6 +239,10 @@ export function usePurchaseOrders() {
           branch_id: branchId,
           po_number: "",
           type: draft.type,
+          ownership_mode: draft.ownership_mode ?? "owned",
+          pay_trigger:
+            draft.pay_trigger ??
+            (draft.ownership_mode === "consignment" ? "on_sale" : "on_receipt_credit"),
           sales_order_id: draft.sales_order_id,
           supplier_id: draft.supplier_id,
           delivery_address: draft.delivery_address,

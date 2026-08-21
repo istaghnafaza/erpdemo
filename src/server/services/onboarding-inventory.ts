@@ -50,8 +50,8 @@ export async function applyOnboardingItemsToBranch(
       });
     }
 
-    const verifiedStock = item.markLegacy ? 0 : item.initialStock;
-    const legacyStock = item.markLegacy ? Math.max(item.initialStock, 1) : 0;
+    const verifiedStock = item.initialStock;
+    const legacyStock = 0;
 
     await ensureBranchProductRow(tenantId, branchId, product.id, {
       sellingPrice: item.sellPrice,

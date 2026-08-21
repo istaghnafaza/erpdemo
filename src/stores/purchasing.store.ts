@@ -44,6 +44,8 @@ export interface CreatePoDraft {
   tenant_id: string;
   branch_id: string;
   type: DbPoType;
+  ownership_mode?: import("@/types/database").DbPoOwnership;
+  pay_trigger?: import("@/types/database").DbPoPayTrigger;
   supplier_id: string;
   sales_order_id: string | null;
   sales_order_number?: string | null;
@@ -107,6 +109,8 @@ function mergeIndentPosFromSalesOrders(existing: MockPoWithItems[]): MockPoWithI
         branch_id: so.branch_id,
         po_number: ip.po_number,
         type: "indent",
+        ownership_mode: "owned",
+        pay_trigger: "on_receipt_credit",
         sales_order_id: so.id,
         supplier_id: ip.supplier_id,
         delivery_address: so.delivery_address,
@@ -284,6 +288,10 @@ export const usePurchasingStore = create<PurchasingState>()(
         branch_id: draft.branch_id,
         po_number: getNextMockPoNumber(draft.type),
         type: draft.type,
+        ownership_mode: draft.ownership_mode ?? "owned",
+        pay_trigger:
+          draft.pay_trigger ??
+          (draft.ownership_mode === "consignment" ? "on_sale" : "on_receipt_credit"),
         sales_order_id: draft.sales_order_id,
         supplier_id: draft.supplier_id,
         delivery_address: draft.delivery_address,

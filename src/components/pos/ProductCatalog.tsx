@@ -237,9 +237,17 @@ export function ProductCatalog({
                         STOCK_BADGE_CLASS[p.stockStatus],
                       )}
                     >
-                      {p.stock <= 0
-                        ? "Stok 0"
-                        : `${p.stock} ${p.stockUnit || p.unit}`}
+                      {p.stockOwnership === "consignment"
+                        ? "Konsinyasi"
+                        : p.verifyStatus === "new"
+                          ? "Baru"
+                          : p.verifyStatus === "unverified"
+                            ? p.stock <= 0
+                              ? "Belum opname"
+                              : `${p.stock} ${p.stockUnit || p.unit}`
+                            : p.stock <= 0
+                              ? "Stok 0"
+                              : `${p.stock} ${p.stockUnit || p.unit}`}
                     </Badge>
                   </div>
                   {(p.sellUnits?.length ?? 0) > 0 && (

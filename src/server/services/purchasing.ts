@@ -13,10 +13,13 @@ import {
   toPoItem,
   toPurchaseOrder,
   toSupplier,
+  stockStr,
+  num,
 } from "@/server/db/mappers";
 import {
   accountsPayable,
   branchProducts,
+  cashAccounts,
   goodsReceiptItems,
   goodsReceipts,
   purchaseOrderItems,
@@ -30,6 +33,8 @@ import {
 import { nextDocNumberForTable } from "@/server/services/doc-numbers";
 import { ensureProductSuppliersTable } from "@/server/db/ensure-product-suppliers";
 import { ensurePoStatusAwaitingSupplier } from "@/server/db/ensure-po-status-enum";
+import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
+import { insertCashTransactionInTx } from "@/server/services/finance";
 import type {
   GoodsReceipt,
   GoodsReceiptInsert,
@@ -212,6 +217,7 @@ export async function createPurchaseOrderRecord(
   po: Omit<PurchaseOrderInsert, "tenant_id">,
   items: Omit<PoItemInsert, "po_id" | "tenant_id">[],
 ): Promise<PurchaseOrder> {
+  await ensureStockOwnershipSchema();
   if (po.status === "awaiting_supplier") {
     await ensurePoStatusAwaitingSupplier();
   }
@@ -228,6 +234,11 @@ export async function createPurchaseOrderRecord(
       prefix,
     ));
 
+  const ownershipMode = po.ownership_mode ?? "owned";
+  const payTrigger =
+    po.pay_trigger ??
+    (ownershipMode === "consignment" ? "on_sale" : "on_receipt_credit");
+
   return db.transaction(async (tx) => {
     const [poRow] = await tx
       .insert(purchaseOrders)
@@ -236,6 +247,8 @@ export async function createPurchaseOrderRecord(
         branchId: po.branch_id,
         poNumber,
         type: po.type ?? "regular",
+        ownershipMode,
+        payTrigger,
         salesOrderId: po.sales_order_id,
         supplierId: po.supplier_id,
         deliveryAddress: po.delivery_address,
@@ -317,7 +330,17 @@ async function createPayableFromGrInTx(
     purchaseOrderId: string;
   },
   items: Omit<GrItemInsert, "gr_id" | "tenant_id">[],
+  userId: string,
 ): Promise<void> {
+  const po = await tx.query.purchaseOrders.findFirst({
+    where: and(eq(purchaseOrders.tenantId, tenantId), eq(purchaseOrders.id, gr.purchaseOrderId)),
+  });
+
+  // Konsinyasi (on_sale): tidak buat AP di GR — hutang muncul saat terjual
+  if (po?.payTrigger === "on_sale" || po?.ownershipMode === "consignment") {
+    return;
+  }
+
   let totalAmount = 0;
 
   for (const item of items) {
@@ -347,15 +370,16 @@ async function createPayableFromGrInTx(
   const supplier = await tx.query.suppliers.findFirst({
     where: and(eq(suppliers.tenantId, tenantId), eq(suppliers.id, gr.supplierId)),
   });
-  const po = await tx.query.purchaseOrders.findFirst({
-    where: and(eq(purchaseOrders.tenantId, tenantId), eq(purchaseOrders.id, gr.purchaseOrderId)),
-  });
 
-  const fallbackDue = new Date();
-  fallbackDue.setDate(fallbackDue.getDate() + 30);
-  const dueDate = po?.expectedDate
-    ? String(po.expectedDate).slice(0, 10)
-    : fallbackDue.toISOString().slice(0, 10);
+  const termDays = supplier?.paymentTermDays ?? 30;
+  const due = new Date();
+  if (po?.payTrigger === "on_receipt_cash") {
+    // COD: jatuh tempo hari ini, langsung lunas
+  } else {
+    due.setDate(due.getDate() + termDays);
+  }
+  const dueDate = due.toISOString().slice(0, 10);
+  const isCash = po?.payTrigger === "on_receipt_cash";
 
   await tx.insert(accountsPayable).values({
     tenantId,
@@ -365,10 +389,26 @@ async function createPayableFromGrInTx(
     supplierName: supplier?.name ?? "Supplier",
     purchaseOrderId: gr.purchaseOrderId,
     totalAmount,
-    paidAmount: 0,
+    paidAmount: isCash ? totalAmount : 0,
     dueDate,
-    status: "unpaid",
+    status: isCash ? "paid" : "unpaid",
   });
+
+  if (isCash && totalAmount > 0) {
+    const cashAcc = await tx.query.cashAccounts.findFirst({
+      where: and(eq(cashAccounts.tenantId, tenantId), eq(cashAccounts.branchId, gr.branchId)),
+    });
+    if (cashAcc) {
+      await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
+        type: "expense",
+        amount: totalAmount,
+        category: "Pembelian",
+        reference: invoiceNumber,
+        description: `COD GR ${gr.grNumber}`,
+        user_id: userId,
+      });
+    }
+  }
 }
 
 export async function listGoodsReceipts(
@@ -441,6 +481,7 @@ export async function createGoodsReceiptRecord(
   items: Omit<GrItemInsert, "gr_id" | "tenant_id">[],
   userId: string,
 ): Promise<GoodsReceipt> {
+  await ensureStockOwnershipSchema();
   const db = getDb();
 
   return db.transaction(async (tx) => {
@@ -522,12 +563,19 @@ export async function createGoodsReceiptRecord(
         });
         if (!bp) continue;
 
-        const currentQty = bp.stock;
+        const currentQty = num(bp.stock);
         const newQty = currentQty + item.received_qty;
+        const isConsignment = po.ownershipMode === "consignment";
 
         await tx
           .update(branchProducts)
-          .set({ stock: newQty })
+          .set({
+            stock: stockStr(newQty),
+            stockOwnership: isConsignment ? "consignment" : "owned",
+            consignmentSupplierId: isConsignment ? po.supplierId : null,
+            // Penerimaan PO = stok baru dari supplier → verified qty dari dokumen
+            stockStatus: "verified",
+          })
           .where(eq(branchProducts.id, bp.id));
 
         await tx.insert(stockMovements).values({
@@ -536,11 +584,13 @@ export async function createGoodsReceiptRecord(
           productId: item.product_id,
           type: "in",
           stockSource: "verified",
-          qty: item.received_qty,
-          qtyBefore: currentQty,
-          qtyAfter: newQty,
+          qty: stockStr(item.received_qty),
+          qtyBefore: stockStr(currentQty),
+          qtyAfter: stockStr(newQty),
           reference: grRow.grNumber,
-          notes: "Penerimaan barang dari PO",
+          notes: isConsignment
+            ? "Penerimaan konsinyasi (milik sales)"
+            : "Penerimaan barang dari PO",
           userId,
         });
       } else {
@@ -577,7 +627,7 @@ export async function createGoodsReceiptRecord(
       .set({ status: newStatus })
       .where(eq(purchaseOrders.id, gr.purchase_order_id));
 
-    await createPayableFromGrInTx(tx, tenantId, grRow, items);
+    await createPayableFromGrInTx(tx, tenantId, grRow, items, userId);
 
     return toGoodsReceipt(grRow);
   });

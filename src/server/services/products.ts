@@ -5,6 +5,7 @@
 import { and, asc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { ensureSellUnitsSchema } from "@/server/db/ensure-sell-units-schema";
+import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
 import {
   branchProductsKey,
   branchProductsMultiKey,
@@ -142,6 +143,7 @@ export async function createProduct(
   },
 ): Promise<Product> {
   await ensureSellUnitsSchema();
+  await ensureStockOwnershipSchema();
   const db = getDb();
   const stockUnit = payload.stock_unit?.trim() || payload.unit;
   const [row] = await db
@@ -221,6 +223,7 @@ async function fetchBranchProductsFromDb(
   branchIds: string[],
 ): Promise<Record<string, BranchProductWithProduct[]>> {
   await ensureSellUnitsSchema();
+  await ensureStockOwnershipSchema();
   const db = getDb();
   const byBranch = Object.fromEntries(branchIds.map((id) => [id, [] as BranchProductWithProduct[]]));
   if (branchIds.length === 0) return byBranch;
@@ -334,11 +337,19 @@ export async function upsertBranchProduct(
   payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location"> & {
     stock?: number;
     legacy_stock?: number;
+    stock_status?: BranchProduct["stock_status"];
+    stock_ownership?: BranchProduct["stock_ownership"];
+    consignment_supplier_id?: string | null;
   },
 ): Promise<BranchProduct> {
+  await ensureSellUnitsSchema();
+  await ensureStockOwnershipSchema();
   const db = getDb();
   const stock = payload.stock ?? 0;
   const legacyStock = payload.legacy_stock ?? 0;
+  const stockStatus =
+    payload.stock_status ??
+    (stock > 0 ? "unverified" : "new");
   const [row] = await db
     .insert(branchProducts)
     .values({
@@ -350,6 +361,9 @@ export async function upsertBranchProduct(
       warehouseLocation: payload.warehouse_location,
       stock: stockStr(stock),
       legacyStock: stockStr(legacyStock),
+      stockStatus,
+      stockOwnership: payload.stock_ownership ?? "owned",
+      consignmentSupplierId: payload.consignment_supplier_id ?? null,
     })
     .onConflictDoUpdate({
       target: [branchProducts.branchId, branchProducts.productId],
@@ -360,6 +374,13 @@ export async function upsertBranchProduct(
         ...(payload.stock !== undefined ? { stock: stockStr(payload.stock) } : {}),
         ...(payload.legacy_stock !== undefined
           ? { legacyStock: stockStr(payload.legacy_stock) }
+          : {}),
+        ...(payload.stock_status !== undefined ? { stockStatus: payload.stock_status } : {}),
+        ...(payload.stock_ownership !== undefined
+          ? { stockOwnership: payload.stock_ownership }
+          : {}),
+        ...(payload.consignment_supplier_id !== undefined
+          ? { consignmentSupplierId: payload.consignment_supplier_id }
           : {}),
       },
     })
@@ -378,6 +399,11 @@ export async function updateBranchProductById(
   if (updates.selling_price !== undefined) patch.sellingPrice = updates.selling_price;
   if (updates.stock !== undefined) patch.stock = stockStr(updates.stock);
   if (updates.legacy_stock !== undefined) patch.legacyStock = stockStr(updates.legacy_stock);
+  if (updates.stock_status !== undefined) patch.stockStatus = updates.stock_status;
+  if (updates.stock_ownership !== undefined) patch.stockOwnership = updates.stock_ownership;
+  if (updates.consignment_supplier_id !== undefined) {
+    patch.consignmentSupplierId = updates.consignment_supplier_id;
+  }
   if (updates.reorder_point !== undefined) patch.reorderPoint = updates.reorder_point;
   if (updates.warehouse_location !== undefined) patch.warehouseLocation = updates.warehouse_location;
 
@@ -464,9 +490,16 @@ export async function ensureBranchProductRow(
     legacyStock: number;
     reorderPoint?: number;
     warehouseLocation?: string | null;
+    stockStatus?: BranchProduct["stock_status"];
+    stockOwnership?: BranchProduct["stock_ownership"];
+    consignmentSupplierId?: string | null;
   },
 ): Promise<BranchProduct> {
+  await ensureSellUnitsSchema();
+  await ensureStockOwnershipSchema();
   const db = getDb();
+  const stockStatus =
+    data.stockStatus ?? (data.stock > 0 ? "unverified" : "new");
   const [row] = await db
     .insert(branchProducts)
     .values({
@@ -474,8 +507,11 @@ export async function ensureBranchProductRow(
       branchId,
       productId,
       sellingPrice: data.sellingPrice,
-      stock: data.stock,
-      legacyStock: data.legacyStock,
+      stock: stockStr(data.stock),
+      legacyStock: stockStr(data.legacyStock),
+      stockStatus,
+      stockOwnership: data.stockOwnership ?? "owned",
+      consignmentSupplierId: data.consignmentSupplierId ?? null,
       reorderPoint: data.reorderPoint ?? 5,
       warehouseLocation: data.warehouseLocation?.trim() || null,
     })
@@ -483,8 +519,11 @@ export async function ensureBranchProductRow(
       target: [branchProducts.branchId, branchProducts.productId],
       set: {
         sellingPrice: data.sellingPrice,
-        stock: data.stock,
-        legacyStock: data.legacyStock,
+        stock: stockStr(data.stock),
+        legacyStock: stockStr(data.legacyStock),
+        stockStatus,
+        stockOwnership: data.stockOwnership ?? "owned",
+        consignmentSupplierId: data.consignmentSupplierId ?? null,
         reorderPoint: data.reorderPoint ?? 5,
         warehouseLocation: data.warehouseLocation?.trim() || null,
       },

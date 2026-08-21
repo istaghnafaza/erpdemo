@@ -6,6 +6,7 @@ import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { ensurePosSchema } from "@/server/db/ensure-pos-schema";
 import { ensureSellUnitsSchema } from "@/server/db/ensure-sell-units-schema";
+import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
 import { formatDbError, nullIfEmptyUuid } from "@/server/lib/format-db-error";
 import {
   invalidateBranchProducts,
@@ -21,6 +22,7 @@ import {
 } from "@/server/db/mappers";
 import { toBaseQty, roundQty } from "@/lib/product-sell-units";
 import {
+  accountsPayable,
   branchProducts,
   branches,
   cashAccounts,
@@ -32,6 +34,8 @@ import {
   salesReturns,
   salesTransactions,
   stockMovements,
+  suppliers,
+  tenants,
 } from "@/server/db/schema";
 import type { DateRangeFilter } from "@/types/app";
 import type { PosCheckoutExtras } from "@/types/pos-checkout-extras";
@@ -116,7 +120,13 @@ async function deductStockInTx(
   stockSource: SalesItem["stock_source"],
   reference: string,
   userId: string | null,
-): Promise<void> {
+  softOpenForProduct: boolean,
+): Promise<{
+  stockOwnership: "owned" | "consignment";
+  consignmentSupplierId: string | null;
+  purchasePrice: number;
+  deductedQty: number;
+}> {
   const bp = await tx.query.branchProducts.findFirst({
     where: and(
       eq(branchProducts.tenantId, tenantId),
@@ -124,13 +134,35 @@ async function deductStockInTx(
       eq(branchProducts.productId, productId),
     ),
   });
-  if (!bp) throw new Error(`STOCK_DEFICIT: produk tidak ditemukan`);
+  if (!bp) {
+    if (softOpenForProduct) {
+      return {
+        stockOwnership: "owned",
+        consignmentSupplierId: null,
+        purchasePrice: 0,
+        deductedQty: 0,
+      };
+    }
+    throw new Error(`STOCK_DEFICIT: produk tidak ditemukan`);
+  }
 
   const isLegacy = stockSource === "legacy";
+  let deductQty = qtyBase;
   const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
-  if (currentQty + 1e-9 < qtyBase) throw new Error(`STOCK_DEFICIT: ${productId}`);
+  if (currentQty + 1e-9 < qtyBase) {
+    if (!softOpenForProduct) throw new Error(`STOCK_DEFICIT: ${productId}`);
+    if (currentQty <= 1e-9) {
+      return {
+        stockOwnership: (bp.stockOwnership as "owned" | "consignment") ?? "owned",
+        consignmentSupplierId: bp.consignmentSupplierId ?? null,
+        purchasePrice: 0,
+        deductedQty: 0,
+      };
+    }
+    deductQty = currentQty;
+  }
 
-  const newQty = roundQty(currentQty - qtyBase);
+  const newQty = roundQty(currentQty - deductQty);
   await tx
     .update(branchProducts)
     .set(
@@ -145,13 +177,20 @@ async function deductStockInTx(
     branchId,
     productId,
     type: isLegacy ? "legacy_out" : "out",
-    stockSource,
-    qty: stockStr(qtyBase),
+    stockSource: softOpenForProduct && stockSource !== "legacy" ? "unverified" : stockSource,
+    qty: stockStr(deductQty),
     qtyBefore: stockStr(currentQty),
     qtyAfter: stockStr(newQty),
     reference,
     userId,
   });
+
+  return {
+    stockOwnership: (bp.stockOwnership as "owned" | "consignment") ?? "owned",
+    consignmentSupplierId: bp.consignmentSupplierId ?? null,
+    purchasePrice: 0,
+    deductedQty: deductQty,
+  };
 }
 
 function resolveItemQtyBase(item: SalesItemInsert): number {
@@ -766,6 +805,13 @@ async function createSaleTransactionInner(
   items: Omit<SalesItemInsert, "transaction_id" | "tenant_id">[],
   extras?: PosCheckoutExtras,
 ): Promise<SalesTransaction> {
+  await ensureStockOwnershipSchema();
+  const tenantRow = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { legacyModeActive: true },
+  });
+  const tenantSoftOpen = Boolean(tenantRow?.legacyModeActive);
+
   const saved = await db.transaction(async (tx) => {
     const transactionNumber = await resolveTransactionNumber(
       tx,
@@ -809,11 +855,20 @@ async function createSaleTransactionInner(
           eq(branchProducts.productId, item.product_id),
         ),
       });
-      if (!bp) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      const softOpenForProduct =
+        tenantSoftOpen ||
+        bp?.stockStatus === "new" ||
+        bp?.stockStatus === "unverified";
+      if (!bp) {
+        if (softOpenForProduct || tenantSoftOpen) continue;
+        throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      }
       const isLegacy = item.stock_source === "legacy";
       const currentQty = num(isLegacy ? bp.legacyStock : bp.stock);
       const need = resolveItemQtyBase(item);
-      if (currentQty + 1e-9 < need) throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      if (currentQty + 1e-9 < need && !softOpenForProduct) {
+        throw new Error(`STOCK_DEFICIT: ${item.sku}`);
+      }
     }
 
     const [txRow] = await tx
@@ -883,7 +938,20 @@ async function createSaleTransactionInner(
 
     for (const item of items) {
       if (!item.product_id || isSoLineItem(item)) continue;
-      await deductStockInTx(
+      const bpPeek = await tx.query.branchProducts.findFirst({
+        where: and(
+          eq(branchProducts.tenantId, tenantId),
+          eq(branchProducts.branchId, transaction.branch_id),
+          eq(branchProducts.productId, item.product_id),
+        ),
+        columns: { stockStatus: true },
+      });
+      const softOpenForProduct =
+        tenantSoftOpen ||
+        bpPeek?.stockStatus === "new" ||
+        bpPeek?.stockStatus === "unverified";
+
+      const deductResult = await deductStockInTx(
         tx,
         tenantId,
         transaction.branch_id,
@@ -892,7 +960,43 @@ async function createSaleTransactionInner(
         item.stock_source,
         transactionNumber,
         transaction.paid_by,
+        softOpenForProduct,
       );
+
+      // Konsinyasi: hutang ke sales muncul saat terjual
+      if (
+        deductResult.stockOwnership === "consignment" &&
+        deductResult.consignmentSupplierId &&
+        deductResult.deductedQty > 0
+      ) {
+        const supplier = await tx.query.suppliers.findFirst({
+          where: and(
+            eq(suppliers.tenantId, tenantId),
+            eq(suppliers.id, deductResult.consignmentSupplierId),
+          ),
+        });
+        const amount = Math.round(
+          (item.purchase_price > 0 ? item.purchase_price : item.selling_price * 0.7) *
+            deductResult.deductedQty,
+        );
+        if (amount > 0) {
+          const invoiceNumber = `CONS-${transactionNumber}-${item.sku}`.slice(0, 64);
+          const due = new Date();
+          due.setDate(due.getDate() + (supplier?.paymentTermDays ?? 7));
+          await tx.insert(accountsPayable).values({
+            tenantId,
+            branchId: transaction.branch_id,
+            invoiceNumber,
+            supplierId: deductResult.consignmentSupplierId,
+            supplierName: supplier?.name ?? "Sales konsinyasi",
+            purchaseOrderId: null,
+            totalAmount: amount,
+            paidAmount: 0,
+            dueDate: due.toISOString().slice(0, 10),
+            status: "unpaid",
+          });
+        }
+      }
     }
 
     if (transaction.payment_method === "credit" && transaction.customer_id) {

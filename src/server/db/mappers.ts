@@ -225,6 +225,9 @@ export function toBranchProduct(row: BranchProductRow): BranchProduct {
     selling_price: row.sellingPrice,
     stock: num(row.stock),
     legacy_stock: num(row.legacyStock),
+    stock_status: (row.stockStatus as BranchProduct["stock_status"]) ?? "verified",
+    stock_ownership: (row.stockOwnership as BranchProduct["stock_ownership"]) ?? "owned",
+    consignment_supplier_id: row.consignmentSupplierId ?? null,
     reorder_point: row.reorderPoint,
     warehouse_location: row.warehouseLocation,
   };
@@ -506,6 +509,8 @@ export function toPurchaseOrder(row: PurchaseOrderRow): PurchaseOrder {
     branch_id: row.branchId,
     po_number: row.poNumber,
     type: row.type,
+    ownership_mode: (row.ownershipMode as PurchaseOrder["ownership_mode"]) ?? "owned",
+    pay_trigger: (row.payTrigger as PurchaseOrder["pay_trigger"]) ?? "on_receipt_credit",
     sales_order_id: row.salesOrderId,
     supplier_id: row.supplierId,
     delivery_address: row.deliveryAddress,

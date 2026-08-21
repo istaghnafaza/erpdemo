@@ -190,6 +190,10 @@ export const userBranches = pgTable(
 
 export const customerTypeEnum = pgEnum("customer_type", ["retail", "credit"]);
 export const stockSourceEnum = pgEnum("stock_source", ["verified", "legacy", "unverified"]);
+/** Soft-open: new/unverified boleh jual meski stok belum akurat; verified = kontrol ketat. */
+export const stockStatusEnum = pgEnum("stock_status", ["new", "unverified", "verified"]);
+/** Kepemilikan stok di gudang: owned = milik toko; consignment = milik sales sampai terjual. */
+export const stockOwnershipEnum = pgEnum("stock_ownership", ["owned", "consignment"]);
 export const movementTypeEnum = pgEnum("movement_type", [
   "in",
   "out",
@@ -282,6 +286,10 @@ export const branchProducts = pgTable(
     sellingPrice: bigint("selling_price", { mode: "number" }).notNull().default(0),
     stock: numeric("stock", { precision: 18, scale: 4 }).notNull().default("0"),
     legacyStock: numeric("legacy_stock", { precision: 18, scale: 4 }).notNull().default("0"),
+    stockStatus: stockStatusEnum("stock_status").notNull().default("verified"),
+    stockOwnership: stockOwnershipEnum("stock_ownership").notNull().default("owned"),
+    /** Diisi saat stok konsinyasi; FK di ensure-schema (suppliers dideklarasikan setelah tabel ini). */
+    consignmentSupplierId: uuid("consignment_supplier_id"),
     reorderPoint: integer("reorder_point").notNull().default(0),
     warehouseLocation: text("warehouse_location"),
   },
@@ -769,6 +777,14 @@ export const poStatusEnum = pgEnum("po_status", [
   "received",
   "cancelled",
 ]);
+/** owned = milik toko setelah terima; consignment = milik sales sampai terjual */
+export const poOwnershipEnum = pgEnum("po_ownership", ["owned", "consignment"]);
+/** Kapan hutang/bayar: kredit saat terima, tunai/COD saat terima, atau saat terjual (konsinyasi) */
+export const poPayTriggerEnum = pgEnum("po_pay_trigger", [
+  "on_receipt_credit",
+  "on_receipt_cash",
+  "on_sale",
+]);
 export const soStatusEnum = pgEnum("so_status", [
   "draft",
   "confirmed",
@@ -845,6 +861,8 @@ export const purchaseOrders = pgTable(
       .references(() => branches.id, { onDelete: "cascade" }),
     poNumber: text("po_number").notNull(),
     type: poTypeEnum("type").notNull().default("regular"),
+    ownershipMode: poOwnershipEnum("ownership_mode").notNull().default("owned"),
+    payTrigger: poPayTriggerEnum("pay_trigger").notNull().default("on_receipt_credit"),
     salesOrderId: uuid("sales_order_id").references(() => salesOrders.id, { onDelete: "set null" }),
     supplierId: uuid("supplier_id")
       .notNull()

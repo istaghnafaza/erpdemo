@@ -177,6 +177,8 @@ export function getSeedMockPurchaseOrders(): MockPoWithItems[] {
       branch_id: BRANCH_SUDIRMAN,
       po_number: po.number,
       type: "regular" as const,
+      ownership_mode: "owned" as const,
+      pay_trigger: "on_receipt_credit" as const,
       sales_order_id: null,
       supplier_id: supplierId,
       delivery_address: null,

@@ -9,6 +9,7 @@ import {
   toStockMovement,
   toStockTransfer,
   toStockTransferItem,
+  stockStr,
 } from "@/server/db/mappers";
 import {
   branchProducts,
@@ -18,6 +19,7 @@ import {
   stockTransferItems,
   stockTransfers,
 } from "@/server/db/schema";
+import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
 import { nextDocNumberForTable } from "@/server/services/doc-numbers";
 import type { DateRangeFilter } from "@/types/app";
 import type {
@@ -36,13 +38,12 @@ export async function submitOpnameRecord(
   reference: string,
   items: OpnameItem[],
 ): Promise<StockMovement[]> {
+  await ensureStockOwnershipSchema();
   const db = getDb();
   const results: StockMovement[] = [];
 
   await db.transaction(async (tx) => {
     for (const item of items) {
-      if (item.discrepancy === 0) continue;
-
       const bp = await tx.query.branchProducts.findFirst({
         where: and(
           eq(branchProducts.tenantId, tenantId),
@@ -53,12 +54,18 @@ export async function submitOpnameRecord(
       if (!bp) continue;
 
       const isLegacy = item.stock_source === "legacy";
-      const currentQty = isLegacy ? bp.legacyStock : bp.stock;
 
       await tx
         .update(branchProducts)
-        .set(isLegacy ? { legacyStock: item.actual_stock } : { stock: item.actual_stock })
+        .set({
+          ...(isLegacy
+            ? { legacyStock: stockStr(item.actual_stock) }
+            : { stock: stockStr(item.actual_stock) }),
+          stockStatus: "verified",
+        })
         .where(eq(branchProducts.id, bp.id));
+
+      if (item.discrepancy === 0) continue;
 
       const [movement] = await tx
         .insert(stockMovements)
@@ -68,9 +75,9 @@ export async function submitOpnameRecord(
           productId: item.product_id,
           type: "opname",
           stockSource: item.stock_source,
-          qty: Math.abs(item.discrepancy),
-          qtyBefore: item.system_stock,
-          qtyAfter: item.actual_stock,
+          qty: stockStr(Math.abs(item.discrepancy)),
+          qtyBefore: stockStr(item.system_stock),
+          qtyAfter: stockStr(item.actual_stock),
           reference,
           notes: item.notes,
           userId,

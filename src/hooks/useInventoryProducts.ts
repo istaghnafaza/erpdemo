@@ -2,7 +2,7 @@
 // useInventoryProducts — business logic for Master Barang (Fase 8).
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isMockTenantId } from "@/lib/mock-session";
@@ -48,6 +48,14 @@ import type { Branch, StockMovement, ProductCategory } from "@/types/database";
 
 const EMPTY_BRANCHES: Branch[] = [];
 
+function toStockQty(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
 export interface InventoryProductRow {
   branchProductId: string;
   productId: string;
@@ -62,6 +70,9 @@ export interface InventoryProductRow {
   stockUnit?: string;
   sellUnits?: import("@/lib/product-sell-units").SellUnitInput[];
   stock: number;
+  /** Soft-open status: new | unverified | verified */
+  verifyStatus: import("@/types/database").DbStockStatus;
+  stockOwnership: import("@/types/database").DbStockOwnership;
   reorderPoint: number;
   purchasePrice: number;
   sellingPrice: number;
@@ -213,6 +224,8 @@ export function useInventoryProducts() {
           stockUnit: override?.stockUnit ?? override?.unit ?? bp.product.unit,
           sellUnits: override?.sellUnits,
           stock,
+          verifyStatus: stock > 0 ? ("unverified" as const) : ("new" as const),
+          stockOwnership: "owned" as const,
           reorderPoint,
           purchasePrice: override?.purchasePrice ?? bp.product.purchase_price,
           sellingPrice: override?.sellingPrice ?? bp.selling_price,
@@ -242,6 +255,8 @@ export function useInventoryProducts() {
           stockUnit: override.stockUnit ?? override.unit ?? "pcs",
           sellUnits: override.sellUnits,
           stock,
+          verifyStatus: stock > 0 ? ("unverified" as const) : ("new" as const),
+          stockOwnership: "owned" as const,
           reorderPoint: override.reorderPoint ?? 5,
           purchasePrice: override.purchasePrice ?? 0,
           sellingPrice: override.sellingPrice ?? 0,
@@ -317,13 +332,15 @@ export function useInventoryProducts() {
                 preset_qty: u.preset_qty,
               }))
             : [],
-          stock: Number(bp.stock) || 0,
+          stock: toStockQty(bp.stock),
+          verifyStatus: bp.stock_status ?? "verified",
+          stockOwnership: bp.stock_ownership ?? "owned",
           reorderPoint: bp.reorder_point,
           purchasePrice: bp.product.purchase_price,
           sellingPrice: bp.selling_price,
           warehouseLocation: bp.warehouse_location ?? "",
           isActive: bp.product.is_active,
-          stockStatus: inventoryStockStatus(Number(bp.stock) || 0, bp.reorder_point),
+          stockStatus: inventoryStockStatus(toStockQty(bp.stock), bp.reorder_point),
         });
       }
     }
@@ -424,6 +441,8 @@ export function useInventoryProducts() {
 
   const closeDetail = useCallback(() => setSelectedProductId(null), []);
 
+  const createSkuLock = useRef<string | null>(null);
+
   const openCreateForm = useCallback(() => {
     setEditingProductId(null);
     setFormOpen(true);
@@ -437,6 +456,7 @@ export function useInventoryProducts() {
   const closeForm = useCallback(() => {
     setFormOpen(false);
     setEditingProductId(null);
+    createSkuLock.current = null;
   }, []);
 
   const openImportDialog = useCallback(() => setImportOpen(true), []);
@@ -514,11 +534,14 @@ export function useInventoryProducts() {
           sell_units: data.sellUnits ?? [],
           ...(categoryId !== undefined ? { category_id: categoryId } : {}),
         });
-        await upsertBranchProduct(tenantId, branchId, editingProductId, {
+        const branchResult = await upsertBranchProduct(tenantId, branchId, editingProductId, {
           selling_price: data.sellingPrice ?? 0,
           reorder_point: data.reorderPoint ?? 5,
           warehouse_location: data.warehouseLocation ?? "",
         });
+        if (branchResult.error) {
+          return { success: false, error: branchResult.error };
+        }
       } else {
         let categoryId: string | null = null;
         if (data.categoryName?.trim()) {
@@ -540,8 +563,6 @@ export function useInventoryProducts() {
           }
         }
         const initialStock = data.initialStock ?? 0;
-        const legacyQty = data.legacyStock ?? 0;
-        const isLegacy = legacyQty > 0;
         const created = await createProduct(tenantId, {
           sku: uniqueSku,
           barcode: data.barcode ?? null,
@@ -556,13 +577,23 @@ export function useInventoryProducts() {
         if (created.error || !created.data) {
           return { success: false, error: created.error ?? "Gagal membuat produk" };
         }
-        await upsertBranchProduct(tenantId, branchId, created.data.id, {
+        const branchResult = await upsertBranchProduct(tenantId, branchId, created.data.id, {
           selling_price: data.sellingPrice ?? 0,
           reorder_point: data.reorderPoint ?? 5,
           warehouse_location: data.warehouseLocation ?? "",
-          stock: isLegacy ? 0 : initialStock,
-          legacy_stock: isLegacy ? legacyQty : 0,
+          stock: initialStock,
+          legacy_stock: 0,
+          stock_status: initialStock > 0 ? "unverified" : "new",
+          stock_ownership: "owned",
         });
+        if (branchResult.error || !branchResult.data) {
+          return {
+            success: false,
+            error:
+              branchResult.error ??
+              "Produk terbuat tetapi stok cabang gagal disimpan. Edit produk lalu simpan ulang harga/stok.",
+          };
+        }
       }
       invalidateInventory();
       return { success: true };
@@ -602,13 +633,16 @@ export function useInventoryProducts() {
       };
     }
     if (formOpen) {
-      const skus = new Set<string>();
-      for (const p of PRODUCTS) skus.add(p.sku);
-      for (const o of Object.values(mockProductOverrides)) {
-        if (o.sku) skus.add(o.sku);
+      if (!createSkuLock.current) {
+        const skus = new Set<string>();
+        for (const p of PRODUCTS) skus.add(p.sku);
+        for (const o of Object.values(mockProductOverrides)) {
+          if (o.sku) skus.add(o.sku);
+        }
+        for (const r of rawRows) skus.add(r.sku);
+        createSkuLock.current = generateNextProductSku(skus);
       }
-      for (const r of rawRows) skus.add(r.sku);
-      return { sku: generateNextProductSku(skus) };
+      return { sku: createSkuLock.current };
     }
     return null;
   }, [editingProductId, formOpen, rawRows, mockProductOverrides]);

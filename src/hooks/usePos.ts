@@ -71,6 +71,8 @@ export interface PosCatalogItem {
   reorderPoint: number;
   stockStatus: PosStockStatus;
   stockSource: "verified" | "legacy" | "unverified";
+  verifyStatus: "new" | "unverified" | "verified";
+  stockOwnership: "owned" | "consignment";
   /** Bisa ditambah dari stok toko */
   canAddToCart: boolean;
   /** Stok 0 — masih bisa ditambah sebagai SO/indent */
@@ -269,6 +271,8 @@ export function usePos() {
         reorderPoint: line.reorderPoint,
         stockStatus: stockStatusOf(line.stock, line.reorderPoint),
         stockSource: line.stockSource,
+        verifyStatus: line.stock > 0 ? ("unverified" as const) : ("new" as const),
+        stockOwnership: "owned" as const,
         canAddToCart: line.canAddToCart,
         canAddAsSo: line.stock <= 0 && !line.canAddToCart,
         sellUnits: (mockProductOverrides[line.productId]?.sellUnits ?? []).map((u, i) => ({
@@ -294,7 +298,13 @@ export function usePos() {
       .map((bp) => {
       const stock = Math.max(0, Number(bp.stock) || 0);
       const sellUnits = bp.product.sell_units ?? [];
-      const canAddToCart = stock > 0;
+      const verifyStatus = bp.stock_status ?? "verified";
+      const stockOwnership = bp.stock_ownership ?? "owned";
+      const softOpen =
+        verifyStatus === "new" ||
+        verifyStatus === "unverified" ||
+        legacyModeActive;
+      const canAddToCart = stock > 0 || softOpen;
       return {
         branchProductId: bp.id,
         productId: bp.product_id,
@@ -311,7 +321,11 @@ export function usePos() {
         stock,
         reorderPoint: bp.reorder_point,
         stockStatus: stockStatusOf(stock, bp.reorder_point),
-        stockSource: "verified" as const,
+        stockSource: (verifyStatus === "verified" ? "verified" : "unverified") as
+          | "verified"
+          | "unverified",
+        verifyStatus,
+        stockOwnership,
         canAddToCart,
         canAddAsSo: !canAddToCart,
         sellUnits,
@@ -450,8 +464,8 @@ export function usePos() {
   const addProductToCart = useCallback(
     (item: PosCatalogItem, qty = 1, sellUnitId?: string | null, asSoLine = false) => {
       const availableStock =
-        item.stock > 0 ? item.stock : legacyModeActive ? 9999 : 0;
-      const forceSo = asSoLine || (availableStock <= 0 && !legacyModeActive);
+        item.stock > 0 ? item.stock : item.canAddToCart ? 9999 : 0;
+      const forceSo = asSoLine || !item.canAddToCart;
       const units = item.sellUnits ?? [];
       const selected =
         (sellUnitId

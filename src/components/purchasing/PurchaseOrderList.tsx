@@ -56,12 +56,28 @@ export function PurchaseOrderList({ orders, loading, onSelect }: PurchaseOrderLi
             >
               <TableCell className="font-mono text-xs font-medium">{po.po_number}</TableCell>
               <TableCell>
-                <Badge
-                  variant={po.type === "indent" ? "default" : "secondary"}
-                  className={po.type === "indent" ? "bg-violet-600" : ""}
-                >
-                  {poTypeLabel(po.type)}
-                </Badge>
+                <div className="flex flex-wrap gap-1">
+                  <Badge
+                    variant={po.type === "indent" ? "default" : "secondary"}
+                    className={po.type === "indent" ? "bg-violet-600" : ""}
+                  >
+                    {poTypeLabel(po.type)}
+                  </Badge>
+                  {po.ownership_mode === "consignment" ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Konsinyasi
+                    </Badge>
+                  ) : null}
+                  {po.pay_trigger === "on_receipt_cash" ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      COD
+                    </Badge>
+                  ) : po.pay_trigger === "on_receipt_credit" ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Tempo
+                    </Badge>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell>{po.supplier?.name ?? "—"}</TableCell>
               <TableCell className="text-xs text-muted-foreground">

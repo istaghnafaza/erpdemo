@@ -17,6 +17,7 @@ import { ProductDetailDrawer } from "@/components/inventory/ProductDetailDrawer"
 import { ProductFormModal } from "@/components/inventory/ProductFormModal";
 import { ProductImportDialog } from "@/components/inventory/ProductImportDialog";
 import { InventoryInputGuideCard } from "@/components/inventory/InventoryInputGuideCard";
+import { SoftOpenModeBanner } from "@/components/inventory/SoftOpenModeBanner";
 import { useInventoryProducts } from "@/hooks/useInventoryProducts";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
 import { toast } from "sonner";
@@ -142,7 +143,12 @@ function ProductsPage() {
     >
       <InventorySubNav />
 
-      {canEditProduct ? <InventoryInputGuideCard productCount={productCount} /> : null}
+      {canEditProduct ? (
+        <div className="space-y-3 mb-4">
+          <SoftOpenModeBanner canEdit={canEditProduct} />
+          <InventoryInputGuideCard productCount={productCount} />
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden">
         <ProductFilters

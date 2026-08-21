@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -69,7 +68,6 @@ export function ProductFormModal({
   const [initialStock, setInitialStock] = useState("");
   const [reorderPoint, setReorderPoint] = useState("");
   const [location, setLocation] = useState("");
-  const [legacyStock, setLegacyStock] = useState(false);
   const [productTypeId, setProductTypeId] = useState("");
   const [selections, setSelections] = useState<ProductAttributeSelections>({});
   const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
@@ -96,13 +94,15 @@ export function ProductFormModal({
     setInitialStock(String(defaults?.initialStock ?? ""));
     setReorderPoint(String(defaults?.reorderPoint ?? "5"));
     setLocation(defaults?.warehouseLocation ?? "");
-    setLegacyStock((defaults?.legacyStock ?? 0) > 0);
     setProductTypeId("");
     setSelections({});
     setNameManuallyEdited(false);
     setError(null);
-  }, [open, defaults, categoryNames]);
-
+    // Init saat buka dialog / ganti mode create↔edit saja.
+    // Jangan depend ke `defaults` object — identity berubah tiap inventory refetch
+    // dan mengosongkan Stok Awal yang sudah diisi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [open, editing]);
 
   const handleCategoryChange = (next: string) => {
     setCategory(next);
@@ -142,7 +142,6 @@ export function ProductFormModal({
       initialStock: Number(initialStock) || 0,
       reorderPoint: Number(reorderPoint) || 5,
       warehouseLocation: location.trim(),
-      legacyStock: legacyStock ? Number(initialStock) || 0 : 0,
     });
     setSaving(false);
     if (result.success) {
@@ -282,16 +281,6 @@ export function ProductFormModal({
               onChange={(e) => setLocation(e.target.value)}
               placeholder="A-01"
             />
-          </div>
-
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <div className="text-sm font-medium">Legacy Stock</div>
-              <div className="text-xs text-muted-foreground">
-                Mode onboarding — stok belum terverifikasi
-              </div>
-            </div>
-            <Switch checked={legacyStock} onCheckedChange={setLegacyStock} />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

@@ -178,6 +178,9 @@ export const neonUpsertBranchProduct = createServerFn({ method: "POST" })
       payload: Pick<BranchProduct, "selling_price" | "reorder_point" | "warehouse_location"> & {
         stock?: number;
         legacy_stock?: number;
+        stock_status?: BranchProduct["stock_status"];
+        stock_ownership?: BranchProduct["stock_ownership"];
+        consignment_supplier_id?: string | null;
       };
     }) => data,
   )

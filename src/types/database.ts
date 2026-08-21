@@ -16,6 +16,10 @@ export type DbPaymentMethod    = 'cash' | 'card' | 'qris_edc' | 'qris_gopay' | '
 export type DbArPaymentMethod  = 'cash' | 'transfer';
 export type DbTxStatus         = 'completed' | 'voided' | 'returned';
 export type DbStockSource      = 'verified' | 'legacy' | 'unverified';
+export type DbStockStatus      = 'new' | 'unverified' | 'verified';
+export type DbStockOwnership   = 'owned' | 'consignment';
+export type DbPoOwnership      = 'owned' | 'consignment';
+export type DbPoPayTrigger     = 'on_receipt_credit' | 'on_receipt_cash' | 'on_sale';
 export type DbMovementType     = 'in' | 'out' | 'adjustment' | 'opname' | 'transfer_out' | 'transfer_in' | 'legacy_in' | 'legacy_out';
 export type DbTransferStatus   = 'draft' | 'sent' | 'received' | 'cancelled';
 export type DbPoType           = 'regular' | 'indent';
@@ -164,6 +168,9 @@ export interface BranchProduct {
   selling_price: number;    // integer — IDR rupiah
   stock: number;
   legacy_stock: number;
+  stock_status: DbStockStatus;
+  stock_ownership: DbStockOwnership;
+  consignment_supplier_id: string | null;
   reorder_point: number;
   warehouse_location: string | null;
 }
@@ -498,6 +505,8 @@ export interface PurchaseOrder {
   branch_id: string;
   po_number: string;
   type: DbPoType;
+  ownership_mode: DbPoOwnership;
+  pay_trigger: DbPoPayTrigger;
   sales_order_id: string | null;
   supplier_id: string;
   delivery_address: string | null;
@@ -512,7 +521,8 @@ export interface PurchaseOrder {
 
 export type PurchaseOrderInsert = Omit<PurchaseOrder, 'id' | 'created_at'> & { id?: string };
 export type PurchaseOrderUpdate = Partial<Pick<PurchaseOrder,
-  'status' | 'expected_date' | 'delivery_address' | 'notes' | 'subtotal' | 'grand_total'
+  'status' | 'expected_date' | 'delivery_address' | 'notes' | 'subtotal' | 'grand_total' |
+  'ownership_mode' | 'pay_trigger'
 >>;
 
 

@@ -56,6 +56,7 @@ export function ProductTable({
             <TableHead>Kategori</TableHead>
             {isConsolidated && <TableHead>Cabang</TableHead>}
             <TableHead className="text-center">Stok</TableHead>
+            <TableHead className="text-center">Status</TableHead>
             <TableHead className="text-center">Min Stok</TableHead>
             {canSeePurchasePrice && <TableHead className="text-right">Harga Beli</TableHead>}
             <TableHead className="text-right">Harga Jual</TableHead>
@@ -100,6 +101,20 @@ export function ProductTable({
                         : undefined
                     }
                   />
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {row.verifyStatus === "new"
+                      ? "Baru"
+                      : row.verifyStatus === "unverified"
+                        ? "Belum opname"
+                        : "Terverifikasi"}
+                  </span>
+                  {row.stockOwnership === "consignment" ? (
+                    <span className="text-[10px] text-amber-700">Konsinyasi</span>
+                  ) : null}
                 </div>
               </TableCell>
               <TableCell className="text-center text-muted-foreground">

@@ -225,7 +225,8 @@ export function useStockOpname() {
   }, [lineItems]);
 
   const buildOpnameItems = useCallback((): OpnameItem[] => {
-    return summary.withDiff.map((l) => ({
+    // Semua baris yang dihitung (termasuk selisih 0) → mark verified
+    return linesWithDiff.map((l) => ({
       product_id: l.productId,
       sku: l.sku,
       product_name: l.name,
@@ -236,7 +237,7 @@ export function useStockOpname() {
       stock_source: "verified" as const,
       notes: null,
     }));
-  }, [summary.withDiff]);
+  }, [linesWithDiff]);
 
   const submitForApproval = useCallback(() => {
     requestOpnameApproval();
@@ -253,8 +254,8 @@ export function useStockOpname() {
 
     if (items.length === 0) {
       setSubmitting(false);
-      setSubmitError("Tidak ada selisih stok untuk disesuaikan");
-      return { success: false, error: "Tidak ada selisih stok untuk disesuaikan" };
+      setSubmitError("Belum ada barang yang dihitung");
+      return { success: false, error: "Belum ada barang yang dihitung" };
     }
 
     if (isMockTenant) {
