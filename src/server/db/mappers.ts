@@ -541,6 +541,7 @@ export function toPoItem(row: PoItemRow): PoItem {
     received_qty: row.receivedQty,
     purchase_price: row.purchasePrice,
     subtotal: row.subtotal,
+    selling_price: row.sellingPrice ?? null,
   };
 }
 

@@ -546,6 +546,7 @@ export interface PoItem {
   received_qty: number;
   purchase_price: number;
   subtotal: number;
+  selling_price: number | null;
 }
 
 export type PoItemInsert = Omit<PoItem, 'id'> & { id?: string };

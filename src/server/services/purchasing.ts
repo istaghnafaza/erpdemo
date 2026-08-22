@@ -37,6 +37,7 @@ import { ensurePoStatusAwaitingSupplier } from "@/server/db/ensure-po-status-enu
 import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
 import { insertCashTransactionInTx } from "@/server/services/finance";
 import { PURCHASE_DISCOUNT_CATEGORY } from "@/lib/cashflow-constants";
+import { suggestedSellingPrice, weightedAvgHpp } from "@/lib/po-costing";
 import type {
   GoodsReceipt,
   GoodsReceiptInsert,
@@ -280,6 +281,7 @@ export async function createPurchaseOrderRecord(
           receivedQty: item.received_qty ?? 0,
           purchasePrice: item.purchase_price,
           subtotal: item.subtotal,
+          sellingPrice: item.selling_price ?? null,
         })),
       );
     }
@@ -647,12 +649,28 @@ export async function createGoodsReceiptRecord(
               set: { lastPurchasePrice: unitCost },
             });
 
-          // Milik toko: HPP master = last cost (harga PO terbaru). Konsinyasi: jangan timpa HPP milik.
+          // Milik toko: HPP = rata-rata tertimbang stok lama + terima baru (laba POS sinkron).
           if (!isConsignment) {
+            const product = await tx.query.products.findFirst({
+              where: and(eq(products.tenantId, tenantId), eq(products.id, item.product_id)),
+            });
+            const oldHpp = product?.purchasePrice ?? unitCost;
+            const avgHpp = weightedAvgHpp(currentQty, oldHpp, item.received_qty, unitCost);
             await tx
               .update(products)
-              .set({ purchasePrice: unitCost, updatedAt: new Date() })
+              .set({ purchasePrice: avgHpp, updatedAt: new Date() })
               .where(and(eq(products.tenantId, tenantId), eq(products.id, item.product_id)));
+
+            const targetSell =
+              poItemForCost?.sellingPrice != null && poItemForCost.sellingPrice > 0
+                ? poItemForCost.sellingPrice
+                : suggestedSellingPrice(bp.sellingPrice, oldHpp, avgHpp);
+            if (targetSell > 0 && targetSell !== bp.sellingPrice) {
+              await tx
+                .update(branchProducts)
+                .set({ sellingPrice: targetSell })
+                .where(eq(branchProducts.id, bp.id));
+            }
           }
         }
       } else {

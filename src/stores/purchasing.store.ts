@@ -38,6 +38,7 @@ export interface CreatePoItemDraft {
   unit: string;
   ordered_qty: number;
   purchase_price: number;
+  selling_price?: number | null;
 }
 
 export interface CreatePoDraft {
@@ -100,6 +101,7 @@ function mergeIndentPosFromSalesOrders(existing: MockPoWithItems[]): MockPoWithI
           received_qty: 0,
           purchase_price: purchasePrice,
           subtotal: lineSubtotal,
+          selling_price: null,
           so_item_id: line.so_item_id,
         });
       }
@@ -254,6 +256,7 @@ export const usePurchasingStore = create<PurchasingState>()(
             received_qty: 0,
             purchase_price: line.purchase_price,
             subtotal: lineSubtotal,
+            selling_price: line.selling_price ?? null,
             so_item_id: draft.so_item_id,
           };
 
@@ -325,6 +328,7 @@ export const usePurchasingStore = create<PurchasingState>()(
           received_qty: 0,
           purchase_price: item.purchase_price,
           subtotal: item.ordered_qty * item.purchase_price,
+          selling_price: item.selling_price ?? null,
           so_item_id:
             draft.type === "indent" && draft.items.length === 1
               ? draft.so_item_id ?? null

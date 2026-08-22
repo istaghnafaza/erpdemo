@@ -167,6 +167,7 @@ export function getSeedMockPurchaseOrders(): MockPoWithItems[] {
         received_qty: received,
         purchase_price: item.price,
         subtotal: item.qty * item.price,
+        selling_price: null,
       };
     });
     const subtotal = items.reduce((s, i) => s + i.subtotal, 0);

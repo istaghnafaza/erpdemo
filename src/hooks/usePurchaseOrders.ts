@@ -32,6 +32,8 @@ export interface PoProductOption {
   name: string;
   unit: string;
   purchasePrice: number;
+  sellingPrice: number;
+  stock: number;
 }
 
 /** Baris SO yang belum punya PO indent aktif — untuk form PO indent manual. */
@@ -124,6 +126,8 @@ export function usePurchaseOrders() {
         name: bp.product.name,
         unit: bp.product.unit,
         purchasePrice: bp.product.purchase_price,
+        sellingPrice: bp.selling_price,
+        stock: Number(bp.stock) || 0,
       }));
     }
     return (catalogQuery.data ?? []).map((bp) => ({
@@ -132,6 +136,8 @@ export function usePurchaseOrders() {
       name: bp.product.name,
       unit: bp.product.unit,
       purchasePrice: bp.product.purchase_price,
+      sellingPrice: bp.selling_price,
+      stock: Number(bp.stock) || 0,
     }));
   }, [branchId, isMockTenant, catalogQuery.data]);
 
@@ -266,6 +272,7 @@ export function usePurchaseOrders() {
           received_qty: 0,
           purchase_price: i.purchase_price,
           subtotal: i.ordered_qty * i.purchase_price,
+          selling_price: i.selling_price ?? null,
         })),
       );
       setActionLoading(false);

@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
+import { hppDiffers, suggestedSellingPrice, weightedAvgHpp } from "@/lib/po-costing";
 import type { Supplier, DbPoType, DbPoOwnership, DbPoPayTrigger } from "@/types/database";
 import type { IndentSoItemOption, PoProductOption } from "@/hooks/usePurchaseOrders";
 
@@ -32,6 +33,11 @@ interface LineDraft {
   unit: string;
   ordered_qty: number;
   purchase_price: number;
+  old_hpp: number;
+  selling_price: number;
+  old_selling_price: number;
+  stock: number;
+  sellTouched: boolean;
 }
 
 function formatIdrInput(n: number): string {
@@ -144,6 +150,11 @@ export function PurchaseOrderFormDialog({
         unit: selectedSoItem.unit,
         ordered_qty: selectedSoItem.remainingQty,
         purchase_price: selectedSoItem.purchasePrice,
+        old_hpp: selectedSoItem.purchasePrice,
+        selling_price: selectedSoItem.purchasePrice,
+        old_selling_price: selectedSoItem.purchasePrice,
+        stock: 0,
+        sellTouched: false,
       },
     ]);
   }, [poType, selectedSoItem]);
@@ -155,9 +166,22 @@ export function PurchaseOrderFormDialog({
     }
   }, [poType]);
 
+  const applyLineCost = (
+    line: LineDraft,
+    patch: Partial<Pick<LineDraft, "ordered_qty" | "purchase_price" | "selling_price" | "sellTouched">>,
+  ): LineDraft => {
+    const next = { ...line, ...patch };
+    const avg = weightedAvgHpp(next.stock, next.old_hpp, next.ordered_qty, next.purchase_price);
+    if (!next.sellTouched) {
+      next.selling_price = suggestedSellingPrice(next.old_selling_price, next.old_hpp, avg);
+    }
+    return next;
+  };
+
   const addLine = () => {
     const p = products.find((x) => x.productId === addProductId);
     if (!p || lines.some((l) => l.product_id === p.productId)) return;
+    const avg = weightedAvgHpp(p.stock, p.purchasePrice, 1, p.purchasePrice);
     setLines((prev) => [
       ...prev,
       {
@@ -168,6 +192,11 @@ export function PurchaseOrderFormDialog({
         unit: p.unit,
         ordered_qty: 1,
         purchase_price: p.purchasePrice,
+        old_hpp: p.purchasePrice,
+        selling_price: suggestedSellingPrice(p.sellingPrice, p.purchasePrice, avg),
+        old_selling_price: p.sellingPrice,
+        stock: p.stock,
+        sellTouched: false,
       },
     ]);
     setAddProductId("");
@@ -206,7 +235,7 @@ export function PurchaseOrderFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Purchase Order Baru</DialogTitle>
         </DialogHeader>
@@ -389,15 +418,41 @@ export function PurchaseOrderFormDialog({
               <TableHeader>
                 <TableRow>
                   <TableHead>Produk</TableHead>
-                  <TableHead className="w-20 text-center">Qty</TableHead>
-                  <TableHead className="w-32 text-center">Harga Beli</TableHead>
+                  <TableHead className="w-16 text-center">Qty</TableHead>
+                  <TableHead className="w-24 text-right">Harga lama</TableHead>
+                  <TableHead className="w-28 text-center">Harga terkini</TableHead>
+                  <TableHead className="w-28 text-center">Harga jual</TableHead>
                   {!isIndent && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lines.map((line) => (
-                  <TableRow key={line.key}>
-                    <TableCell className="text-sm">{line.product_name}</TableCell>
+                {lines.map((line) => {
+                  const avgHpp = weightedAvgHpp(
+                    line.stock,
+                    line.old_hpp,
+                    line.ordered_qty,
+                    line.purchase_price,
+                  );
+                  const priceChanged =
+                    ownershipMode === "owned" && hppDiffers(line.old_hpp, line.purchase_price);
+                  const stockAfter = line.stock + line.ordered_qty;
+                  const oldMargin = line.old_selling_price - line.old_hpp;
+                  const newMargin = line.selling_price - avgHpp;
+                  return (
+                  <TableRow key={line.key} className="align-top">
+                    <TableCell className="text-sm">
+                      <div>{line.product_name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Stok {line.stock} → {stockAfter} {line.unit} · HPP rata-rata{" "}
+                        {avgHpp.toLocaleString("id-ID")}
+                      </div>
+                      {priceChanged ? (
+                        <div className="text-[11px] text-amber-700 mt-0.5">
+                          Margin {oldMargin.toLocaleString("id-ID")} →{" "}
+                          {newMargin.toLocaleString("id-ID")}/unit
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell>
                       <Input
                         type="number"
@@ -410,12 +465,17 @@ export function PurchaseOrderFormDialog({
                           setLines((prev) =>
                             prev.map((l) =>
                               l.key === line.key
-                                ? { ...l, ordered_qty: Math.max(1, Number(e.target.value) || 1) }
+                                ? applyLineCost(l, {
+                                    ordered_qty: Math.max(1, Number(e.target.value) || 1),
+                                  })
                                 : l,
                             ),
                           )
                         }
                       />
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                      {line.old_hpp.toLocaleString("id-ID")}
                     </TableCell>
                     <TableCell>
                       <Input
@@ -426,9 +486,30 @@ export function PurchaseOrderFormDialog({
                           setLines((prev) =>
                             prev.map((l) =>
                               l.key === line.key
+                                ? applyLineCost(l, {
+                                    purchase_price: parseIdrInput(e.target.value),
+                                  })
+                                : l,
+                            ),
+                          )
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        inputMode="numeric"
+                        className="h-8 text-center"
+                        readOnly={!priceChanged}
+                        disabled={!priceChanged}
+                        value={formatIdrInput(line.selling_price)}
+                        onChange={(e) =>
+                          setLines((prev) =>
+                            prev.map((l) =>
+                              l.key === line.key
                                 ? {
                                     ...l,
-                                    purchase_price: parseIdrInput(e.target.value),
+                                    selling_price: parseIdrInput(e.target.value),
+                                    sellTouched: true,
                                   }
                                 : l,
                             ),
@@ -450,13 +531,19 @@ export function PurchaseOrderFormDialog({
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
             <div className="flex justify-between px-3 py-2 text-sm border-t bg-muted/30">
-              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-muted-foreground">Subtotal beli</span>
               <CurrencyDisplay value={linesSubtotal} />
             </div>
+            <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">
+              Jika harga terkini beda dari harga lama, HPP stok gabungan memakai rata-rata
+              tertimbang dan harga jual menyesuaikan agar margin per unit tetap. Harga jual
+              bisa diubah. Berlaku saat barang diterima (GR).
+            </p>
           </div>
         )}
 

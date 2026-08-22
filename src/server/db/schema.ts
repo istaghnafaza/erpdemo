@@ -904,7 +904,9 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   receivedQty: integer("received_qty").notNull().default(0),
   purchasePrice: bigint("purchase_price", { mode: "number" }).notNull().default(0),
   subtotal: bigint("subtotal", { mode: "number" }).notNull().default(0),
-});
+  /** Harga jual cabang yang akan diterapkan saat GR (restock beda HPP). */
+  sellingPrice: bigint("selling_price", { mode: "number" }),
+
 
 export const goodsReceipts = pgTable(
   "goods_receipts",
