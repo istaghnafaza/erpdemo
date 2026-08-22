@@ -3,13 +3,13 @@
 // =============================================================================
 
 import { useCallback, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore, MOCK_TENANT_ID } from "@/stores/auth.store";
 import { isNeonBackend } from "@/lib/api/backend";
 import { isMockTenantId } from "@/lib/mock-session";
 import { useBranchStore } from "@/stores/branch.store";
 import { usePurchasingStore, poReadyForGoodsReceipt } from "@/stores/purchasing.store";
 import { getGoodsReceipts, createGoodsReceipt, getPurchaseOrders } from "@/lib/api/purchasing";
+import { invalidateAfterGoodsReceipt } from "@/lib/invalidate-pos-queries";
 import type { MockGrWithItems, MockPoWithItems } from "@/lib/mock-purchasing";
 
 export function useGoodsReceipt() {
@@ -20,7 +20,6 @@ export function useGoodsReceipt() {
   const pendingGrPoId = usePurchasingStore((s) => s.pendingGrPoId);
   const setPendingGrPoId = usePurchasingStore((s) => s.setPendingGrPoId);
   const receiveMockGoods = usePurchasingStore((s) => s.receiveMockGoods);
-  const queryClient = useQueryClient();
 
   const user = currentUser?.profile ?? null;
   const tenantId = currentUser?.tenantId ?? "";
@@ -102,6 +101,7 @@ export function useGoodsReceipt() {
         closeForm();
         await loadReceipts();
         await loadPendingPos();
+        await invalidateAfterGoodsReceipt(tenantId, branchId);
         return { success: true, grNumber: result.grNumber };
       }
       const grItems = selectedPo.items.map((item) => ({
@@ -131,9 +131,7 @@ export function useGoodsReceipt() {
       closeForm();
       await loadReceipts();
       await loadPendingPos();
-      await queryClient.invalidateQueries({ queryKey: ["payables", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["inventory", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["branch-products", tenantId] });
+      await invalidateAfterGoodsReceipt(tenantId, selectedPo.branch_id);
       return { success: true, grNumber: result.data?.gr_number };
     },
     [
@@ -145,7 +143,7 @@ export function useGoodsReceipt() {
       loadReceipts,
       loadPendingPos,
       tenantId,
-      queryClient,
+      branchId,
     ],
   );
 

@@ -392,6 +392,35 @@ async function createPayableFromGrInTx(
   const dueDate = due.toISOString().slice(0, 10);
   const isCash = po?.payTrigger === "on_receipt_cash";
 
+  const cashAcc = await tx.query.cashAccounts.findFirst({
+    where: and(eq(cashAccounts.tenantId, tenantId), eq(cashAccounts.branchId, gr.branchId)),
+  });
+
+  // COD/tunai lunas: kas + catatan di PO saja, jangan masuk daftar hutang supplier
+  if (isCash) {
+    if (cashAcc && totalAmount > 0) {
+      await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
+        type: "expense",
+        amount: totalAmount,
+        category: "Pembelian",
+        reference: `PO-${gr.grNumber}`,
+        description: `COD GR ${gr.grNumber}`,
+        user_id: userId,
+      });
+      if (discount > 0) {
+        await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
+          type: "income",
+          amount: discount,
+          category: PURCHASE_DISCOUNT_CATEGORY,
+          reference: `PO-${gr.grNumber}`,
+          description: `Diskon COD GR ${gr.grNumber}`,
+          user_id: userId,
+        });
+      }
+    }
+    return;
+  }
+
   await tx.insert(accountsPayable).values({
     tenantId,
     branchId: gr.branchId,
@@ -400,42 +429,16 @@ async function createPayableFromGrInTx(
     supplierName: supplier?.name ?? "Supplier",
     purchaseOrderId: gr.purchaseOrderId,
     totalAmount: netAmount,
-    paidAmount: isCash ? netAmount : 0,
+    paidAmount: 0,
     dueDate,
-    status: isCash ? "paid" : "unpaid",
+    status: "unpaid",
   });
 
-  if (!isCash && netAmount > 0 && supplier) {
+  if (netAmount > 0 && supplier) {
     await tx
       .update(suppliers)
       .set({ outstandingDebt: (supplier.outstandingDebt ?? 0) + netAmount })
       .where(eq(suppliers.id, supplier.id));
-  }
-
-  const cashAcc = await tx.query.cashAccounts.findFirst({
-    where: and(eq(cashAccounts.tenantId, tenantId), eq(cashAccounts.branchId, gr.branchId)),
-  });
-
-  if (isCash && cashAcc && totalAmount > 0) {
-    // Gross: expense list + income diskon → net kas = netAmount; diskon = keuntungan
-    await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
-      type: "expense",
-      amount: totalAmount,
-      category: "Pembelian",
-      reference: invoiceNumber,
-      description: `COD GR ${gr.grNumber}`,
-      user_id: userId,
-    });
-    if (discount > 0) {
-      await insertCashTransactionInTx(tx, tenantId, gr.branchId, cashAcc.id, {
-        type: "income",
-        amount: discount,
-        category: PURCHASE_DISCOUNT_CATEGORY,
-        reference: invoiceNumber,
-        description: `Diskon COD GR ${gr.grNumber}`,
-        user_id: userId,
-      });
-    }
   }
 }
 

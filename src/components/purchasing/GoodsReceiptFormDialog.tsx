@@ -110,20 +110,17 @@ export function GoodsReceiptFormDialog({
                     </TableCell>
                     <TableCell>
                       <Input
-                        type="number"
+                        inputMode="numeric"
                         min={0}
-                        max={remaining}
-                        className="h-8 text-center"
+                        className="h-8 min-w-[5.5rem] w-full px-2 text-center tabular-nums"
                         value={qties[item.id] ?? 0}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const n = Number(String(e.target.value).replace(/\D/g, "")) || 0;
                           setQties((p) => ({
                             ...p,
-                            [item.id]: Math.min(
-                              remaining,
-                              Math.max(0, Number(e.target.value) || 0),
-                            ),
-                          }))
-                        }
+                            [item.id]: Math.min(remaining, Math.max(0, n)),
+                          }));
+                        }}
                       />
                     </TableCell>
                   </TableRow>

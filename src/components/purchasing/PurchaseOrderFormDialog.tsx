@@ -285,20 +285,24 @@ export function PurchaseOrderFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Cara bayar</Label>
-            <Select
-              value={payTrigger}
-              onValueChange={(v) => setPayTrigger(v as DbPoPayTrigger)}
-              disabled={ownershipMode === "consignment"}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="on_receipt_credit">Tempo (hutang saat terima)</SelectItem>
-                <SelectItem value="on_receipt_cash">COD (bayar saat terima)</SelectItem>
-                <SelectItem value="on_sale">Saat terjual (konsinyasi)</SelectItem>
-              </SelectContent>
-            </Select>
+            {ownershipMode === "consignment" ? (
+              <p className="text-sm rounded-md border bg-muted/40 px-3 py-2 text-muted-foreground">
+                Saat terjual — hutang muncul setelah barang laku di kasir
+              </p>
+            ) : (
+              <Select
+                value={payTrigger === "on_sale" ? "on_receipt_credit" : payTrigger}
+                onValueChange={(v) => setPayTrigger(v as DbPoPayTrigger)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on_receipt_credit">Tempo (hutang saat terima)</SelectItem>
+                  <SelectItem value="on_receipt_cash">COD / tunai (lunas saat terima)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
@@ -323,11 +327,11 @@ export function PurchaseOrderFormDialog({
             <div className="space-y-1.5">
               <Label>Rebate setelah terjual (qty)</Label>
               <Input
-                type="number"
-                min={1}
+                inputMode="numeric"
+                className="h-8 min-w-[5.5rem] px-2 text-center tabular-nums"
                 placeholder="mis. 100"
                 value={rebateAfterQty}
-                onChange={(e) => setRebateAfterQty(e.target.value)}
+                onChange={(e) => setRebateAfterQty(e.target.value.replace(/\D/g, ""))}
               />
             </div>
             <div className="space-y-1.5">
@@ -418,7 +422,7 @@ export function PurchaseOrderFormDialog({
               <TableHeader>
                 <TableRow>
                   <TableHead>Produk</TableHead>
-                  <TableHead className="w-16 text-center">Qty</TableHead>
+                  <TableHead className="w-28 text-center">Qty</TableHead>
                   <TableHead className="w-24 text-right">Harga lama</TableHead>
                   <TableHead className="w-28 text-center">Harga terkini</TableHead>
                   <TableHead className="w-28 text-center">Harga jual</TableHead>
@@ -455,23 +459,22 @@ export function PurchaseOrderFormDialog({
                     </TableCell>
                     <TableCell>
                       <Input
-                        type="number"
-                        min={1}
-                        max={isIndent ? selectedSoItem?.remainingQty : undefined}
-                        className="h-8 text-center"
-                        value={line.ordered_qty}
+                        inputMode="numeric"
+                        className="h-8 min-w-[5.5rem] w-full px-2 text-center tabular-nums"
+                        value={line.ordered_qty || ""}
                         disabled={isIndent}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const n = parseIdrInput(e.target.value);
                           setLines((prev) =>
                             prev.map((l) =>
                               l.key === line.key
                                 ? applyLineCost(l, {
-                                    ordered_qty: Math.max(1, Number(e.target.value) || 1),
+                                    ordered_qty: Math.max(1, n || 1),
                                   })
                                 : l,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       />
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground tabular-nums">

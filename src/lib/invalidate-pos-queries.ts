@@ -32,6 +32,30 @@ export async function invalidatePosAfterCheckout(
   }
 }
 
+export async function invalidateAfterGoodsReceipt(
+  tenantId: string,
+  branchId: string,
+): Promise<void> {
+  try {
+    const qc = getQueryClient();
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pos-catalog", tenantId] }),
+      qc.invalidateQueries({ queryKey: ["inventory-catalog", tenantId] }),
+      qc.invalidateQueries({ queryKey: queryKeys.products(tenantId) }),
+      qc.invalidateQueries({ queryKey: queryKeys.purchaseOrders(tenantId, branchId) }),
+      qc.invalidateQueries({ queryKey: ["payables", tenantId] }),
+      qc.invalidateQueries({ queryKey: queryKeys.suppliers(tenantId, true) }),
+      qc.invalidateQueries({ queryKey: queryKeys.suppliers(tenantId, false) }),
+    ]);
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ["pos-catalog", tenantId] }),
+      qc.refetchQueries({ queryKey: ["inventory-catalog", tenantId] }),
+    ]);
+  } catch {
+    // query client only in browser
+  }
+}
+
 export async function invalidatePosCustomers(tenantId: string): Promise<void> {
   try {
     const qc = getQueryClient();

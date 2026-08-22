@@ -99,10 +99,11 @@ export function usePayablesPage() {
     [neonApQuery.data],
   );
 
-  const scopedPayables = useMemo(
-    () => (isMockTenant ? filterByBranchIds(payables, branchIds) : neonPayables),
-    [isMockTenant, payables, branchIds, neonPayables],
-  );
+  const scopedPayables = useMemo(() => {
+    const rows = isMockTenant ? filterByBranchIds(payables, branchIds) : neonPayables;
+    // Hutang = sisa belum lunas. COD/tunai tidak masuk daftar.
+    return rows.filter((p) => remainingAmount(p.amount, p.paid) > 0);
+  }, [isMockTenant, payables, branchIds, neonPayables]);
 
   const scopedPayments = useMemo(
     () => filterByBranchIds(payments, branchIds),
