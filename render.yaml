@@ -3,6 +3,7 @@
 # Isi env yang sync: false dari hasil: npm run render:env:staging
 #
 # Plan Starter (~USD 7) = 24 jam. Free (jika masih ada) akan tidur saat idle.
+# VITE_* di envVars ikut jadi Docker build ARG (Render tidak punya field dockerBuildArgs).
 
 services:
   - type: web
@@ -15,11 +16,6 @@ services:
     dockerContext: .
     healthCheckPath: /pwa-icon.svg
     autoDeploy: true
-    dockerBuildArgs:
-      VITE_DATA_BACKEND: neon
-      VITE_APP_NAME: SEPS Staging
-      VITE_APP_ENV: staging
-      VITE_PUBLIC_APP_URL: https://staging.seps.fazagroup.id
     envVars:
       - key: NODE_ENV
         value: production
