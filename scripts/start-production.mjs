@@ -58,10 +58,10 @@ if (!hasDatabase) {
     "[SEPS] DATABASE_URL tidak ada di runtime container.",
   );
   console.error(
-    "[SEPS] Railway: Variables disimpan belum otomatis masuk container. Di canvas project, klik banner ungu 'Staged changes' → Deploy (BUKAN Redeploy dari menu deployment).",
+    "[SEPS] Railway/Render: DATABASE_URL harus ada di Environment service (value tanpa tanda kutip), lalu Redeploy.",
   );
   console.error(
-    "[SEPS] Pastikan Variables ada di SERVICE erpdemo (domain seps.fazagroup.id), value tanpa tanda kutip.",
+    "[SEPS] Jangan set PORT di Render — platform yang mengisi. Host 0.0.0.0.",
   );
 }
 

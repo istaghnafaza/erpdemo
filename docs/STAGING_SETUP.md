@@ -72,7 +72,30 @@ Workflow: `feat/*` → merge **`staging`** → uji online → merge **`main`**.
 
 ---
 
-## Langkah 3 — Railway: service staging
+## Tanpa Railway — Render (staging 24 jam)
+
+Railway Hobby terkendala pembayaran. Alternatif: **Render** (Docker, region Singapore). Starter ~USD 7/bulan, 24 jam. Paket Free (jika masih ditawarkan) **tidur** saat idle — kasir jadi lambat.
+
+### Deploy
+
+1. Push branch `staging` ke GitHub.
+2. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → repo ini (`render.yaml`), **atau** **Web Service** → Docker → branch `staging` → region **Singapore**.
+3. Lokal:
+
+```bash
+npm run render:env:staging
+```
+
+4. Render → Environment → tempel isi **`.env.render.staging.local`**. **Jangan** isi `PORT`.
+5. Deploy. URL sementara: `https://seps-staging.onrender.com` (nama bisa berbeda).
+6. Samakan `AUTH_URL` dan `VITE_PUBLIC_APP_URL` dengan URL itu (atau domain custom), lalu **Manual Deploy** (karena `VITE_*` di-build ke image).
+7. Custom Domain → `staging.seps.fazagroup.id` → CNAME di Hostinger ke target Render.
+
+Neon tetap **branch staging**, bukan production.
+
+---
+
+## Langkah 3 — Railway: service staging (cadangan)
 
 1. Railway → project SEPS → **+ New Service** → GitHub `erpdemo`
 2. Settings → **Branch:** `staging`

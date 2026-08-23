@@ -1,0 +1,57 @@
+# SEPS staging di Render (pengganti Railway Hobby).
+# Dashboard: New Blueprint → pilih repo, atau New Web Service + Docker.
+# Isi env yang sync: false dari hasil: npm run render:env:staging
+#
+# Plan Starter (~USD 7) = 24 jam. Free (jika masih ada) akan tidur saat idle.
+
+services:
+  - type: web
+    name: seps-staging
+    runtime: docker
+    plan: starter
+    region: singapore
+    branch: staging
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /pwa-icon.svg
+    autoDeploy: true
+    dockerBuildArgs:
+      VITE_DATA_BACKEND: neon
+      VITE_APP_NAME: SEPS Staging
+      VITE_APP_ENV: staging
+      VITE_PUBLIC_APP_URL: https://staging.seps.fazagroup.id
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: "0.0.0.0"
+      - key: NITRO_HOST
+        value: "0.0.0.0"
+      - key: VITE_DATA_BACKEND
+        value: neon
+      - key: VITE_APP_NAME
+        value: SEPS Staging
+      - key: VITE_APP_ENV
+        value: staging
+      - key: VITE_PUBLIC_APP_URL
+        value: https://staging.seps.fazagroup.id
+      - key: AUTH_URL
+        value: https://staging.seps.fazagroup.id
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MIDTRANS_SERVER_KEY
+        sync: false
+      - key: MIDTRANS_CLIENT_KEY
+        sync: false
+      - key: MIDTRANS_IS_PRODUCTION
+        value: "false"

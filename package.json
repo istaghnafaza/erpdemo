@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev",
+    "tunnel": "cloudflared tunnel --url http://localhost:8080",
     "build": "node scripts/patch-nf3-nft.mjs && vite build && node scripts/copy-pwa-sw.mjs",
     "start": "node .output/server/index.mjs",
     "build:dev": "vite build --mode development",
@@ -38,7 +39,8 @@
     "neon:housekeeping:sessions": "node scripts/close-orphan-cashier-sessions.mjs",
     "neon:plan:renew-check": "npx tsx scripts/plan-renew-check.ts",
     "railway:env": "node scripts/print-railway-env.mjs",
-    "railway:env:staging": "node scripts/print-railway-staging-env.mjs"
+    "railway:env:staging": "node scripts/print-railway-staging-env.mjs",
+    "render:env:staging": "node scripts/print-render-staging-env.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
