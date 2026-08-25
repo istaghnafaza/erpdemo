@@ -272,7 +272,7 @@ export function usePurchaseOrders() {
           received_qty: 0,
           purchase_price: i.purchase_price,
           subtotal: i.ordered_qty * i.purchase_price,
-          selling_price: i.selling_price ?? null,
+          selling_price: null,
         })),
       );
       setActionLoading(false);

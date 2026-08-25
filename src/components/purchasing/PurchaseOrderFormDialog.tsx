@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
-import { hppDiffers, suggestedSellingPrice, weightedAvgHpp } from "@/lib/po-costing";
+import { hppDiffers, weightedAvgHpp } from "@/lib/po-costing";
 import type { Supplier, DbPoType, DbPoOwnership, DbPoPayTrigger } from "@/types/database";
 import type { IndentSoItemOption, PoProductOption } from "@/hooks/usePurchaseOrders";
 
@@ -35,9 +35,7 @@ interface LineDraft {
   purchase_price: number;
   old_hpp: number;
   selling_price: number;
-  old_selling_price: number;
   stock: number;
-  sellTouched: boolean;
 }
 
 function formatIdrInput(n: number): string {
@@ -152,9 +150,7 @@ export function PurchaseOrderFormDialog({
         purchase_price: selectedSoItem.purchasePrice,
         old_hpp: selectedSoItem.purchasePrice,
         selling_price: selectedSoItem.purchasePrice,
-        old_selling_price: selectedSoItem.purchasePrice,
         stock: 0,
-        sellTouched: false,
       },
     ]);
   }, [poType, selectedSoItem]);
@@ -168,20 +164,12 @@ export function PurchaseOrderFormDialog({
 
   const applyLineCost = (
     line: LineDraft,
-    patch: Partial<Pick<LineDraft, "ordered_qty" | "purchase_price" | "selling_price" | "sellTouched">>,
-  ): LineDraft => {
-    const next = { ...line, ...patch };
-    const avg = weightedAvgHpp(next.stock, next.old_hpp, next.ordered_qty, next.purchase_price);
-    if (!next.sellTouched) {
-      next.selling_price = suggestedSellingPrice(next.old_selling_price, next.old_hpp, avg);
-    }
-    return next;
-  };
+    patch: Partial<Pick<LineDraft, "ordered_qty" | "purchase_price">>,
+  ): LineDraft => ({ ...line, ...patch });
 
   const addLine = () => {
     const p = products.find((x) => x.productId === addProductId);
     if (!p || lines.some((l) => l.product_id === p.productId)) return;
-    const avg = weightedAvgHpp(p.stock, p.purchasePrice, 1, p.purchasePrice);
     setLines((prev) => [
       ...prev,
       {
@@ -193,10 +181,8 @@ export function PurchaseOrderFormDialog({
         ordered_qty: 1,
         purchase_price: p.purchasePrice,
         old_hpp: p.purchasePrice,
-        selling_price: suggestedSellingPrice(p.sellingPrice, p.purchasePrice, avg),
-        old_selling_price: p.sellingPrice,
+        selling_price: p.sellingPrice,
         stock: p.stock,
-        sellTouched: false,
       },
     ]);
     setAddProductId("");
@@ -425,7 +411,7 @@ export function PurchaseOrderFormDialog({
                   <TableHead className="w-28 text-center">Qty</TableHead>
                   <TableHead className="w-24 text-right">Harga lama</TableHead>
                   <TableHead className="w-28 text-center">Harga terkini</TableHead>
-                  <TableHead className="w-28 text-center">Harga jual</TableHead>
+                  <TableHead className="w-28 text-right">Harga jual</TableHead>
                   {!isIndent && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
@@ -440,8 +426,8 @@ export function PurchaseOrderFormDialog({
                   const priceChanged =
                     ownershipMode === "owned" && hppDiffers(line.old_hpp, line.purchase_price);
                   const stockAfter = line.stock + line.ordered_qty;
-                  const oldMargin = line.old_selling_price - line.old_hpp;
-                  const newMargin = line.selling_price - avgHpp;
+                  const marginNow = line.selling_price - line.old_hpp;
+                  const marginIfHppAvg = line.selling_price - avgHpp;
                   return (
                   <TableRow key={line.key} className="align-top">
                     <TableCell className="text-sm">
@@ -451,9 +437,13 @@ export function PurchaseOrderFormDialog({
                         {avgHpp.toLocaleString("id-ID")}
                       </div>
                       {priceChanged ? (
-                        <div className="text-[11px] text-amber-700 mt-0.5">
-                          Margin {oldMargin.toLocaleString("id-ID")} →{" "}
-                          {newMargin.toLocaleString("id-ID")}/unit
+                        <div className="text-[11px] text-amber-800 mt-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-1">
+                          Harga PO berubah {line.old_hpp.toLocaleString("id-ID")} →{" "}
+                          {line.purchase_price.toLocaleString("id-ID")}. Harga jual tetap{" "}
+                          {line.selling_price.toLocaleString("id-ID")} (margin{" "}
+                          {marginNow.toLocaleString("id-ID")} →{" "}
+                          {marginIfHppAvg.toLocaleString("id-ID")}/unit setelah terima). Ubah
+                          harga jual di Master Barang / Inventory.
                         </div>
                       ) : null}
                     </TableCell>
@@ -498,27 +488,8 @@ export function PurchaseOrderFormDialog({
                         }
                       />
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        inputMode="numeric"
-                        className="h-8 text-center"
-                        readOnly={!priceChanged}
-                        disabled={!priceChanged}
-                        value={formatIdrInput(line.selling_price)}
-                        onChange={(e) =>
-                          setLines((prev) =>
-                            prev.map((l) =>
-                              l.key === line.key
-                                ? {
-                                    ...l,
-                                    selling_price: parseIdrInput(e.target.value),
-                                    sellTouched: true,
-                                  }
-                                : l,
-                            ),
-                          )
-                        }
-                      />
+                    <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                      {formatIdrInput(line.selling_price) || "—"}
                     </TableCell>
                     {!isIndent && (
                       <TableCell>
@@ -543,9 +514,9 @@ export function PurchaseOrderFormDialog({
               <CurrencyDisplay value={linesSubtotal} />
             </div>
             <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">
-              Jika harga terkini beda dari harga lama, HPP stok gabungan memakai rata-rata
-              tertimbang dan harga jual menyesuaikan agar margin per unit tetap. Harga jual
-              bisa diubah. Berlaku saat barang diterima (GR).
+              Harga jual tidak diubah dari PO — atur di Master Barang. Jika harga beli PO
+              beda dari HPP lama, muncul peringatan; setelah GR, HPP stok memakai rata-rata
+              tertimbang.
             </p>
           </div>
         )}
