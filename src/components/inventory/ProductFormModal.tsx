@@ -28,6 +28,7 @@ import { useProductAttributesStore } from "@/stores/product-attributes.store";
 import type { SellUnitInput } from "@/lib/product-sell-units";
 import type { ProductAttributeSelections } from "@/types/product-attributes";
 import type { MockProductOverride } from "@/stores/inventory.store";
+import { PoPriceChangeWarning } from "@/components/inventory/PoPriceChangeWarning";
 
 interface ProductFormModalProps {
   open: boolean;
@@ -252,6 +253,16 @@ export function ProductFormModal({
               />
             </div>
           </div>
+
+          {editing ? (
+            <PoPriceChangeWarning
+              hpp={Number(purchasePrice) || 0}
+              lastPoPrice={defaults?.lastPoPrice}
+              sellingPrice={Number(sellingPrice) || 0}
+              poNumber={defaults?.lastPoNumber}
+              showAmounts={canEditPurchasePrice}
+            />
+          ) : null}
 
           {!editing && (
             <div className="grid grid-cols-2 gap-3">

@@ -80,6 +80,45 @@ if (midtransServer && midtransClient) {
   );
 }
 
+const planBcaAccount = env.get("PLAN_BCA_ACCOUNT_NUMBER")?.trim();
+if (planBcaAccount) {
+  lines.push(
+    `PLAN_BCA_BANK_NAME=${env.get("PLAN_BCA_BANK_NAME")?.trim() || "BCA"}`,
+    `PLAN_BCA_ACCOUNT_NUMBER=${planBcaAccount}`,
+    `PLAN_BCA_ACCOUNT_NAME=${env.get("PLAN_BCA_ACCOUNT_NAME")?.trim() || "SEPS / Faza Group"}`,
+  );
+  const qrisHint = env.get("PLAN_BCA_QRIS_HINT")?.trim();
+  if (qrisHint) lines.push(`PLAN_BCA_QRIS_HINT=${qrisHint}`);
+  const bcaSecret = env.get("PLAN_BCA_WEBHOOK_SECRET")?.trim();
+  if (bcaSecret) lines.push(`PLAN_BCA_WEBHOOK_SECRET=${bcaSecret}`);
+}
+
+const geminiKey = env.get("GEMINI_API_KEY")?.trim();
+if (geminiKey) {
+  lines.push(`GEMINI_API_KEY=${geminiKey}`);
+  const geminiModel = env.get("GEMINI_OCR_MODEL")?.trim();
+  if (geminiModel) lines.push(`GEMINI_OCR_MODEL=${geminiModel}`);
+}
+
+const resendKey = env.get("RESEND_API_KEY")?.trim();
+if (resendKey) {
+  lines.push(`RESEND_API_KEY=${resendKey}`);
+  const from = env.get("RESEND_FROM_EMAIL")?.trim();
+  if (from) lines.push(`RESEND_FROM_EMAIL=${from}`);
+}
+
+const fonnte = env.get("FONNTE_TOKEN")?.trim();
+if (fonnte) lines.push(`FONNTE_TOKEN=${fonnte}`);
+
+const tgToken = env.get("PLAN_OPS_TELEGRAM_BOT_TOKEN")?.trim();
+const tgChat = env.get("PLAN_OPS_TELEGRAM_CHAT_ID")?.trim();
+if (tgToken && tgChat) {
+  lines.push(
+    `PLAN_OPS_TELEGRAM_BOT_TOKEN=${tgToken}`,
+    `PLAN_OPS_TELEGRAM_CHAT_ID=${tgChat}`,
+  );
+}
+
 writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
 
 console.log(`[railway:env] OK — salin SEMUA baris ke Railway Variables (Raw Editor):`);

@@ -62,6 +62,7 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
 
 export const planInvoiceStatusEnum = pgEnum("plan_invoice_status", [
   "pending",
+  "review",
   "paid",
   "failed",
   "expired",
@@ -91,11 +92,19 @@ export const planInvoices = pgTable("plan_invoices", {
     .notNull()
     .references(() => tenants.id, { onDelete: "cascade" }),
   amount: bigint("amount", { mode: "number" }).notNull(),
+  /** Nominal unik untuk transfer (amount + suffix). */
+  payAmount: bigint("pay_amount", { mode: "number" }),
   plan: tenantPlanEnum("plan").notNull(),
   billingCycle: billingCycleEnum("billing_cycle").notNull().default("monthly"),
   status: planInvoiceStatusEnum("status").notNull().default("pending"),
+  paymentMethod: text("payment_method").notNull().default("midtrans"),
+  paymentReference: text("payment_reference"),
+  verificationStatus: text("verification_status").notNull().default("none"),
   midtransOrderId: text("midtrans_order_id").notNull().unique(),
   paidAt: timestamp("paid_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  proofPayload: jsonb("proof_payload"),
+  matchDetails: jsonb("match_details"),
   rawPayload: jsonb("raw_payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

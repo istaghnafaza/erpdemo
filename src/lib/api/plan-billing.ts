@@ -1,7 +1,14 @@
 import { neonCall } from "@/lib/api/backend";
 import {
+  neonApprovePlanTransferReview,
   neonCreatePlanCheckout,
+  neonCreatePlanTransferCheckout,
+  neonGetPlanTransferStatus,
+  neonIngestBcaMutasiPaste,
+  neonListPlanTransferReview,
   neonMarkPlanInvoicePaidManual,
+  neonRejectPlanTransferReview,
+  neonSubmitPlanPaymentProof,
 } from "@/lib/api/neon/plan-billing-fns";
 import type { BillingCycle } from "@/lib/plan-config";
 import type { ApiResponse } from "@/types/app";
@@ -14,6 +21,35 @@ export interface PlanCheckoutSession {
   amount: number;
   plan: string;
   billingCycle: BillingCycle;
+}
+
+export interface PlanTransferCheckoutSession {
+  orderId: string;
+  amount: number;
+  payAmount: number;
+  paymentReference: string;
+  plan: string;
+  billingCycle: BillingCycle;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  qrisHint: string | null;
+  expiresAt: string;
+}
+
+export interface PlanTransferReviewRow {
+  orderId: string;
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  billingCycle: BillingCycle;
+  payAmount: number;
+  paymentReference: string;
+  status: string;
+  verificationStatus: string;
+  createdAt: string;
+  matchDetails: Record<string, unknown> | null;
+  hasProof: boolean;
 }
 
 export async function createPlanCheckout(input: {
@@ -32,6 +68,87 @@ export async function createPlanCheckout(input: {
   );
   if (result.error) return { data: null, error: result.error };
   if (!result.data) return { data: null, error: "Gagal membuat checkout" };
+  return { data: result.data, error: null };
+}
+
+export async function createPlanTransferCheckout(input: {
+  tenantId: string;
+  plan: string;
+  billingCycle?: BillingCycle;
+}): Promise<ApiResponse<PlanTransferCheckoutSession>> {
+  const result = await neonCall(() =>
+    neonCreatePlanTransferCheckout({
+      data: {
+        tenantId: input.tenantId,
+        plan: input.plan,
+        billingCycle: input.billingCycle,
+      },
+    }),
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: "Gagal membuat invoice transfer" };
+  return { data: result.data, error: null };
+}
+
+export async function submitPlanPaymentProof(input: {
+  tenantId: string;
+  orderId: string;
+  imageBase64: string;
+  mimeType: string;
+}): Promise<ApiResponse<{ action: string }>> {
+  const result = await neonCall(() =>
+    neonSubmitPlanPaymentProof({ data: input }),
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: "Gagal mengunggah bukti" };
+  return { data: { action: result.data.action }, error: null };
+}
+
+export async function getPlanTransferStatus(input: {
+  tenantId: string;
+  orderId: string;
+}): Promise<ApiResponse<{ status: string; verificationStatus: string; paid: boolean }>> {
+  const result = await neonCall(() => neonGetPlanTransferStatus({ data: input }));
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: "Status tidak ditemukan" };
+  return { data: result.data, error: null };
+}
+
+export async function listPlanTransferReview(): Promise<ApiResponse<PlanTransferReviewRow[]>> {
+  const result = await neonCall(() => neonListPlanTransferReview());
+  if (result.error) return { data: null, error: result.error };
+  return { data: result.data ?? [], error: null };
+}
+
+export async function approvePlanTransferReview(
+  orderId: string,
+): Promise<ApiResponse<{ tenantId: string; plan: string }>> {
+  const result = await neonCall(() => neonApprovePlanTransferReview({ data: { orderId } }));
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: "Gagal menyetujui" };
+  return { data: result.data, error: null };
+}
+
+export async function rejectPlanTransferReview(
+  orderId: string,
+  reason?: string,
+): Promise<ApiResponse<{ ok: boolean }>> {
+  const result = await neonCall(() =>
+    neonRejectPlanTransferReview({ data: { orderId, reason } }),
+  );
+  if (result.error) return { data: null, error: result.error };
+  return { data: { ok: true }, error: null };
+}
+
+export async function ingestBcaMutasiPaste(input: {
+  body: string;
+  subject?: string;
+}): Promise<
+  ApiResponse<{ matched: string[]; activated: string[]; review: string[] }>
+> {
+  const result = await neonCall(() => neonIngestBcaMutasiPaste({ data: input }));
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data) return { data: null, error: "Gagal memproses mutasi" };
   return { data: result.data, error: null };
 }
 

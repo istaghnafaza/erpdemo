@@ -25,6 +25,8 @@ import {
   verifyMidtransSignature,
 } from "@/server/services/midtrans";
 import { sendPlanOpsTelegram } from "@/server/services/plan-ops-alert";
+import { activatePaidPlanRecord } from "@/server/services/plan-billing-core";
+import { notifyPlanActivated } from "@/server/services/plan-activation-notify";
 
 export interface PlanCheckoutResult {
   orderId: string;
@@ -121,60 +123,7 @@ async function activatePaidPlan(params: {
   amount: number;
   rawPayload: unknown;
 }): Promise<void> {
-  const db = getWriteDb();
-  const now = new Date();
-  const periodEnd = addDays(now, getPlanPeriodDays(params.billingCycle));
-
-  await db
-    .update(planInvoices)
-    .set({
-      status: "paid",
-      paidAt: now,
-      rawPayload: params.rawPayload as Record<string, unknown>,
-      updatedAt: now,
-    })
-    .where(eq(planInvoices.midtransOrderId, params.orderId));
-
-  const existing = await db.query.tenantSubscriptions.findFirst({
-    where: eq(tenantSubscriptions.tenantId, params.tenantId),
-  });
-
-  if (existing) {
-    await db
-      .update(tenantSubscriptions)
-      .set({
-        plan: params.plan,
-        status: "active",
-        billingCycle: params.billingCycle,
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        midtransOrderId: params.orderId,
-        updatedAt: now,
-      })
-      .where(eq(tenantSubscriptions.tenantId, params.tenantId));
-  } else {
-    await db.insert(tenantSubscriptions).values({
-      tenantId: params.tenantId,
-      plan: params.plan,
-      status: "active",
-      billingCycle: params.billingCycle,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      midtransOrderId: params.orderId,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  await db
-    .update(tenants)
-    .set({
-      plan: params.plan,
-      planRenewsAt: periodEnd,
-      trialEndsAt: null,
-      updatedAt: now,
-    })
-    .where(eq(tenants.id, params.tenantId));
+  await activatePaidPlanRecord(params);
 }
 
 export async function handleMidtransNotification(
@@ -298,6 +247,21 @@ export async function markPlanInvoicePaidManual(input: {
     amount: invoice.amount,
     rawPayload: { manual: true, at: new Date().toISOString() },
   });
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, invoice.tenantId),
+  });
+  if (tenant && isPaidPlan(invoice.plan)) {
+    const periodEnd = addDays(new Date(), getPlanPeriodDays(invoice.billingCycle));
+    await notifyPlanActivated({
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      ownerEmail: tenant.ownerEmail,
+      ownerPhone: tenant.phone,
+      plan: invoice.plan,
+      periodEnd,
+    });
+  }
 
   return { tenantId: invoice.tenantId, plan: invoice.plan };
 }

@@ -13,6 +13,7 @@ import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { DateDisplay } from "@/components/ui/date-display";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PoPriceChangeWarning } from "@/components/inventory/PoPriceChangeWarning";
 import { cn } from "@/lib/utils";
 import type { InventoryProductRow } from "@/hooks/useInventoryProducts";
 import type { StockMovement } from "@/types/database";
@@ -89,6 +90,15 @@ export function ProductDetailDrawer({
               <InfoTile label="Lokasi Gudang" value={product.warehouseLocation || "—"} />
               <InfoTile label="Satuan" value={product.unit} />
             </div>
+            {product.stockOwnership !== "consignment" ? (
+              <PoPriceChangeWarning
+                hpp={product.purchasePrice}
+                lastPoPrice={product.lastPoPrice}
+                sellingPrice={product.sellingPrice}
+                poNumber={product.lastPoNumber}
+                showAmounts={canSeePurchasePrice}
+              />
+            ) : null}
             <div>
               <StatusBadge
                 status={

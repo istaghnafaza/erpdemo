@@ -19,6 +19,7 @@ import { ProductImportDialog } from "@/components/inventory/ProductImportDialog"
 import { InventoryInputGuideCard } from "@/components/inventory/InventoryInputGuideCard";
 import { SoftOpenModeBanner } from "@/components/inventory/SoftOpenModeBanner";
 import { useInventoryProducts } from "@/hooks/useInventoryProducts";
+import { shouldWarnPoPriceChange } from "@/components/inventory/PoPriceChangeWarning";
 import { requireAuth, requireRole } from "@/routes/$tenantSlug";
 import { toast } from "sonner";
 
@@ -80,6 +81,12 @@ function ProductsPage() {
 
   const importBranchId = activeBranch?.id ?? branchList[0]?.id ?? "";
   const importBranchName = activeBranch?.name ?? branchList[0]?.name ?? "Cabang";
+
+  const poPriceWarningCount = filteredRows.filter(
+    (r) =>
+      r.stockOwnership !== "consignment" &&
+      shouldWarnPoPriceChange(r.purchasePrice, r.lastPoPrice),
+  ).length;
 
   if (!user) return null;
 
@@ -147,6 +154,13 @@ function ProductsPage() {
         <div className="space-y-3 mb-4">
           <SoftOpenModeBanner canEdit={canEditProduct} />
           <InventoryInputGuideCard productCount={productCount} />
+        </div>
+      ) : null}
+
+      {poPriceWarningCount > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-4">
+          {poPriceWarningCount} produk punya harga PO terbaru yang berbeda dari HPP. Harga jual
+          tidak diubah otomatis — sesuaikan di Master Barang bila perlu.
         </div>
       ) : null}
 

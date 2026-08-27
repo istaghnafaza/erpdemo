@@ -31,6 +31,8 @@ export interface MockProductOverride {
   stockUnit?: string;
   purchasePrice?: number;
   sellingPrice?: number;
+  lastPoPrice?: number | null;
+  lastPoNumber?: string | null;
   reorderPoint?: number;
   warehouseLocation?: string;
   initialStock?: number;

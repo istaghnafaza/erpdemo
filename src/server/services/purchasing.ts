@@ -287,6 +287,9 @@ export async function createPurchaseOrderRecord(
     }
 
     return toPurchaseOrder(poRow);
+  }).then(async (created) => {
+    await invalidateBranchProducts(tenantId, po.branch_id);
+    return created;
   });
 }
 

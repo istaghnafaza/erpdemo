@@ -42,6 +42,7 @@ import { Route as TenantSlugDeliveriesIndexRouteImport } from './routes/$tenantS
 import { Route as TenantSlugCustomersIndexRouteImport } from './routes/$tenantSlug/customers/index'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth/google/callback'
 import { Route as ApiPrintThermerRouteImport } from './routes/api/print/thermer'
+import { Route as ApiPlanBillingBcaInboundRouteImport } from './routes/api/plan-billing/bca-inbound'
 import { Route as ApiMidtransNotificationRouteImport } from './routes/api/midtrans/notification'
 import { Route as TenantSlugShopOrdersRouteImport } from './routes/$tenantSlug/shop/orders'
 import { Route as TenantSlugSettingsPricingRouteImport } from './routes/$tenantSlug/settings/pricing'
@@ -234,6 +235,12 @@ const ApiPrintThermerRoute = ApiPrintThermerRouteImport.update({
   path: '/api/print/thermer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPlanBillingBcaInboundRoute =
+  ApiPlanBillingBcaInboundRouteImport.update({
+    id: '/api/plan-billing/bca-inbound',
+    path: '/api/plan-billing/bca-inbound',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMidtransNotificationRoute = ApiMidtransNotificationRouteImport.update({
   id: '/api/midtrans/notification',
   path: '/api/midtrans/notification',
@@ -398,6 +405,7 @@ export interface FileRoutesByFullPath {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/plan-billing/bca-inbound': typeof ApiPlanBillingBcaInboundRoute
   '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
@@ -453,6 +461,7 @@ export interface FileRoutesByTo {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/plan-billing/bca-inbound': typeof ApiPlanBillingBcaInboundRoute
   '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers': typeof TenantSlugCustomersIndexRoute
@@ -510,6 +519,7 @@ export interface FileRoutesById {
   '/$tenantSlug/settings/pricing': typeof TenantSlugSettingsPricingRoute
   '/$tenantSlug/shop/orders': typeof TenantSlugShopOrdersRoute
   '/api/midtrans/notification': typeof ApiMidtransNotificationRoute
+  '/api/plan-billing/bca-inbound': typeof ApiPlanBillingBcaInboundRoute
   '/api/print/thermer': typeof ApiPrintThermerRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
   '/$tenantSlug/customers/': typeof TenantSlugCustomersIndexRoute
@@ -568,6 +578,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/plan-billing/bca-inbound'
     | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
@@ -623,6 +634,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/plan-billing/bca-inbound'
     | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers'
@@ -679,6 +691,7 @@ export interface FileRouteTypes {
     | '/$tenantSlug/settings/pricing'
     | '/$tenantSlug/shop/orders'
     | '/api/midtrans/notification'
+    | '/api/plan-billing/bca-inbound'
     | '/api/print/thermer'
     | '/auth/google/callback'
     | '/$tenantSlug/customers/'
@@ -707,6 +720,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ApiMidtransNotificationRoute: typeof ApiMidtransNotificationRoute
+  ApiPlanBillingBcaInboundRoute: typeof ApiPlanBillingBcaInboundRoute
   ApiPrintThermerRoute: typeof ApiPrintThermerRoute
   AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
 }
@@ -942,6 +956,13 @@ declare module '@tanstack/react-router' {
       path: '/api/print/thermer'
       fullPath: '/api/print/thermer'
       preLoaderRoute: typeof ApiPrintThermerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/plan-billing/bca-inbound': {
+      id: '/api/plan-billing/bca-inbound'
+      path: '/api/plan-billing/bca-inbound'
+      fullPath: '/api/plan-billing/bca-inbound'
+      preLoaderRoute: typeof ApiPlanBillingBcaInboundRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/midtrans/notification': {
@@ -1221,6 +1242,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   ApiMidtransNotificationRoute: ApiMidtransNotificationRoute,
+  ApiPlanBillingBcaInboundRoute: ApiPlanBillingBcaInboundRoute,
   ApiPrintThermerRoute: ApiPrintThermerRoute,
   AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
 }

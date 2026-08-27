@@ -157,9 +157,12 @@ export function usePurchaseOrders() {
 
   const refreshOrders = useCallback(async () => {
     if (isMockTenant) return;
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.purchaseOrders(tenantId, branchId),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.purchaseOrders(tenantId, branchId),
+      }),
+      queryClient.invalidateQueries({ queryKey: ["inventory-catalog", tenantId] }),
+    ]);
   }, [isMockTenant, queryClient, tenantId, branchId]);
 
   const indentSoItemOptions = useMemo((): IndentSoItemOption[] => {

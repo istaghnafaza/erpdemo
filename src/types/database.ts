@@ -181,6 +181,9 @@ export type BranchProductUpdate = Partial<Omit<BranchProductInsert, 'tenant_id' 
 /** Joined: product master + branch-specific data */
 export interface BranchProductWithProduct extends BranchProduct {
   product: Product;
+  /** Harga beli baris PO owned terbaru (bukan HPP rata-rata). */
+  last_po_price?: number | null;
+  last_po_number?: string | null;
 }
 
 

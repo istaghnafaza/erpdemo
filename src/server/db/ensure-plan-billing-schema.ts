@@ -92,6 +92,41 @@ export async function ensurePlanBillingSchema(): Promise<void> {
         WHERE status IN ('pending', 'failed', 'expired')
     `);
 
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TYPE plan_invoice_status ADD VALUE IF NOT EXISTS 'review';
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS payment_method text NOT NULL DEFAULT 'midtrans'
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS pay_amount bigint
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS payment_reference text
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS verification_status text NOT NULL DEFAULT 'none'
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS proof_payload jsonb
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS match_details jsonb
+    `);
+    await db.execute(sql`
+      ALTER TABLE plan_invoices ADD COLUMN IF NOT EXISTS expires_at timestamptz
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_plan_invoices_review
+        ON plan_invoices (status, verification_status)
+        WHERE status IN ('pending', 'review')
+    `);
+
     ensured = true;
   })();
 

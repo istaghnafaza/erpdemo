@@ -76,6 +76,8 @@ export interface InventoryProductRow {
   reorderPoint: number;
   purchasePrice: number;
   sellingPrice: number;
+  lastPoPrice: number | null;
+  lastPoNumber: string | null;
   warehouseLocation: string;
   isActive: boolean;
   stockStatus: ReturnType<typeof inventoryStockStatus>;
@@ -229,6 +231,8 @@ export function useInventoryProducts() {
           reorderPoint,
           purchasePrice: override?.purchasePrice ?? bp.product.purchase_price,
           sellingPrice: override?.sellingPrice ?? bp.selling_price,
+          lastPoPrice: null,
+          lastPoNumber: null,
           warehouseLocation: override?.warehouseLocation ?? bp.warehouse_location ?? "",
           isActive: true,
           stockStatus: inventoryStockStatus(stock, reorderPoint),
@@ -260,6 +264,8 @@ export function useInventoryProducts() {
           reorderPoint: override.reorderPoint ?? 5,
           purchasePrice: override.purchasePrice ?? 0,
           sellingPrice: override.sellingPrice ?? 0,
+          lastPoPrice: null,
+          lastPoNumber: null,
           warehouseLocation: override.warehouseLocation ?? "",
           isActive: true,
           stockStatus: inventoryStockStatus(stock, override.reorderPoint ?? 5),
@@ -338,6 +344,8 @@ export function useInventoryProducts() {
           reorderPoint: bp.reorder_point,
           purchasePrice: bp.product.purchase_price,
           sellingPrice: bp.selling_price,
+          lastPoPrice: bp.last_po_price ?? null,
+          lastPoNumber: bp.last_po_number ?? null,
           warehouseLocation: bp.warehouse_location ?? "",
           isActive: bp.product.is_active,
           stockStatus: inventoryStockStatus(toStockQty(bp.stock), bp.reorder_point),
@@ -627,6 +635,8 @@ export function useInventoryProducts() {
         sellUnits: row.sellUnits,
         purchasePrice: row.purchasePrice,
         sellingPrice: row.sellingPrice,
+        lastPoPrice: row.lastPoPrice,
+        lastPoNumber: row.lastPoNumber,
         reorderPoint: row.reorderPoint,
         warehouseLocation: row.warehouseLocation,
         initialStock: row.stock,

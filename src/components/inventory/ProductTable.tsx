@@ -17,6 +17,7 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { cn } from "@/lib/utils";
+import { PoPriceChangeWarning } from "@/components/inventory/PoPriceChangeWarning";
 import type { InventoryProductRow } from "@/hooks/useInventoryProducts";
 
 interface ProductTableProps {
@@ -77,6 +78,16 @@ export function ProductTable({
                 {row.barcode && (
                   <div className="text-xs text-muted-foreground">{row.barcode}</div>
                 )}
+                {row.stockOwnership !== "consignment" ? (
+                  <PoPriceChangeWarning
+                    className="mt-1 max-w-md"
+                    hpp={row.purchasePrice}
+                    lastPoPrice={row.lastPoPrice}
+                    sellingPrice={row.sellingPrice}
+                    poNumber={row.lastPoNumber}
+                    showAmounts={canSeePurchasePrice}
+                  />
+                ) : null}
               </TableCell>
               <TableCell className="text-muted-foreground">{row.category}</TableCell>
               {isConsolidated && (

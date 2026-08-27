@@ -2,7 +2,7 @@
 // Products service — Neon/Drizzle (Phase 2)
 // =============================================================================
 
-import { and, asc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { ensureSellUnitsSchema } from "@/server/db/ensure-sell-units-schema";
 import { ensureStockOwnershipSchema } from "@/server/db/ensure-stock-ownership-schema";
@@ -26,7 +26,13 @@ import {
   toProduct,
   toProductCategory,
 } from "@/server/db/mappers";
-import { branchProducts, productCategories, products } from "@/server/db/schema";
+import {
+  branchProducts,
+  productCategories,
+  products,
+  purchaseOrderItems,
+  purchaseOrders,
+} from "@/server/db/schema";
 import { listSellUnitsForProducts, replaceProductSellUnits } from "@/server/services/sell-units";
 import { stockStr } from "@/server/db/mappers";
 import type { SellUnitInput } from "@/lib/product-sell-units";
@@ -218,6 +224,40 @@ export async function updateProduct(
   return product;
 }
 
+async function listLatestOwnedPoPrices(
+  tenantId: string,
+  productIds: string[],
+): Promise<Map<string, { price: number; poNumber: string }>> {
+  const map = new Map<string, { price: number; poNumber: string }>();
+  if (productIds.length === 0) return map;
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      productId: purchaseOrderItems.productId,
+      purchasePrice: purchaseOrderItems.purchasePrice,
+      poNumber: purchaseOrders.poNumber,
+    })
+    .from(purchaseOrderItems)
+    .innerJoin(purchaseOrders, eq(purchaseOrderItems.poId, purchaseOrders.id))
+    .where(
+      and(
+        eq(purchaseOrders.tenantId, tenantId),
+        eq(purchaseOrders.ownershipMode, "owned"),
+        ne(purchaseOrders.status, "cancelled"),
+        inArray(purchaseOrderItems.productId, productIds),
+      ),
+    )
+    .orderBy(purchaseOrderItems.productId, desc(purchaseOrders.createdAt));
+
+  for (const row of rows) {
+    if (!row.productId || map.has(row.productId)) continue;
+    if (!row.purchasePrice) continue;
+    map.set(row.productId, { price: row.purchasePrice, poNumber: row.poNumber });
+  }
+  return map;
+}
+
 async function fetchBranchProductsFromDb(
   tenantId: string,
   branchIds: string[],
@@ -246,11 +286,17 @@ async function fetchBranchProductsFromDb(
   }
 
   const productIds = Array.from(new Set(rows.map((r) => r.product.id)));
-  const sellUnitsMap = await listSellUnitsForProducts(tenantId, productIds);
+  const [sellUnitsMap, lastPoMap] = await Promise.all([
+    listSellUnitsForProducts(tenantId, productIds),
+    listLatestOwnedPoPrices(tenantId, productIds),
+  ]);
   for (const branchId of Object.keys(byBranch)) {
     for (const item of byBranch[branchId] ?? []) {
       item.product.sell_units = sellUnitsMap.get(item.product_id) ?? [];
       if (!item.product.stock_unit) item.product.stock_unit = item.product.unit;
+      const lastPo = lastPoMap.get(item.product_id);
+      item.last_po_price = lastPo?.price ?? null;
+      item.last_po_number = lastPo?.poNumber ?? null;
     }
   }
 
