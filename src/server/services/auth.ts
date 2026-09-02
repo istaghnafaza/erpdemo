@@ -114,6 +114,11 @@ export async function signInWithPassword(
   loginId: string,
   password: string,
 ): Promise<{ user: AuthUser; token: string } | null> {
+  const { ensureRegistrationVerificationSchema } = await import(
+    "@/server/db/ensure-registration-verification-schema"
+  );
+  await ensureRegistrationVerificationSchema();
+
   const authRow = await findAuthUserByLoginId(loginId);
   if (!authRow) return null;
 
@@ -157,6 +162,11 @@ export async function signInWithPassword(
 }
 
 export async function getUserBySession(userId: string): Promise<AuthUser | null> {
+  const { ensureRegistrationVerificationSchema } = await import(
+    "@/server/db/ensure-registration-verification-schema"
+  );
+  await ensureRegistrationVerificationSchema();
+
   const db = getDb();
   const authRow = await db.query.authUsers.findFirst({
     where: eq(authUsers.id, userId),
