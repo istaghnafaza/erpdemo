@@ -77,40 +77,28 @@ Termasuk: prioritas onboarding, SLA, account manager.
 
 ## Cara Order
 
-1. **Transfer BCA (utama, tanpa fee Midtrans):** Daftar trial → Upgrade paket → Transfer BCA (nominal unik + berita `SEPS-…`) → unggah bukti → Make.com forward email mutasi BCA → auto-aktif jika BCA + OCR cocok; selain itu antrian review di `/platform/dashboard`.
-2. **Midtrans Snap (opsional):** QRIS/VA/GoPay → webhook Midtrans aktifkan plan.
-3. **Manual:** platform admin **Tandai lunas** / setujui antrian transfer.
+1. **Self-service (otomatis):** Daftar trial → uji 7 hari → di app / `/pricing` pilih paket → bayar Midtrans Snap (QRIS/VA/GoPay) → webhook aktifkan plan.
+2. **Exception:** gagal bayar berulang, dispute, atau transfer di luar Snap → platform admin **Tandai lunas manual** (order id).
 
 **Kontak:** Tim SEPS / Faza Group · WhatsApp sales
 
 *Harga belum termasuk PPN.*
 
-### Production (`seps.fazagroup.id`) — env plan billing
+### Midtrans (production)
 
 ```
-# Transfer BCA + OCR
-PLAN_BCA_ACCOUNT_NUMBER=
-PLAN_BCA_ACCOUNT_NAME=
-PLAN_BCA_WEBHOOK_SECRET=
-GEMINI_API_KEY=
-RESEND_API_KEY=
-FONNTE_TOKEN=                  # opsional WA aktivasi
-
-# Make.com → POST https://seps.fazagroup.id/api/plan-billing/bca-inbound
-# Header: x-plan-bca-secret = PLAN_BCA_WEBHOOK_SECRET
-
-# Midtrans (opsional)
 MIDTRANS_SERVER_KEY=
 MIDTRANS_CLIENT_KEY=
 MIDTRANS_IS_PRODUCTION=true
 MIDTRANS_NOTIFICATION_URL=https://seps.fazagroup.id/api/midtrans/notification
-PLAN_OPS_TELEGRAM_BOT_TOKEN=
+PLAN_OPS_TELEGRAM_BOT_TOKEN=   # opsional alert past_due / jatuh tempo
 PLAN_OPS_TELEGRAM_CHAT_ID=
+RESEND_API_KEY=                # opsional email setelah lunas manual
+FONNTE_TOKEN=                  # opsional WA
 ```
 
 Cron harian (reminder + `past_due`): `npm run neon:plan:renew-check`
 
 ---
 
-**URL pricing live:** https://seps.fazagroup.id/pricing · **Registrasi:** `/register`  
-**Webhook BCA:** `POST /api/plan-billing/bca-inbound` · **Webhook Midtrans:** `POST /api/midtrans/notification`
+**URL pricing live:** https://seps.fazagroup.id/pricing · **Registrasi:** `/register` · **Webhook:** `POST /api/midtrans/notification`

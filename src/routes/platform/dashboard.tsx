@@ -33,7 +33,6 @@ import { useAuthStore } from "@/stores/auth.store";
 import type { PlatformDashboardData, PlatformTenantRow } from "@/types/platform";
 import { toast } from "sonner";
 import { PlatformTenantPlanDialog } from "@/components/platform/PlatformTenantPlanDialog";
-import { PlanTransferReviewQueue } from "@/components/platform/PlanTransferReviewQueue";
 
 export const Route = createFileRoute("/platform/dashboard")({
   beforeLoad: () => {
@@ -216,11 +215,9 @@ function PlatformDashboardPage() {
         </Card>
       </div>
 
-      <PlanTransferReviewQueue onChanged={() => void load()} />
-
       <Card className="p-4 mb-6 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
-          <label className="text-xs font-medium text-muted-foreground">Tandai lunas manual (order id)</label>
+          <label className="text-xs font-medium text-muted-foreground">Tandai lunas manual (order Midtrans)</label>
           <input
             className="mt-1 w-full h-9 rounded-md border bg-background px-3 text-sm"
             placeholder="seps-...-order-id"

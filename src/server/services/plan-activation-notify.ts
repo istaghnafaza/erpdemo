@@ -126,17 +126,3 @@ export async function notifyPlanActivated(input: {
 
   return { email, wa };
 }
-
-export function getPlanBankTransferConfig(): {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  qrisHint: string | null;
-} {
-  return {
-    bankName: readEnv("PLAN_BCA_BANK_NAME") ?? "BCA",
-    accountNumber: readEnv("PLAN_BCA_ACCOUNT_NUMBER") ?? "",
-    accountName: readEnv("PLAN_BCA_ACCOUNT_NAME") ?? "SEPS / Faza Group",
-    qrisHint: readEnv("PLAN_BCA_QRIS_HINT") ?? null,
-  };
-}

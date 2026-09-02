@@ -224,7 +224,7 @@ export async function handleMidtransNotification(
   return { ok: true, action: mapped };
 }
 
-/** Platform admin: tandai lunas manual (transfer di luar Snap). */
+/** Platform admin: tandai lunas manual (order Midtrans di luar Snap). */
 export async function markPlanInvoicePaidManual(input: {
   orderId: string;
 }): Promise<{ tenantId: string; plan: string }> {
