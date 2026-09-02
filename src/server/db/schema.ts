@@ -118,8 +118,23 @@ export const authUsers = pgTable("auth_users", {
   googleSub: text("google_sub").unique(),
   tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+  emailVerified: boolean("email_verified").notNull().default(true),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const registrationVerificationOtps = pgTable("registration_verification_otps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  destination: text("destination").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const passwordResetOtps = pgTable("password_reset_otps", {

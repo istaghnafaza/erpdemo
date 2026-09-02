@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createSafeJSONStorage } from "@/lib/safe-storage";
-import { signIn, signOut, getCurrentUser, signUp, signInWithGoogle, signInWithGoogleCode } from "@/lib/api/auth";
+import { signIn, signOut, getCurrentUser, signUp, signInWithGoogle, signInWithGoogleCode, confirmRegistration } from "@/lib/api/auth";
 import { getTenant } from "@/lib/api/tenants";
 import { isNeonBackend, isMockBackend } from "@/lib/api/backend";
 import { useBranchStore } from "@/stores/branch.store";
@@ -202,7 +202,8 @@ interface AuthState {
 
   // Actions
   login(email: string, password: string): Promise<boolean>;
-  register(input: RegisterInput): Promise<boolean>;
+  register(input: RegisterInput): Promise<import("@/lib/api/auth").RegistrationChallengeResult | null>;
+  completeEmailVerification(challengeId: string, otp: string): Promise<boolean>;
   loginWithGoogle(credential: string): Promise<{ ok: boolean; isNewUser?: boolean }>;
   completeGoogleOAuth(code: string, redirectUri: string): Promise<{ ok: boolean; isNewUser?: boolean }>;
   /** Development/demo only — instantly signs in as a seeded demo user, no Supabase call. */
@@ -314,11 +315,28 @@ export const useAuthStore = create<AuthState>()(
           const authResult = await signUp(input);
           if (authResult.error) {
             set({ error: authResult.error, isLoading: false });
+            return null;
+          }
+          set({ isLoading: false });
+          return authResult.data!;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Registrasi gagal";
+          set({ error: msg, isLoading: false });
+          return null;
+        }
+      },
+
+      completeEmailVerification: async (challengeId, otp) => {
+        set({ isLoading: true, error: null });
+        try {
+          const authResult = await confirmRegistration(challengeId, otp);
+          if (authResult.error) {
+            set({ error: authResult.error, isLoading: false });
             return false;
           }
           return applyAuthSession(authResult.data!);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "Registrasi gagal";
+          const msg = err instanceof Error ? err.message : "Verifikasi gagal";
           set({ error: msg, isLoading: false });
           return false;
         }

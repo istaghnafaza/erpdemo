@@ -14,10 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isNeonBackend } from "@/lib/api/backend";
 import { AUTH_UI } from "@/lib/auth-features";
-import { resolvePostAuthDestination } from "@/lib/auth-navigate";
 import { validateRegisterForm } from "@/lib/validation/register-form";
 import { useAuthStore } from "@/stores/auth.store";
-import { useOnboardingStore } from "@/stores/onboarding.store";
 import { preparePublicAuthRouteSync, waitForAuthHydration } from "@/lib/auth-bootstrap";
 import { usePublicAuthRedirect } from "@/hooks/usePublicAuthRedirect";
 
@@ -50,16 +48,6 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const goAfterAuth = async () => {
-    const { currentUser } = useAuthStore.getState();
-    if (!currentUser) return;
-
-    useOnboardingStore.getState().resetOnboarding();
-    toast.success(`Selamat datang, ${currentUser.profile.name}!`);
-    const dest = await resolvePostAuthDestination(currentUser.profile.role);
-    navigate(dest);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,14 +85,27 @@ function RegisterPage() {
       return;
     }
 
-    const ok = await register(parsed.data);
+    const challenge = await register(parsed.data);
 
-    if (!ok) {
+    if (!challenge) {
       toast.error(useAuthStore.getState().error ?? "Registrasi gagal");
       return;
     }
 
-    await goAfterAuth();
+    toast.success(
+      challenge.debugOtp
+        ? "Mode development: kode OTP ditampilkan di halaman verifikasi."
+        : `Kode verifikasi dikirim ke ${challenge.destinationHint}. Cek juga folder spam.`,
+    );
+
+    navigate({
+      to: "/verify-email",
+      search: {
+        challengeId: challenge.challengeId,
+        email: parsed.data.email,
+        debugOtp: challenge.debugOtp,
+      },
+    });
   };
 
   const setPin = (value: string, field: "password" | "confirmPassword") => {
@@ -188,7 +189,9 @@ function RegisterPage() {
           ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email (opsional)</Label>
+          <Label htmlFor="email">
+            Email <span className="text-destructive">*</span>
+          </Label>
           <Input
             id="email"
             type="email"
@@ -196,7 +199,11 @@ function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="nama@email.com"
             autoComplete="email"
+            required
           />
+          <p className="text-xs text-muted-foreground">
+            Kode verifikasi akan dikirim ke email ini sebelum akun aktif.
+          </p>
           {fieldErrors.email ? (
             <p className="text-xs text-destructive">{fieldErrors.email}</p>
           ) : null}

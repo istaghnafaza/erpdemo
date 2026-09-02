@@ -1,10 +1,11 @@
 // =============================================================================
-// OTP delivery — email (Resend) + SMS/WA (Twilio / Fonnte)
+// OTP delivery — email (Resend / SMTP Hostinger) + SMS/WA (Twilio / Fonnte)
 // =============================================================================
 
 import { readEnv } from "@/server/env";
 
 export type OtpChannel = "email" | "sms";
+export type OtpPurpose = "reset-pin" | "registration";
 
 function isProduction(): boolean {
   return readEnv("NODE_ENV") === "production";
@@ -14,8 +15,16 @@ export function isOtpDevEchoEnabled(): boolean {
   return !isProduction();
 }
 
+function isSmtpConfigured(): boolean {
+  return (
+    Boolean(readEnv("SMTP_HOST")) &&
+    Boolean(readEnv("SMTP_USER")) &&
+    Boolean(readEnv("SMTP_PASS"))
+  );
+}
+
 export function isEmailOtpConfigured(): boolean {
-  return Boolean(readEnv("RESEND_API_KEY"));
+  return Boolean(readEnv("RESEND_API_KEY")) || isSmtpConfigured();
 }
 
 export function isSmsOtpConfigured(): boolean {
@@ -69,11 +78,33 @@ export function maskPhone(phone: string): string {
   return `****${digits.slice(-4)}`;
 }
 
-async function sendResendEmail(to: string, code: string): Promise<void> {
+function otpEmailContent(purpose: OtpPurpose, code: string): { subject: string; text: string } {
+  if (purpose === "registration") {
+    return {
+      subject: "Kode verifikasi email SEPS",
+      text: `Kode verifikasi email SEPS Anda: ${code}\nBerlaku 10 menit. Masukkan kode ini untuk mengaktifkan akun Anda.\nJangan bagikan ke siapa pun.`,
+    };
+  }
+  return {
+    subject: "Kode reset PIN SEPS",
+    text: `Kode OTP SEPS Anda: ${code}\nBerlaku 10 menit. Jangan bagikan ke siapa pun.`,
+  };
+}
+
+function defaultFromEmail(): string {
+  return (
+    readEnv("SMTP_FROM") ??
+    readEnv("RESEND_FROM_EMAIL") ??
+    "SEPS <seps@fazagroup.id>"
+  );
+}
+
+async function sendResendEmail(to: string, code: string, purpose: OtpPurpose): Promise<void> {
   const apiKey = readEnv("RESEND_API_KEY");
   if (!apiKey) throw new Error("RESEND_API_KEY belum diset");
 
-  const from = readEnv("RESEND_FROM_EMAIL") ?? "SEPS <noreply@fazagroup.id>";
+  const from = defaultFromEmail();
+  const { subject, text } = otpEmailContent(purpose, code);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -83,8 +114,8 @@ async function sendResendEmail(to: string, code: string): Promise<void> {
     body: JSON.stringify({
       from,
       to: [to],
-      subject: "Kode reset PIN SEPS",
-      text: `Kode OTP SEPS Anda: ${code}\nBerlaku 10 menit. Jangan bagikan ke siapa pun.`,
+      subject,
+      text,
     }),
   });
 
@@ -92,6 +123,28 @@ async function sendResendEmail(to: string, code: string): Promise<void> {
     const body = await res.text().catch(() => "");
     throw new Error(`Gagal mengirim email OTP (${res.status})${body ? `: ${body.slice(0, 180)}` : ""}`);
   }
+}
+
+async function sendSmtpEmail(to: string, code: string, purpose: OtpPurpose): Promise<void> {
+  const host = readEnv("SMTP_HOST");
+  const user = readEnv("SMTP_USER");
+  const pass = readEnv("SMTP_PASS");
+  if (!host || !user || !pass) throw new Error("SMTP belum lengkap (SMTP_HOST, SMTP_USER, SMTP_PASS)");
+
+  const port = Number(readEnv("SMTP_PORT") ?? "465");
+  const secure = readEnv("SMTP_SECURE") !== "false";
+  const from = defaultFromEmail();
+  const { subject, text } = otpEmailContent(purpose, code);
+
+  const nodemailer = await import("nodemailer");
+  const transport = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+
+  await transport.sendMail({ from, to, subject, text });
 }
 
 async function sendTwilioSms(toE164: string, code: string): Promise<void> {
@@ -150,17 +203,24 @@ export async function deliverOtp(
   channel: OtpChannel,
   destination: string,
   code: string,
+  purpose: OtpPurpose = "reset-pin",
 ): Promise<{ delivered: boolean; via: "email" | "sms" | "log" }> {
   if (channel === "email") {
-    if (isEmailOtpConfigured()) {
-      await sendResendEmail(destination, code);
+    if (readEnv("RESEND_API_KEY")) {
+      await sendResendEmail(destination, code, purpose);
+      return { delivered: true, via: "email" };
+    }
+    if (isSmtpConfigured()) {
+      await sendSmtpEmail(destination, code, purpose);
       return { delivered: true, via: "email" };
     }
     if (isOtpDevEchoEnabled()) {
-      console.info(`[SEPS OTP] email ${destination} → ${code}`);
+      console.info(`[SEPS OTP] email ${destination} → ${code} (${purpose})`);
       return { delivered: false, via: "log" };
     }
-    throw new Error("Pengiriman email belum dikonfigurasi. Set RESEND_API_KEY di server.");
+    throw new Error(
+      "Pengiriman email belum dikonfigurasi. Set RESEND_API_KEY atau SMTP_HOST/SMTP_USER/SMTP_PASS di server.",
+    );
   }
 
   const phone = normalizePhone(destination);

@@ -62,6 +62,7 @@ interface NewTenantBundle {
   ownerAddress?: string | null;
   passwordHash: string;
   googleSub?: string | null;
+  emailVerified?: boolean;
 }
 
 async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: AuthUser; token: string }> {
@@ -101,6 +102,8 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
       passwordHash: input.passwordHash,
       googleSub: input.googleSub ?? null,
       tenantId: input.tenantId,
+      emailVerified: input.emailVerified ?? true,
+      emailVerifiedAt: input.emailVerified === false ? null : new Date(),
     });
 
     await tx.insert(profiles).values({
@@ -125,7 +128,7 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
 
 export async function registerWithEmail(
   input: RegisterInput,
-): Promise<{ user: AuthUser; token: string }> {
+): Promise<import("@/server/services/registration-verify").RegistrationChallengeResult> {
   const { validateRegisterForm } = await import("@/lib/validation/register-form");
   const parsed = validateRegisterForm(input);
   if (!parsed.success) {
@@ -134,7 +137,7 @@ export async function registerWithEmail(
 
   const data = parsed.data;
   const username = data.username;
-  const email = data.email ?? `${username}@noemail.local`;
+  const email = data.email;
   const password = data.password;
 
   const db = getDb();
@@ -145,7 +148,15 @@ export async function registerWithEmail(
   if (existingUsername) throw new Error("Username sudah dipakai. Pilih username lain.");
 
   const existing = await db.query.authUsers.findFirst({ where: eq(authUsers.email, email) });
-  if (existing) throw new Error("Email sudah terdaftar. Silakan masuk.");
+  if (existing) {
+    if (!existing.emailVerified) {
+      const { sendRegistrationVerificationOtp } = await import(
+        "@/server/services/registration-verify"
+      );
+      return sendRegistrationVerificationOtp(existing.id);
+    }
+    throw new Error("Email sudah terdaftar. Silakan masuk.");
+  }
 
   const passwordHash = await hashPassword(password);
   const ownerAddress = formatIndonesiaAddress({
@@ -156,9 +167,10 @@ export async function registerWithEmail(
     provinceName: data.address.provinceName,
   });
 
-  return createTenantWithOwner({
+  const userId = crypto.randomUUID();
+  await createTenantWithOwner({
     tenantId: crypto.randomUUID(),
-    userId: crypto.randomUUID(),
+    userId,
     branchId: crypto.randomUUID(),
     username,
     email,
@@ -166,7 +178,11 @@ export async function registerWithEmail(
     phone: data.phone,
     ownerAddress,
     passwordHash,
+    emailVerified: false,
   });
+
+  const { sendRegistrationVerificationOtp } = await import("@/server/services/registration-verify");
+  return sendRegistrationVerificationOtp(userId);
 }
 
 export async function signInWithGoogleCredential(
@@ -232,6 +248,7 @@ async function signInWithGoogleProfile(
     phone: null,
     passwordHash,
     googleSub: google.sub,
+    emailVerified: google.emailVerified ?? true,
   });
 
   return { ...session, isNewUser: true };

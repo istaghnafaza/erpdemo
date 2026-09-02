@@ -68,7 +68,12 @@ export const registerFormSchema = z
 
       .regex(/^[a-z0-9._-]+$/i, "Username hanya huruf, angka, titik, strip, underscore"),
 
-    email: z.string().trim().max(254).optional().or(z.literal("")),
+    email: z
+      .string()
+      .trim()
+      .min(1, "Email wajib diisi")
+      .max(254)
+      .email("Format email tidak valid"),
 
     phone: z
 
@@ -91,15 +96,6 @@ export const registerFormSchema = z
   })
 
   .superRefine((data, ctx) => {
-
-    const email = data.email?.trim();
-
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-
-      ctx.addIssue({ code: "custom", message: "Format email tidak valid", path: ["email"] });
-
-    }
-
     if (data.password !== data.confirmPassword) {
 
       ctx.addIssue({
@@ -122,7 +118,7 @@ export const registerFormSchema = z
 
     username: data.username.trim().toLowerCase(),
 
-    email: data.email?.trim() ? data.email.trim().toLowerCase() : undefined,
+    email: data.email.trim().toLowerCase(),
 
     phone: data.phone.trim(),
 
@@ -140,7 +136,7 @@ export function validateRegisterForm(input: {
 
   username: string;
 
-  email?: string;
+  email: string;
 
   phone: string;
 

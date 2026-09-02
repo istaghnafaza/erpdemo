@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PlatformRouteImport } from './routes/platform'
@@ -64,6 +65,11 @@ import { Route as TenantSlugFinanceCashBookRouteImport } from './routes/$tenantS
 import { Route as TenantSlugSettingsMasterDataIndexRouteImport } from './routes/$tenantSlug/settings/master-data/index'
 import { Route as TenantSlugSettingsMasterDataProductAttributesRouteImport } from './routes/$tenantSlug/settings/master-data/product-attributes'
 
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -367,6 +373,7 @@ export interface FileRoutesByFullPath {
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
   '/$tenantSlug/pos': typeof TenantSlugPosRoute
@@ -423,6 +430,7 @@ export interface FileRoutesByTo {
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
   '/$tenantSlug/pos': typeof TenantSlugPosRoute
@@ -479,6 +487,7 @@ export interface FileRoutesById {
   '/platform': typeof PlatformRouteWithChildren
   '/pricing': typeof PricingRoute
   '/register': typeof RegisterRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/$tenantSlug/dashboard': typeof TenantSlugDashboardRoute
   '/$tenantSlug/payables': typeof TenantSlugPayablesRoute
   '/$tenantSlug/pos': typeof TenantSlugPosRoute
@@ -537,6 +546,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/pricing'
     | '/register'
+    | '/verify-email'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
     | '/$tenantSlug/pos'
@@ -593,6 +603,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/pricing'
     | '/register'
+    | '/verify-email'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
     | '/$tenantSlug/pos'
@@ -648,6 +659,7 @@ export interface FileRouteTypes {
     | '/platform'
     | '/pricing'
     | '/register'
+    | '/verify-email'
     | '/$tenantSlug/dashboard'
     | '/$tenantSlug/payables'
     | '/$tenantSlug/pos'
@@ -705,6 +717,7 @@ export interface RootRouteChildren {
   PlatformRoute: typeof PlatformRouteWithChildren
   PricingRoute: typeof PricingRoute
   RegisterRoute: typeof RegisterRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ApiMidtransNotificationRoute: typeof ApiMidtransNotificationRoute
   ApiPrintThermerRoute: typeof ApiPrintThermerRoute
@@ -713,6 +726,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -1219,6 +1239,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlatformRoute: PlatformRouteWithChildren,
   PricingRoute: PricingRoute,
   RegisterRoute: RegisterRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   ApiMidtransNotificationRoute: ApiMidtransNotificationRoute,
   ApiPrintThermerRoute: ApiPrintThermerRoute,

@@ -87,6 +87,21 @@ if (resendKey) {
   if (from) lines.push(`RESEND_FROM_EMAIL=${from}`);
 }
 
+const smtpHost = env.get("SMTP_HOST")?.trim();
+const smtpUser = env.get("SMTP_USER")?.trim();
+const smtpPass = env.get("SMTP_PASS")?.trim();
+if (smtpHost && smtpUser && smtpPass) {
+  lines.push(
+    `SMTP_HOST=${smtpHost}`,
+    `SMTP_PORT=${env.get("SMTP_PORT")?.trim() || "465"}`,
+    `SMTP_SECURE=${env.get("SMTP_SECURE")?.trim() || "true"}`,
+    `SMTP_USER=${smtpUser}`,
+    `SMTP_PASS=${smtpPass}`,
+  );
+  const smtpFrom = env.get("SMTP_FROM")?.trim();
+  if (smtpFrom) lines.push(`SMTP_FROM=${smtpFrom}`);
+}
+
 const fonnte = env.get("FONNTE_TOKEN")?.trim();
 if (fonnte) lines.push(`FONNTE_TOKEN=${fonnte}`);
 

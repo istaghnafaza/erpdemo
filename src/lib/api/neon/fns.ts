@@ -63,7 +63,15 @@ export const neonSignIn = createServerFn({ method: "POST" })
     const { sessionCookieHeader } = await import("@/server/auth/session");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
 
-    const result = await signInWithPassword(parsed.data.username, parsed.data.password);
+    let result: Awaited<ReturnType<typeof signInWithPassword>>;
+    try {
+      result = await signInWithPassword(parsed.data.username, parsed.data.password);
+    } catch (err) {
+      if (err instanceof Error && err.message === "EMAIL_NOT_VERIFIED") {
+        throw new Error("Email belum diverifikasi. Cek inbox atau buka halaman verifikasi email.");
+      }
+      throw err;
+    }
     if (!result) throw new Error("Username atau PIN salah");
 
     clearRateLimit(`sign-in:${ip}`);
@@ -458,16 +466,38 @@ export const neonHealthCheck = createServerFn({ method: "GET" }).handler(async (
 
 export const neonRegister = createServerFn({ method: "POST" })
   .validator((data: RegisterInput) => data)
-  .handler(async ({ data }): Promise<AuthUser> => {
+  .handler(async ({ data }) => {
     const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
     await assertAuthRateLimit("register");
     const { registerWithEmail } = await import("@/server/services/register");
+    return registerWithEmail(data);
+  });
+
+export const neonConfirmRegistration = createServerFn({ method: "POST" })
+  .validator((data: { challengeId: string; otp: string }) => data)
+  .handler(async ({ data }): Promise<AuthUser> => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("register-verify");
+    const { confirmRegistrationVerification } = await import(
+      "@/server/services/registration-verify"
+    );
     const { sessionCookieHeader } = await import("@/server/auth/session");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
 
-    const result = await registerWithEmail(data);
+    const result = await confirmRegistrationVerification(data);
     setResponseHeader("Set-Cookie", sessionCookieHeader(result.token));
     return result.user;
+  });
+
+export const neonResendRegistrationOtp = createServerFn({ method: "POST" })
+  .validator((data: { email: string }) => data)
+  .handler(async ({ data }) => {
+    const { assertAuthRateLimit } = await import("@/server/server-fn-rate-limit");
+    await assertAuthRateLimit("register-resend");
+    const { resendRegistrationVerificationOtp } = await import(
+      "@/server/services/registration-verify"
+    );
+    return resendRegistrationVerificationOtp(data.email);
   });
 
 export const neonSignInWithGoogle = createServerFn({ method: "POST" })

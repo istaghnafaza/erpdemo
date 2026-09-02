@@ -7,6 +7,8 @@ import { neonCall } from "./backend";
 import {
   neonGetCurrentUser,
   neonRegister,
+  neonConfirmRegistration,
+  neonResendRegistrationOtp,
   neonSignIn,
   neonSignInWithGoogle,
   neonGoogleOAuthCallback,
@@ -39,10 +41,19 @@ export async function signIn(
   return fail("Backend auth tidak aktif. Set VITE_DATA_BACKEND=neon atau gunakan demo login.");
 }
 
+export type RegistrationChallengeResult = {
+  challengeId: string;
+  destinationHint: string;
+  expiresInSec: number;
+  debugOtp?: string;
+};
+
 // ---------------------------------------------------------------------------
-// signUp — register new tenant + owner account
+// signUp — register new tenant + owner account (kirim OTP verifikasi email)
 // ---------------------------------------------------------------------------
-export async function signUp(input: RegisterInput): Promise<ApiResponse<AuthUser>> {
+export async function signUp(
+  input: RegisterInput,
+): Promise<ApiResponse<RegistrationChallengeResult>> {
   if (isNeonBackend()) {
     const result = await neonCall(() => neonRegister({ data: input }));
     if (result.error) return fail(result.error);
@@ -50,6 +61,33 @@ export async function signUp(input: RegisterInput): Promise<ApiResponse<AuthUser
     return ok(result.data);
   }
   return fail("Registrasi memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function confirmRegistration(
+  challengeId: string,
+  otp: string,
+): Promise<ApiResponse<AuthUser>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() =>
+      neonConfirmRegistration({ data: { challengeId, otp } }),
+    );
+    if (result.error) return fail(result.error);
+    if (!result.data) return fail("Verifikasi gagal");
+    return ok(result.data);
+  }
+  return fail("Verifikasi memerlukan VITE_DATA_BACKEND=neon");
+}
+
+export async function resendRegistrationOtp(
+  email: string,
+): Promise<ApiResponse<RegistrationChallengeResult>> {
+  if (isNeonBackend()) {
+    const result = await neonCall(() => neonResendRegistrationOtp({ data: { email } }));
+    if (result.error) return fail(result.error);
+    if (!result.data) return fail("Gagal mengirim ulang kode");
+    return ok(result.data);
+  }
+  return fail("Verifikasi memerlukan VITE_DATA_BACKEND=neon");
 }
 
 // ---------------------------------------------------------------------------

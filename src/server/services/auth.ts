@@ -120,6 +120,14 @@ export async function signInWithPassword(
   const valid = await verifyPassword(password, authRow.passwordHash);
   if (!valid) return null;
 
+  if (
+    !authRow.isPlatformAdmin &&
+    authRow.emailVerified === false &&
+    !authRow.email.endsWith("@noemail.local")
+  ) {
+    throw new Error("EMAIL_NOT_VERIFIED");
+  }
+
   if (authRow.isPlatformAdmin) {
     const user = buildPlatformAuthUser(authRow);
     const token = await createSessionToken({

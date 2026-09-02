@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <title>SEPS — Alur Transaksi Pembayaran Midtrans Snap</title>
   <style>
-    @page { size: A4; margin: 18mm; }
+    @page { size: A4; margin: 14mm; }
     * { box-sizing: border-box; }
     body {
       font-family: "Segoe UI", Arial, sans-serif;
       color: #111;
       line-height: 1.45;
       font-size: 12px;
-      max-width: 800px;
+      max-width: 820px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -27,33 +27,35 @@
       background: #fafafa;
     }
     .shot {
-      border: 2px dashed #999;
+      border: 1px solid #d4d4d8;
       border-radius: 8px;
-      min-height: 160px;
       margin: 8px 0 14px;
-      padding: 12px;
+      padding: 8px;
       background: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
+      overflow: hidden;
+    }
+    .shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 420px;
+      object-fit: contain;
+      object-position: top center;
+      border-radius: 4px;
+      background: #f4f4f5;
+    }
+    .shot.tall img { max-height: 520px; }
+    .caption {
+      margin-top: 6px;
+      font-size: 11px;
       color: #666;
+      text-align: center;
     }
     ol.steps { padding-left: 20px; }
-    ol.steps > li { margin-bottom: 16px; }
+    ol.steps > li { margin-bottom: 18px; page-break-inside: avoid; }
     table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
     th { background: #f0f0f0; }
-    .badge {
-      display: inline-block;
-      background: #0ea5e9;
-      color: #fff;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .warn { background: #fff7ed; border-color: #fdba74; }
     .print-hint {
       background: #ecfeff;
       border: 1px solid #67e8f9;
@@ -64,8 +66,8 @@
     @media print {
       .print-hint { display: none; }
       body { padding: 0; }
-      .shot { min-height: 140px; page-break-inside: avoid; }
-      li { page-break-inside: avoid; }
+      .shot { page-break-inside: avoid; }
+      .shot img { max-height: 380px; }
     }
   </style>
 </head>
@@ -94,76 +96,95 @@
   <table>
     <tr><th>Item</th><th>Nilai</th></tr>
     <tr><td>URL aplikasi</td><td>https://seps.fazagroup.id/login</td></tr>
-    <tr><td>Email / username</td><td><em>faza</em></td></tr>
-    <tr><td>Password</td><td><em>111111</em></td></tr>
+    <tr><td>Username</td><td>faza</td></tr>
+    <tr><td>PIN</td><td>111111</td></tr>
     <tr><td>Peran</td><td>Owner toko (trial / pending upgrade)</td></tr>
-    <tr><td>Catatan</td><td>Akun khusus review </td></tr>
+    <tr><td>Catatan</td><td>Akun khusus review Midtrans — uji Upgrade → Midtrans Snap</td></tr>
   </table>
-  
 
   <h2>2. Ringkasan teknis Midtrans di SEPS</h2>
   <table>
     <tr><th>Item</th><th>Detail</th></tr>
-    <tr><td>Integrasi</td><td>Midtrans Snap (popup / redirect checkout)</td></tr>
-    <tr><td>Metode pembayaran</td><td>QRIS, Virtual Account, GoPay / e-wallet (sesuai channel Snap)</td></tr>
+    <tr><td>Integrasi</td><td>Midtrans Snap (popup checkout)</td></tr>
+    <tr><td>Metode pembayaran</td><td>QRIS, Virtual Account (BCA/Mandiri/BNI/BRI/dll), GoPay, ShopeePay, kartu</td></tr>
     <tr><td>Webhook</td><td><code>POST https://seps.fazagroup.id/api/midtrans/notification</code></td></tr>
     <tr><td>Finish redirect</td><td><code>/{tenantSlug}/dashboard?plan_paid=1</code></td></tr>
     <tr><td>Aktivasi paket</td><td>Otomatis setelah status Midtrans settlement / capture (signature verified)</td></tr>
   </table>
 
-  <h2>3. Alur transaksi langkah demi langkah</h2>
+  <h2>3. Alur transaksi langkah demi langkah (dengan screenshot)</h2>
   <ol class="steps">
     <li>
       <h3>Langkah 1 — Buka situs &amp; login</h3>
       <p>
-        Reviewer membuka <strong>https://seps.fazagroup.id/login</strong>, memasukkan email/username
-        dan password akun uji, lalu masuk ke dashboard toko.
+        Reviewer membuka <strong>https://seps.fazagroup.id/login</strong>, memasukkan username
+        dan PIN akun uji, lalu klik <strong>Masuk</strong>.
       </p>
-      <div class="shot">TEMPAT SCREENSHOT #1<br/>Halaman Login SEPS</div>
+      <div class="shot">
+        <img src="midtrans-screenshots/01-login.png" alt="Halaman Login SEPS" />
+        <div class="caption">Screenshot #1 — Halaman Login SEPS</div>
+      </div>
     </li>
 
     <li>
-      <h3>Langkah 2 — Masuk dashboard / halaman pricing</h3>
+      <h3>Langkah 2 — Dashboard &amp; tombol Upgrade</h3>
       <p>
-        Setelah login, reviewer melihat banner paket / akun trial. Klik
-        <strong>Upgrade</strong> di banner, atau buka
-        <strong>https://seps.fazagroup.id/pricing</strong> lalu pilih paket.
+        Setelah login, muncul banner trial / kunci modul. Klik <strong>Upgrade</strong>
+        (banner atas) atau <strong>Upgrade Paket</strong> (sidebar bawah) untuk membuka sheet upgrade.
       </p>
-      <div class="shot">TEMPAT SCREENSHOT #2<br/>Dashboard + banner Upgrade / halaman Pricing</div>
+      <div class="shot">
+        <img src="midtrans-screenshots/02-dashboard-upgrade.png" alt="Dashboard dengan tombol Upgrade" />
+        <div class="caption">Screenshot #2 — Dashboard + tombol Upgrade (banner &amp; sidebar)</div>
+      </div>
     </li>
 
     <li>
-      <h3>Langkah 3 — Pilih paket &amp; siklus tagihan</h3>
+      <h3>Langkah 3 — Pilih paket &amp; bayar</h3>
       <p>
-        Sheet <strong>Upgrade paket</strong> muncul. Pilih siklus <em>Bulanan</em> atau
-        <em>Tahunan</em>, lalu pilih salah satu: Basic / Pro / Enterprise.
-        Tekan tombol <strong>Bayar …</strong>.
+        Sheet <strong>Upgrade paket</strong> muncul. Pilih siklus Bulanan/Tahunan dan paket
+        (Basic / Pro / Enterprise). Klik nama paket untuk detail fitur di halaman harga, atau
+        tekan <strong>Bayar …</strong> untuk membuka Midtrans Snap.
       </p>
-      <div class="shot">TEMPAT SCREENSHOT #3<br/>Sheet Upgrade paket (pilih plan + Bayar)</div>
+      <div class="shot">
+        <img src="midtrans-screenshots/03-upgrade-sheet.png" alt="Sheet Upgrade paket" />
+        <div class="caption">Screenshot #3 — Sheet Upgrade paket (pilih plan + Bayar Pro)</div>
+      </div>
     </li>
 
     <li>
-      <h3>Langkah 4 — Midtrans Snap checkout</h3>
+      <h3>Langkah 4 — Midtrans Snap: pilih metode bayar</h3>
       <p>
-        Sistem memanggil API Midtrans Snap (server-side) dan membuka popup Snap.
-        Reviewer memilih metode pembayaran (QRIS / VA / GoPay) dan menyelesaikan pembayaran
-        sesuai instruksi Midtrans (sandbox atau production sesuai environment merchant).
+        Popup Midtrans Snap menampilkan nominal (contoh Rp850.000 untuk Pro bulanan),
+        order ID, dan daftar metode: GoPay/QRIS, Virtual Account, kartu, ShopeePay.
       </p>
-      <div class="shot">TEMPAT SCREENSHOT #4<br/>Popup Midtrans Snap — pilih metode bayar</div>
-      <div class="shot">TEMPAT SCREENSHOT #5<br/>Halaman pembayaran Midtrans (QRIS/VA/e-wallet)</div>
+      <div class="shot tall">
+        <img src="midtrans-screenshots/04-midtrans-snap.png" alt="Popup Midtrans Snap" />
+        <div class="caption">Screenshot #4 — Midtrans Snap — daftar metode pembayaran</div>
+      </div>
     </li>
 
-    
+    <li>
+      <h3>Langkah 5 — Bayar via Virtual Account (contoh BCA)</h3>
+      <p>
+        Reviewer memilih Virtual Account BCA. Midtrans menampilkan nomor VA yang harus dibayar.
+        Setelah settlement, webhook mengaktifkan paket di SEPS secara otomatis.
+      </p>
+      <div class="shot tall">
+        <img src="midtrans-screenshots/05-midtrans-bca-va.png" alt="Midtrans BCA Virtual Account" />
+        <div class="caption">Screenshot #5 — Midtrans — pembayaran BCA Virtual Account</div>
+      </div>
+    </li>
   </ol>
 
   <h2>4. Diagram alur (ringkas)</h2>
   <div class="box">
     <pre style="white-space:pre-wrap;margin:0;font-size:11px;">User (Owner)
-  → Login SEPS
-  → Pilih paket (Upgrade / Pricing)
-  → Backend SEPS: create Snap transaction (order_id + amount)
-  → Midtrans Snap UI (bayar QRIS/VA/e-wallet)
-  → Midtrans webhook → SEPS /api/midtrans/notification
+  → Login SEPS (username + PIN)
+  → Dashboard → klik Upgrade / Upgrade Paket
+  → Sheet Upgrade → pilih paket → Bayar
+  → Midtrans Snap (pilih QRIS / VA / e-wallet)
+  → Selesaikan pembayaran di Midtrans
+  → Webhook → SEPS /api/midtrans/notification
   → Verifikasi signature + aktivasi plan
   → User akses fitur sesuai paket</pre>
   </div>
@@ -174,12 +195,12 @@
     <tr><td>Nama produk</td><td>SEPS — Simetri ERP Store</td></tr>
     <tr><td>Website</td><td>https://seps.fazagroup.id</td></tr>
     <tr><td>Halaman harga</td><td>https://seps.fazagroup.id/pricing</td></tr>
-    <tr><td>Kontak teknis</td><td><em>[ISI: email / WA PIC]</em></td></tr>
+    <tr><td>Kontak teknis</td><td>Istaghna Faza Kamil · owner akun uji di atas</td></tr>
   </table>
 
   <p class="muted" style="margin-top:28px;">
     Dokumen ini dibuat untuk memenuhi permintaan Midtrans: akun akses uji + alur transaksi
-    dari pemilihan paket hingga checkout Midtrans Snap.
+    dari login hingga checkout Midtrans Snap (dengan screenshot).
   </p>
 </body>
 </html>

@@ -642,7 +642,7 @@ export interface AuthUser {
 export interface RegisterInput {
   name: string;
   username: string;
-  email?: string;
+  email: string;
   password: string;
   confirmPassword: string;
   phone: string;

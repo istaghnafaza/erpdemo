@@ -83,6 +83,21 @@ if (midtransServer && midtransClient) {
   );
 }
 
+const smtpHost = map.get("SMTP_HOST")?.trim();
+const smtpUser = map.get("SMTP_USER")?.trim();
+const smtpPass = map.get("SMTP_PASS")?.trim();
+if (smtpHost && smtpUser && smtpPass) {
+  lines.push(
+    `SMTP_HOST=${smtpHost}`,
+    `SMTP_PORT=${map.get("SMTP_PORT")?.trim() || "465"}`,
+    `SMTP_SECURE=${map.get("SMTP_SECURE")?.trim() || "true"}`,
+    `SMTP_USER=${smtpUser}`,
+    `SMTP_PASS=${smtpPass}`,
+  );
+  const smtpFrom = map.get("SMTP_FROM")?.trim();
+  if (smtpFrom) lines.push(`SMTP_FROM=${smtpFrom}`);
+}
+
 writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
 console.log(`[staging:env] OK → ${outPath}`);
 console.log("Paste ke Railway staging service → Variables → Raw Editor → Deploy");
