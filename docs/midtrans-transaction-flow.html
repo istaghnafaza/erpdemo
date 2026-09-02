@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>SEPS — Alur Transaksi Pembayaran Midtrans Snap</title>
+  <style>
+    @page { size: A4; margin: 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #111;
+      line-height: 1.45;
+      font-size: 12px;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    h2 { font-size: 15px; margin: 22px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    h3 { font-size: 13px; margin: 14px 0 6px; }
+    .muted { color: #555; }
+    .box {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 10px 0;
+      background: #fafafa;
+    }
+    .shot {
+      border: 2px dashed #999;
+      border-radius: 8px;
+      min-height: 160px;
+      margin: 8px 0 14px;
+      padding: 12px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #666;
+    }
+    ol.steps { padding-left: 20px; }
+    ol.steps > li { margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+    .badge {
+      display: inline-block;
+      background: #0ea5e9;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .warn { background: #fff7ed; border-color: #fdba74; }
+    .print-hint {
+      background: #ecfeff;
+      border: 1px solid #67e8f9;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+    }
+    @media print {
+      .print-hint { display: none; }
+      body { padding: 0; }
+      .shot { min-height: 140px; page-break-inside: avoid; }
+      li { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>SEPS — Alur Transaksi Pembayaran Midtrans Snap</h1>
+  <p class="muted">
+    Dokumen untuk review onboarding Midtrans · Merchant: SEPS (Simetri ERP Store) ·
+    Website: <strong>https://seps.fazagroup.id</strong>
+  </p>
+
+  <div class="box">
+    <strong>Ringkasan produk</strong>
+    <p>
+      SEPS adalah aplikasi SaaS ERP untuk toko bangunan. Pelanggan (owner toko) berlangganan
+      paket berbayar (Basic / Pro / Enterprise) dan membayar melalui <strong>Midtrans Snap</strong>
+      (QRIS / Virtual Account / e-wallet). Setelah pembayaran sukses, Midtrans mengirim
+      notifikasi webhook ke server SEPS; paket langganan diaktifkan otomatis.
+    </p>
+  </div>
+
+  <h2>1. Informasi akun uji untuk review Midtrans</h2>
+  <p>
+    Silakan login dengan kredensial berikut untuk menguji alur pembayaran di production.
+  </p>
+  <table>
+    <tr><th>Item</th><th>Nilai</th></tr>
+    <tr><td>URL aplikasi</td><td>https://seps.fazagroup.id/login</td></tr>
+    <tr><td>Email / username</td><td><em>faza</em></td></tr>
+    <tr><td>Password</td><td><em>111111</em></td></tr>
+    <tr><td>Peran</td><td>Owner toko (trial / pending upgrade)</td></tr>
+    <tr><td>Catatan</td><td>Akun khusus review </td></tr>
+  </table>
+  
+
+  <h2>2. Ringkasan teknis Midtrans di SEPS</h2>
+  <table>
+    <tr><th>Item</th><th>Detail</th></tr>
+    <tr><td>Integrasi</td><td>Midtrans Snap (popup / redirect checkout)</td></tr>
+    <tr><td>Metode pembayaran</td><td>QRIS, Virtual Account, GoPay / e-wallet (sesuai channel Snap)</td></tr>
+    <tr><td>Webhook</td><td><code>POST https://seps.fazagroup.id/api/midtrans/notification</code></td></tr>
+    <tr><td>Finish redirect</td><td><code>/{tenantSlug}/dashboard?plan_paid=1</code></td></tr>
+    <tr><td>Aktivasi paket</td><td>Otomatis setelah status Midtrans settlement / capture (signature verified)</td></tr>
+  </table>
+
+  <h2>3. Alur transaksi langkah demi langkah</h2>
+  <ol class="steps">
+    <li>
+      <h3>Langkah 1 — Buka situs &amp; login</h3>
+      <p>
+        Reviewer membuka <strong>https://seps.fazagroup.id/login</strong>, memasukkan email/username
+        dan password akun uji, lalu masuk ke dashboard toko.
+      </p>
+      <div class="shot">TEMPAT SCREENSHOT #1<br/>Halaman Login SEPS</div>
+    </li>
+
+    <li>
+      <h3>Langkah 2 — Masuk dashboard / halaman pricing</h3>
+      <p>
+        Setelah login, reviewer melihat banner paket / akun trial. Klik
+        <strong>Upgrade</strong> di banner, atau buka
+        <strong>https://seps.fazagroup.id/pricing</strong> lalu pilih paket.
+      </p>
+      <div class="shot">TEMPAT SCREENSHOT #2<br/>Dashboard + banner Upgrade / halaman Pricing</div>
+    </li>
+
+    <li>
+      <h3>Langkah 3 — Pilih paket &amp; siklus tagihan</h3>
+      <p>
+        Sheet <strong>Upgrade paket</strong> muncul. Pilih siklus <em>Bulanan</em> atau
+        <em>Tahunan</em>, lalu pilih salah satu: Basic / Pro / Enterprise.
+        Tekan tombol <strong>Bayar …</strong>.
+      </p>
+      <div class="shot">TEMPAT SCREENSHOT #3<br/>Sheet Upgrade paket (pilih plan + Bayar)</div>
+    </li>
+
+    <li>
+      <h3>Langkah 4 — Midtrans Snap checkout</h3>
+      <p>
+        Sistem memanggil API Midtrans Snap (server-side) dan membuka popup Snap.
+        Reviewer memilih metode pembayaran (QRIS / VA / GoPay) dan menyelesaikan pembayaran
+        sesuai instruksi Midtrans (sandbox atau production sesuai environment merchant).
+      </p>
+      <div class="shot">TEMPAT SCREENSHOT #4<br/>Popup Midtrans Snap — pilih metode bayar</div>
+      <div class="shot">TEMPAT SCREENSHOT #5<br/>Halaman pembayaran Midtrans (QRIS/VA/e-wallet)</div>
+    </li>
+
+    
+  </ol>
+
+  <h2>4. Diagram alur (ringkas)</h2>
+  <div class="box">
+    <pre style="white-space:pre-wrap;margin:0;font-size:11px;">User (Owner)
+  → Login SEPS
+  → Pilih paket (Upgrade / Pricing)
+  → Backend SEPS: create Snap transaction (order_id + amount)
+  → Midtrans Snap UI (bayar QRIS/VA/e-wallet)
+  → Midtrans webhook → SEPS /api/midtrans/notification
+  → Verifikasi signature + aktivasi plan
+  → User akses fitur sesuai paket</pre>
+  </div>
+
+  <h2>5. Kontak merchant</h2>
+  <table>
+    <tr><th>Item</th><th>Nilai</th></tr>
+    <tr><td>Nama produk</td><td>SEPS — Simetri ERP Store</td></tr>
+    <tr><td>Website</td><td>https://seps.fazagroup.id</td></tr>
+    <tr><td>Halaman harga</td><td>https://seps.fazagroup.id/pricing</td></tr>
+    <tr><td>Kontak teknis</td><td><em>[ISI: email / WA PIC]</em></td></tr>
+  </table>
+
+  <p class="muted" style="margin-top:28px;">
+    Dokumen ini dibuat untuk memenuhi permintaan Midtrans: akun akses uji + alur transaksi
+    dari pemilihan paket hingga checkout Midtrans Snap.
+  </p>
+</body>
+</html>

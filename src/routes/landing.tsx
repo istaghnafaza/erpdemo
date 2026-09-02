@@ -433,7 +433,7 @@ function PricingSection() {
                     : "bg-[var(--lp-ink)] text-white hover:bg-black",
                 )}
               >
-                <Link to="/pricing" search={{ plan: plan.id }}>
+                <Link to="/pricing" search={{ plan: plan.id, checkout: true }}>
                   Bayar {plan.name} sekarang
                 </Link>
               </Button>

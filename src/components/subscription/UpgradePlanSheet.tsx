@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Crown, Loader2, Sparkles } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Crown, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,7 @@ export function UpgradePlanSheet({
   initialPlan = "pro",
   initialCycle = "monthly",
 }: UpgradePlanSheetProps) {
+  const navigate = useNavigate();
   const tenantId = useAuthStore((s) => s.currentUser?.tenantId);
   const tenant = useAuthStore((s) => s.currentTenant);
   const refreshUser = useAuthStore((s) => s.refreshUser);
@@ -50,6 +52,16 @@ export function UpgradePlanSheet({
     setCycle(initialCycle);
     setSelected(initialPlan);
   }, [open, initialCycle, initialPlan]);
+
+  const goToPricingDetail = (plan: PaidTenantPlan) => {
+    if (busy) return;
+    setSelected(plan);
+    onOpenChange(false);
+    void navigate({
+      to: "/pricing",
+      search: { plan, cycle },
+    });
+  };
 
   const startCheckout = async (plan: PaidTenantPlan, billingCycle: BillingCycle) => {
     if (!tenantId) {
@@ -108,8 +120,8 @@ export function UpgradePlanSheet({
           </SheetTitle>
           <SheetDescription>
             {tenant?.name
-              ? `Pilih paket untuk ${tenant.name}. Bayar via Midtrans (QRIS/VA/GoPay).`
-              : "Pilih paket dan bayar via Midtrans Snap."}
+              ? `Pilih paket untuk ${tenant.name}. Klik paket untuk lihat detail fitur di halaman harga.`
+              : "Klik paket untuk lihat detail fitur, lalu bayar via Midtrans Snap."}
           </SheetDescription>
         </SheetHeader>
 
@@ -154,7 +166,7 @@ export function UpgradePlanSheet({
                   key={plan}
                   type="button"
                   disabled={busy}
-                  onClick={() => setSelected(plan)}
+                  onClick={() => goToPricingDetail(plan)}
                   className={cn(
                     "w-full text-left rounded-lg border p-3 transition-colors",
                     active
@@ -182,10 +194,12 @@ export function UpgradePlanSheet({
                       ) : null}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     {PLAN_LIMITS[plan].maxBranches >= 999
                       ? "Cabang & user tanpa batas praktis"
                       : `${PLAN_LIMITS[plan].maxBranches} cabang · ${PLAN_LIMITS[plan].maxUsers} user`}
+                    <ExternalLink className="h-3 w-3 opacity-60" />
+                    <span className="text-primary/80">Detail fitur</span>
                   </p>
                 </button>
               );
@@ -210,8 +224,8 @@ export function UpgradePlanSheet({
             )}
           </Button>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Aktivasi final dari notifikasi Midtrans (bukan hanya popup browser). Setelah lunas,
-            paket dan periode perpanjang otomatis.
+            Klik nama paket di atas untuk melihat fitur lengkap di halaman harga. Tombol Bayar
+            membuka Midtrans Snap (QRIS/VA/GoPay).
           </p>
         </div>
       </SheetContent>

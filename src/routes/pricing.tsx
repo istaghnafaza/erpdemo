@@ -23,13 +23,26 @@ import { usePlanPricing } from "@/hooks/usePlanPricing";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth.store";
 
+type BillingCycle = "monthly" | "yearly";
+
 export const Route = createFileRoute("/pricing")({
-  validateSearch: (search: Record<string, unknown>): { plan?: PaidTenantPlan } => {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { plan?: PaidTenantPlan; cycle?: BillingCycle; checkout?: boolean } => {
     const plan = search.plan;
+    const cycle = search.cycle;
+    const checkoutRaw = search.checkout;
+    const result: { plan?: PaidTenantPlan; cycle?: BillingCycle; checkout?: boolean } = {};
     if (plan === "basic" || plan === "pro" || plan === "enterprise") {
-      return { plan };
+      result.plan = plan;
     }
-    return {};
+    if (cycle === "monthly" || cycle === "yearly") {
+      result.cycle = cycle;
+    }
+    if (checkoutRaw === true || checkoutRaw === "1" || checkoutRaw === "true") {
+      result.checkout = true;
+    }
+    return result;
   },
   head: () => ({
     meta: [
@@ -44,8 +57,6 @@ export const Route = createFileRoute("/pricing")({
   component: PricingPage,
 });
 
-type BillingCycle = "monthly" | "yearly";
-
 const FEATURES = [
   "POS kasir multi-metode (tunai, QRIS, transfer, tempo)",
   "Stok real-time per cabang + transfer antar gudang",
@@ -55,8 +66,8 @@ const FEATURES = [
 ];
 
 function PricingPage() {
-  const { plan: planFromAd } = Route.useSearch();
-  const [cycle, setCycle] = useState<BillingCycle>("yearly");
+  const { plan: planFromAd, cycle: cycleFromSearch, checkout } = Route.useSearch();
+  const [cycle, setCycle] = useState<BillingCycle>(cycleFromSearch ?? "yearly");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [checkoutPlan, setCheckoutPlan] = useState<PaidTenantPlan>(planFromAd ?? "pro");
   const isOwner = useAuthStore((s) => s.currentUser?.isOwner ?? false);
@@ -64,10 +75,26 @@ function PricingPage() {
   const { pricing } = usePlanPricing();
 
   useEffect(() => {
+    if (cycleFromSearch) setCycle(cycleFromSearch);
+  }, [cycleFromSearch]);
+
+  useEffect(() => {
     if (!planFromAd) return;
     setCheckoutPlan(planFromAd);
-    if (isOwner) setUpgradeOpen(true);
-  }, [planFromAd, isOwner]);
+    // Hanya buka Snap sheet jika diminta eksplisit (iklan/landing).
+    // Dari popup upgrade → pricing hanya highlight detail, tanpa buka sheet lagi.
+    if (isOwner && checkout) setUpgradeOpen(true);
+  }, [planFromAd, isOwner, checkout]);
+
+  useEffect(() => {
+    if (!planFromAd) return;
+    const el = document.getElementById(`plan-card-${planFromAd}`);
+    if (el) {
+      window.setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 120);
+    }
+  }, [planFromAd]);
 
   const openCheckout = (plan: PaidTenantPlan) => {
     setCheckoutPlan(plan);
@@ -88,8 +115,9 @@ function PricingPage() {
       features: [
         `${PLAN_LIMITS.trial.maxBranches} cabang`,
         `${PLAN_LIMITS.trial.maxUsers} user`,
-        "Semua modul ERP aktif",
-        `Maks. ${TRIAL_DAYS} hari`,
+        "Semua modul ERP aktif (setara Pro)",
+        `Maks. ${TRIAL_DAYS} hari · tanpa kartu kredit`,
+        "POS, stok, piutang, hutang, laporan",
       ],
     },
     {
@@ -107,7 +135,10 @@ function PricingPage() {
       features: [
         `${PLAN_LIMITS.basic.maxBranches} cabang`,
         `${PLAN_LIMITS.basic.maxUsers} user`,
-        "POS + stok + laporan",
+        "POS kasir (tunai, QRIS, transfer, tempo)",
+        "Master barang, stok, opname",
+        "Piutang & hutang supplier",
+        "Laporan penjualan & laba rugi",
         "Support email",
       ],
     },
@@ -128,6 +159,9 @@ function PricingPage() {
         `${PLAN_LIMITS.pro.maxUsers} user`,
         "Semua fitur Basic",
         "Konsolidasi laporan multi-cabang",
+        "Transfer stok antar cabang",
+        "Dashboard owner gabungan",
+        "PO / goods receipt & pricing rules",
       ],
     },
     {
@@ -144,13 +178,13 @@ function PricingPage() {
       ctaTo: "/register" as const,
       features: [
         "Cabang & user tanpa batas praktis",
+        "Semua fitur Pro",
         "Prioritas onboarding",
         "SLA & custom integrasi",
         "Account manager dedicated",
       ],
     },
   ];
-
   return (
     <div className="min-h-screen bg-gradient-mesh">
       <header className="border-b border-white/10 bg-gradient-sidebar text-white">
@@ -224,15 +258,24 @@ function PricingPage() {
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
           {plans.map((plan) => (
             <Card
+              id={`plan-card-${plan.id}`}
               key={plan.id}
               className={cn(
-                "p-6 flex flex-col shadow-card relative",
+                "p-6 flex flex-col shadow-card relative scroll-mt-24",
                 plan.highlight && "border-primary ring-2 ring-primary/20 scale-[1.02]",
-                planFromAd === plan.id && "border-primary ring-2 ring-primary/30",
+                planFromAd === plan.id && "border-primary ring-2 ring-primary/40 shadow-md",
               )}
             >
-              {plan.highlight && (
+              {planFromAd === plan.id ? (
+                <Badge variant="secondary" className="absolute -top-2.5 right-3">
+                  Paket dipilih
+                </Badge>
+              ) : null}
+              {plan.highlight && planFromAd !== plan.id && (
                 <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2">Paling populer</Badge>
+              )}
+              {plan.highlight && planFromAd === plan.id && (
+                <Badge className="absolute -top-2.5 left-3">Paling populer</Badge>
               )}
               <div className="flex items-center gap-2 mb-3">
                 <Crown className={cn("h-5 w-5", plan.highlight ? "text-primary" : "text-muted-foreground")} />
