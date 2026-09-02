@@ -6,6 +6,9 @@ import type { TenantPlan } from "@/types/app";
 
 export const TRIAL_DAYS = 7;
 
+/** Hari tambahan setelah trial habis sebelum toko dinonaktifkan otomatis. */
+export const TRIAL_GRACE_DAYS = 7;
+
 export type BillingCycle = "monthly" | "yearly";
 
 export interface PlanPricing {

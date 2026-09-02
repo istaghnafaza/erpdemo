@@ -14,6 +14,10 @@ import { formatIndonesiaAddress } from "@/lib/indonesia-wilayah";
 import type { AuthUser, RegisterInput } from "@/types/app";
 
 import { TRIAL_DAYS } from "@/lib/plan-config";
+import {
+  releaseInactiveTenantByEmail,
+  releaseInactiveTenantByUsername,
+} from "@/server/services/tenant-lifecycle";
 
 function slugify(value: string): string {
   return value
@@ -142,6 +146,9 @@ export async function registerWithEmail(
 
   const db = getDb();
 
+  await releaseInactiveTenantByEmail(email);
+  await releaseInactiveTenantByUsername(username);
+
   const existingUsername = await db.query.authUsers.findFirst({
     where: sql`lower(${authUsers.username}) = ${username}`,
   });
@@ -224,6 +231,18 @@ async function signInWithGoogleProfile(
   }
 
   if (authRow) {
+    if (authRow.tenantId) {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, authRow.tenantId),
+      });
+      if (tenant && !tenant.isActive) {
+        await db.delete(tenants).where(eq(tenants.id, tenant.id));
+        authRow = undefined;
+      }
+    }
+  }
+
+  if (authRow) {
     const profileRow = await db.query.profiles.findFirst({
       where: and(eq(profiles.id, authRow.id), eq(profiles.isActive, true)),
     });
@@ -256,8 +275,15 @@ async function signInWithGoogleProfile(
 
 export async function emailExists(email: string): Promise<boolean> {
   const db = getDb();
+  const normalized = email.trim().toLowerCase();
   const row = await db.query.authUsers.findFirst({
-    where: eq(authUsers.email, email.trim().toLowerCase()),
+    where: eq(authUsers.email, normalized),
   });
+  if (!row?.tenantId) return Boolean(row);
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, row.tenantId),
+  });
+  if (tenant && !tenant.isActive) return false;
   return Boolean(row);
 }

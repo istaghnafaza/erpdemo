@@ -10,6 +10,7 @@ import {
   PLAN_LIMITS,
   type BillingCycle,
   type PaidTenantPlan,
+  TRIAL_GRACE_DAYS,
 } from "@/lib/plan-config";
 import { getWriteDb } from "@/server/db";
 import { ensurePlanBillingSchema } from "@/server/db/ensure-plan-billing-schema";
@@ -270,12 +271,16 @@ export interface RenewCheckResult {
   trialsExpiringSoon: number;
   subscriptionsPastDue: number;
   renewalsDueSoon: number;
+  trialsDeactivated: number;
   alertsSent: number;
 }
 
 /** Daily job: past_due + reminder Telegram (trial/renew ≤2 hari). */
 export async function runPlanRenewCheck(): Promise<RenewCheckResult> {
   await ensurePlanBillingSchema();
+  const { deactivateExpiredTrialTenants } = await import("@/server/services/tenant-lifecycle");
+  const deactivated = await deactivateExpiredTrialTenants();
+
   const db = getWriteDb();
   const now = new Date();
   let alertsSent = 0;
@@ -362,10 +367,18 @@ export async function runPlanRenewCheck(): Promise<RenewCheckResult> {
     if (sent) alertsSent += 1;
   }
 
+  if (deactivated.deactivatedCount > 0) {
+    const sent = await sendPlanOpsTelegram(
+      `[SEPS] Trial nonaktif otomatis: ${deactivated.deactivatedCount} toko (grace ${TRIAL_GRACE_DAYS} hari setelah trial habis).`,
+    );
+    if (sent) alertsSent += 1;
+  }
+
   return {
     trialsExpiringSoon: trialRows.length,
     subscriptionsPastDue,
     renewalsDueSoon: renewRows.length,
+    trialsDeactivated: deactivated.deactivatedCount,
     alertsSent,
   };
 }

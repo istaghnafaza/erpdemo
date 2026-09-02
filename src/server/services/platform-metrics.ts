@@ -241,6 +241,9 @@ export async function getPlatformBillingKpis(): Promise<PlatformBillingKpis> {
 }
 
 export async function getPlatformOverview(): Promise<PlatformOverview> {
+  const { deactivateExpiredTrialTenants } = await import("@/server/services/tenant-lifecycle");
+  await deactivateExpiredTrialTenants();
+
   const [tenants, billing] = await Promise.all([
     listPlatformTenants(),
     getPlatformBillingKpis().catch(() => ({
@@ -251,13 +254,14 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
       renewingWithin7d: 0,
     })),
   ]);
+  const activeTenants = tenants.filter((t) => t.isActive);
   return {
-    totalTenants: tenants.length,
-    activeTenants: tenants.filter((t) => t.isActive).length,
-    trialTenants: tenants.filter((t) => t.plan === "trial").length,
-    onboardingPending: tenants.filter((t) => !t.onboardingComplete).length,
-    totalRevenue30d: tenants.reduce((sum, t) => sum + t.revenue30d, 0),
-    totalTx30d: tenants.reduce((sum, t) => sum + t.txCount30d, 0),
+    totalTenants: activeTenants.length,
+    activeTenants: activeTenants.length,
+    trialTenants: activeTenants.filter((t) => t.plan === "trial").length,
+    onboardingPending: activeTenants.filter((t) => !t.onboardingComplete).length,
+    totalRevenue30d: activeTenants.reduce((sum, t) => sum + t.revenue30d, 0),
+    totalTx30d: activeTenants.reduce((sum, t) => sum + t.txCount30d, 0),
     billing,
   };
 }

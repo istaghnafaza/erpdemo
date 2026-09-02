@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   CreditCard,
@@ -33,6 +33,14 @@ import { useAuthStore } from "@/stores/auth.store";
 import type { PlatformDashboardData, PlatformTenantRow } from "@/types/platform";
 import { toast } from "sonner";
 import { PlatformTenantPlanDialog } from "@/components/platform/PlatformTenantPlanDialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/platform/dashboard")({
   beforeLoad: () => {
@@ -66,6 +74,30 @@ function PlatformDashboardPage() {
   const [manualOrderId, setManualOrderId] = useState("");
   const [markingPaid, setMarkingPaid] = useState(false);
   const [editTenant, setEditTenant] = useState<PlatformTenantRow | null>(null);
+  const [planFilter, setPlanFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredTenants = useMemo(() => {
+    if (!data?.tenants) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return data.tenants.filter((tenant) => {
+      if (planFilter !== "all" && tenant.plan !== planFilter) return false;
+      const accessStatus = getTenantAccessStatus(tenant);
+      if (statusFilter !== "all" && accessStatus !== statusFilter) return false;
+      if (!q) return true;
+      const haystack = [
+        tenant.name,
+        tenant.slug,
+        tenant.ownerName ?? "",
+        tenant.ownerEmail,
+        tenant.phone ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [data?.tenants, planFilter, statusFilter, searchQuery]);
 
   const load = async () => {
     setLoading(true);
@@ -143,7 +175,7 @@ function PlatformDashboardPage() {
         <Card className="p-5">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Toko</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">Toko Aktif</div>
               <div className="text-2xl font-bold mt-1">{overview ? angka(overview.totalTenants) : "—"}</div>
             </div>
             <Store className="h-5 w-5 text-primary" />
@@ -248,17 +280,65 @@ function PlatformDashboardPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="p-5 border-b flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-lg">Daftar Owner / Toko</h2>
-            <p className="text-sm text-muted-foreground">
-              Data langganan, cabang aktif, dan performa transaksi 30 hari terakhir
-            </p>
+        <div className="p-5 border-b space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-semibold text-lg">Daftar Owner / Toko</h2>
+              <p className="text-sm text-muted-foreground">
+                Data langganan, cabang aktif, dan performa transaksi 30 hari terakhir
+              </p>
+            </div>
+            <Badge variant="outline" className="gap-1">
+              <Users className="h-3.5 w-3.5" />
+              {angka(filteredTenants.length)}
+              {data && filteredTenants.length !== data.tenants.length
+                ? ` / ${angka(data.tenants.length)}`
+                : ""}{" "}
+              tenant
+            </Badge>
           </div>
-          <Badge variant="outline" className="gap-1">
-            <Users className="h-3.5 w-3.5" />
-            {data ? angka(data.tenants.length) : 0} tenant
-          </Badge>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Cari toko / owner</label>
+              <Input
+                placeholder="Nama toko, slug, email, HP..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Filter plan</label>
+              <Select value={planFilter} onValueChange={setPlanFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua plan</SelectItem>
+                  <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Filter status</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua status</SelectItem>
+                  <SelectItem value="active">Aktif</SelectItem>
+                  <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="trial_expired">Trial berakhir</SelectItem>
+                  <SelectItem value="past_due">Langganan habis</SelectItem>
+                  <SelectItem value="inactive">Nonaktif</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -285,8 +365,8 @@ function PlatformDashboardPage() {
                     Memuat data...
                   </TableCell>
                 </TableRow>
-              ) : data?.tenants.length ? (
-                data.tenants.map((tenant) => (
+              ) : filteredTenants.length ? (
+                filteredTenants.map((tenant) => (
                   <TableRow key={tenant.id}>
                     <TableCell>
                       <div className="font-medium">{tenant.name}</div>
@@ -346,6 +426,12 @@ function PlatformDashboardPage() {
                     </TableCell>
                   </TableRow>
                 ))
+              ) : data?.tenants.length ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                    Tidak ada tenant yang cocok dengan filter
+                  </TableCell>
+                </TableRow>
               ) : (
                 <TableRow>
                   <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
