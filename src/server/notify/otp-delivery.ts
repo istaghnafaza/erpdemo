@@ -142,9 +142,17 @@ async function sendSmtpEmail(to: string, code: string, purpose: OtpPurpose): Pro
     port,
     secure,
     auth: { user, pass },
+    connectionTimeout: 12_000,
+    greetingTimeout: 12_000,
+    socketTimeout: 12_000,
   });
 
-  await transport.sendMail({ from, to, subject, text });
+  await Promise.race([
+    transport.sendMail({ from, to, subject, text }),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("SMTP timeout — cek koneksi Hostinger")), 15_000);
+    }),
+  ]);
 }
 
 async function sendTwilioSms(toE164: string, code: string): Promise<void> {

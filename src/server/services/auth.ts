@@ -5,7 +5,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/server/db";
 import { toProfile } from "@/server/db/mappers";
-import { authUsers, profiles, userBranches } from "@/server/db/schema";
+import { authUsers, profiles, tenants, userBranches } from "@/server/db/schema";
 import { verifyPassword, hashPassword } from "@/server/auth/password";
 import { createSessionToken } from "@/server/auth/session";
 import { getPlatformAdminDisplayName } from "@/server/services/platform-admin";
@@ -133,6 +133,17 @@ export async function signInWithPassword(
     throw new Error("EMAIL_NOT_VERIFIED");
   }
 
+  const db = getDb();
+
+  if (!authRow.isPlatformAdmin && authRow.tenantId) {
+    const tenantRow = await db.query.tenants.findFirst({
+      where: eq(tenants.id, authRow.tenantId),
+    });
+    if (tenantRow && !tenantRow.isActive) {
+      throw new Error("TENANT_INACTIVE");
+    }
+  }
+
   if (authRow.isPlatformAdmin) {
     const user = buildPlatformAuthUser(authRow);
     const token = await createSessionToken({
@@ -144,11 +155,20 @@ export async function signInWithPassword(
     return { user, token };
   }
 
-  const db = getDb();
   const profileRow = await db.query.profiles.findFirst({
     where: and(eq(profiles.id, authRow.id), eq(profiles.isActive, true)),
   });
-  if (!profileRow) return null;
+  if (!profileRow) {
+    if (authRow.tenantId) {
+      const tenantRow = await db.query.tenants.findFirst({
+        where: eq(tenants.id, authRow.tenantId),
+      });
+      if (tenantRow && !tenantRow.isActive) {
+        throw new Error("TENANT_INACTIVE");
+      }
+    }
+    return null;
+  }
 
   const profile = toProfile(profileRow);
   const branchIds = await getBranchIdsForUser(profile.id);

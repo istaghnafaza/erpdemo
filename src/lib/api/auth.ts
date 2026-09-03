@@ -46,6 +46,7 @@ export type RegistrationChallengeResult = {
   destinationHint: string;
   expiresInSec: number;
   debugOtp?: string;
+  otpDeliveryFailed?: boolean;
 };
 
 // ---------------------------------------------------------------------------

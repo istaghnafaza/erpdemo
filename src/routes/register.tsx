@@ -93,9 +93,11 @@ function RegisterPage() {
     }
 
     toast.success(
-      challenge.debugOtp
-        ? "Mode development: kode OTP ditampilkan di halaman verifikasi."
-        : `Kode verifikasi dikirim ke ${challenge.destinationHint}. Cek juga folder spam.`,
+      challenge.otpDeliveryFailed
+        ? "Akun dibuat. Email OTP gagal dikirim — lanjut verifikasi untuk kirim ulang kode."
+        : challenge.debugOtp
+          ? "Mode development: kode OTP ditampilkan di halaman verifikasi."
+          : `Kode verifikasi dikirim ke ${challenge.destinationHint}. Cek juga folder spam.`,
     );
 
     navigate({
@@ -103,7 +105,7 @@ function RegisterPage() {
       search: {
         challengeId: challenge.challengeId,
         email: parsed.data.email,
-        debugOtp: challenge.debugOtp,
+        ...(challenge.debugOtp ? { debugOtp: challenge.debugOtp } : {}),
       },
     });
   };

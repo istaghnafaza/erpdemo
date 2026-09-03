@@ -127,6 +127,10 @@ async function createTenantWithOwner(input: NewTenantBundle): Promise<{ user: Au
     });
   });
 
+  if (input.emailVerified === false) {
+    return { user: null!, token: "" };
+  }
+
   return sessionForUserId(input.userId);
 }
 

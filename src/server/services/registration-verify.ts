@@ -26,6 +26,7 @@ export type RegistrationChallengeResult = {
   destinationHint: string;
   expiresInSec: number;
   debugOtp?: string;
+  otpDeliveryFailed?: boolean;
 };
 
 async function createAndSendOtp(userId: string, email: string): Promise<RegistrationChallengeResult> {
@@ -58,21 +59,23 @@ async function createAndSendOtp(userId: string, email: string): Promise<Registra
 
   if (!row) throw new Error("Gagal membuat kode OTP");
 
-  let sent: Awaited<ReturnType<typeof deliverOtp>>;
+  let sent: Awaited<ReturnType<typeof deliverOtp>> | null = null;
+  let otpDeliveryFailed = false;
   try {
     sent = await deliverOtp("email", email, code, "registration");
   } catch (err) {
-    await db.delete(registrationVerificationOtps).where(eq(registrationVerificationOtps.id, row.id));
-    throw err;
+    otpDeliveryFailed = true;
+    console.error("[SEPS OTP] registration email failed:", err);
   }
 
   const result: RegistrationChallengeResult = {
     challengeId: row.id,
     destinationHint: maskEmail(email),
     expiresInSec: Math.floor(OTP_TTL_MS / 1000),
+    otpDeliveryFailed,
   };
 
-  if (isOtpDevEchoEnabled() && sent.via === "log") {
+  if (isOtpDevEchoEnabled() && sent?.via === "log") {
     result.debugOtp = code;
   }
 

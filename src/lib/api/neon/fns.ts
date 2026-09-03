@@ -70,6 +70,11 @@ export const neonSignIn = createServerFn({ method: "POST" })
       if (err instanceof Error && err.message === "EMAIL_NOT_VERIFIED") {
         throw new Error("Email belum diverifikasi. Cek inbox atau buka halaman verifikasi email.");
       }
+      if (err instanceof Error && err.message === "TENANT_INACTIVE") {
+        throw new Error(
+          "Toko sudah nonaktif. Silakan daftar ulang — email yang sama bisa dipakai lagi.",
+        );
+      }
       throw err;
     }
     if (!result) throw new Error("Username atau PIN salah");

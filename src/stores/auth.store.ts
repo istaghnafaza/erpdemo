@@ -317,12 +317,13 @@ export const useAuthStore = create<AuthState>()(
             set({ error: authResult.error, isLoading: false });
             return null;
           }
-          set({ isLoading: false });
           return authResult.data!;
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Registrasi gagal";
           set({ error: msg, isLoading: false });
           return null;
+        } finally {
+          set({ isLoading: false });
         }
       },
 

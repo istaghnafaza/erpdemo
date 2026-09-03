@@ -77,10 +77,16 @@ function LoginPage() {
 
     if (!ok) {
       const err = useAuthStore.getState().error ?? "Username atau PIN salah";
+      if (err.includes("nonaktif") || err.includes("daftar ulang")) {
+        toast.error(err, { duration: 8000 });
+        return;
+      }
       toast.error(
         err.includes("DATABASE_URL")
           ? "Database belum terhubung. Pastikan DATABASE_URL sudah diisi di Railway, lalu Redeploy."
-          : err,
+          : err.includes("belum diverifikasi")
+            ? err
+            : err,
       );
       return;
     }
